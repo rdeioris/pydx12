@@ -58,7 +58,7 @@
 	if (com_owner)\
 	{\
 		com_owner->AddRef();\
-		printf("[2] allocing " #t " com_owner: %p\n", com_owner);\
+		printf("[2] allocing " #t " com_owner: %p %p\n", py_object, com_owner);\
 		py_object->com_owner = com_owner;\
 	}\
 	return (PyObject*)py_object;\
@@ -83,7 +83,7 @@ t* pydx12_##t##_check(PyObject* py_object)\
 }\
 static void pydx12_##t##_dealloc(pydx12_##t* self)\
 {\
-	printf("dealloc " #t " %p\n", self->com_owner);\
+	printf("dealloc " #t " %p %p\n", self, self->com_owner);\
 	if (self->data)\
 	{\
 		if (!self->data_owner)\
@@ -95,10 +95,8 @@ static void pydx12_##t##_dealloc(pydx12_##t* self)\
 			Py_DECREF(self->data_owner);\
 		}\
 	}\
-	printf("dealloc " #t " step %p\n", self->com_owner);\
 	if (self->com_owner)\
 		self->com_owner->Release();\
-	printf("dealloced " #t "\n");\
 	Py_TYPE(self)->tp_free((PyObject*)self);\
 }\
 static int pydx12_##t##_init(pydx12_##t* self, PyObject *args, PyObject *kwds)\
@@ -154,6 +152,59 @@ static PySequenceMethods pydx12_##t##_sequence_methods = {\
 	NULL,\
 	NULL,\
 	(ssizeargfunc)pydx12_##t##_sq_item\
+};\
+static PyObject* pydx12_##t##_get_fields(pydx12_##t* self)\
+{\
+	PyObject* py_list = PyList_New(0);\
+	PyGetSetDef* getset = pydx12_##t##Type.tp_getset;\
+	while (getset->name)\
+	{\
+		PyObject* py_name = PyUnicode_FromString(getset->name);\
+		PyList_Append(py_list, py_name);\
+		Py_DECREF(py_name);\
+		getset++;\
+	}\
+	return py_list;\
+}\
+static PyObject* pydx12_##t##_to_dict(pydx12_##t* self)\
+{\
+	PyObject* py_dict = PyDict_New();\
+	PyGetSetDef* getset = pydx12_##t##Type.tp_getset;\
+	while (getset->name)\
+	{\
+		if (getset->get)\
+		{\
+			PyObject* py_value = getset->get((PyObject*)self, getset->closure);\
+			if (!py_value)\
+			{\
+				Py_DECREF(py_dict);\
+				return NULL;\
+			}\
+			PyDict_SetItemString(py_dict, getset->name, py_value);\
+			Py_DECREF(py_value);\
+		}\
+		getset++;\
+	}\
+	return py_dict;\
+}\
+static PyObject* pydx12_##t##_to_bytes(pydx12_##t* self)\
+{\
+	if (!self->data)\
+		Py_RETURN_NONE;\
+	return PyBytes_FromStringAndSize((const char*)self->data, self->data_len);\
+}\
+static PyObject* pydx12_##t##_to_bytearray(pydx12_##t* self)\
+{\
+	if (!self->data)\
+		Py_RETURN_NONE;\
+	return PyByteArray_FromStringAndSize((const char*)self->data, self->data_len);\
+}\
+static PyMethodDef pydx12_##t##_methods[] = {\
+	{"get_fields", (PyCFunction)pydx12_##t##_get_fields, METH_NOARGS, "returns a list of structure's fields"},\
+	{"to_dict", (PyCFunction)pydx12_##t##_to_dict, METH_NOARGS, "returns a dictionary representation of the structure"},\
+	{"to_bytes", (PyCFunction)pydx12_##t##_to_bytes, METH_NOARGS, "returns structure's content as a bytes object"},\
+	{"to_bytearray", (PyCFunction)pydx12_##t##_to_bytearray, METH_NOARGS, "returns structure's content as a bytearray object"},\
+	{NULL}\
 };
 
 #define PYDX12_TYPE_INSTANTIATE_COM(t) PyObject* pydx12_##t##_instantiate(t* com_ptr, const bool add_ref)\
@@ -167,11 +218,11 @@ static PySequenceMethods pydx12_##t##_sequence_methods = {\
 	memset(offset + sizeof(PyObject), 0, sizeof(pydx12_##t) - sizeof(PyObject));\
 	if (com_ptr && add_ref)\
 	{\
-		printf("AddRef() for " #t " : %ld\n",com_ptr->AddRef());\
+		printf("AddRef() for " #t " : %p %ld\n", com_ptr, com_ptr->AddRef());\
 	}\
 	else\
 	{\
-		printf("NoRef for " #t "\n");\
+		printf("NoRef for " #t " : %p\n", com_ptr);\
 	}\
 	py_object->com_ptr = com_ptr;\
 	return (PyObject*)py_object;\
@@ -189,7 +240,7 @@ static void pydx12_##t##_dealloc(pydx12_##t* self)\
 {\
 	if (self->com_ptr)\
 	{\
-		printf("com release for " #t " %ld\n", self->com_ptr->Release());\
+		printf("com release for " #t " %p %ld\n", self->com_ptr, self->com_ptr->Release());\
 	}\
 	Py_TYPE(self)->tp_free((PyObject*)self);\
 }\
@@ -206,12 +257,12 @@ static int pydx12_##t##_init(pydx12_##t* self, PyObject* args, PyObject* kwds)\
 		PyErr_SetString(PyExc_ValueError, "expected a IUnknown");\
 		return -1;\
 	}\
+	self->com_ptr = NULL;\
 	if (unknown->QueryInterface<t>(&self->com_ptr) != S_OK)\
 	{\
 		PyErr_SetString(PyExc_ValueError, "QueryInterface<" #t "> failed");\
 		return -1;\
 	}\
-	self->com_ptr->AddRef();\
 	return 0;\
 }\
 PyTypeObject* pydx12_##t##_get_type()\
@@ -240,6 +291,33 @@ PYDX12_TYPE_INSTANTIATE(t)
 PYDX12_TYPE_MEMBERS(t);\
 PYDX12_TYPE_INSTANTIATE_COM(t)
 
+#define PYDX12_TYPE_HANDLE(t, ...) typedef struct\
+{\
+	PyObject_HEAD\
+	HANDLE handle;\
+	__VA_ARGS__;\
+} pydx12_##t;\
+PYDX12_TYPE_MEMBERS(t);\
+static void pydx12_##t##_dealloc(pydx12_##t* self)\
+{\
+	if (self->handle)\
+		CloseHandle(self->handle);\
+	Py_TYPE(self)->tp_free((PyObject*)self);\
+}\
+HANDLE pydx12_##t##_check(PyObject* py_object)\
+{\
+	if (PyLong_Check(py_object))\
+	{\
+		return (HANDLE)PyLong_AsUnsignedLongLong(py_object);\
+	}\
+	if (!PyObject_IsInstance(py_object, (PyObject*)&pydx12_##t##Type))\
+	{\
+		return NULL; \
+	}\
+	pydx12_##t##* pydx12_object = (pydx12_##t*)py_object; \
+	return pydx12_object->handle; \
+}\
+
 #define PYDX12_ENUM(t) PyModule_AddObject(m, #t, PyLong_FromLongLong(t))
 
 #define PYDX12_REGISTER(t) if (PyType_Ready(&pydx12_##t##Type) < 0)\
@@ -256,12 +334,18 @@ pydx12_##t##Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
 pydx12_##t##Type.tp_getset = pydx12_##t##_getsetters;\
 pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
 pydx12_##t##Type.tp_as_sequence = &pydx12_##t##_sequence_methods;\
+pydx12_##t##Type.tp_methods = pydx12_##t##_methods;\
 PYDX12_REGISTER(t)
 
 #define PYDX12_REGISTER_COM(t, s) pydx12_##t##Type.tp_base = pydx12_##s##_get_type();\
 pydx12_##t##Type.tp_new = PyType_GenericNew;\
 pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
 PYDX12_REGISTER_COM_BASE(t)
+
+#define PYDX12_REGISTER_HANDLE(t) pydx12_##t##Type.tp_new = PyType_GenericNew;\
+pydx12_##t##Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
+pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
+PYDX12_REGISTER(t)
 
 #define PYDX12_REGISTER_COM_BASE(t) pydx12_##t##Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
 PYDX12_REGISTER(t)
@@ -558,6 +642,7 @@ PYDX12_BUFFER_SETTER(t, field, py_ref_field)
 		if (!value)\
 		{\
 			PyErr_SetString(PyExc_ValueError, "value must be a " #field_t);\
+			return -1;\
 		}\
 		value->AddRef();\
 	}\
@@ -581,6 +666,8 @@ t* pydx12_##t##_check(PyObject* py_object)
 #define PYDX12_IMPORT_COM(t) PyObject* pydx12_##t##_instantiate(t* com_ptr, const bool add_ref);\
 t* pydx12_##t##_check(PyObject* py_object);\
 PyTypeObject* pydx12_##t##_get_type()
+
+#define PYDX12_IMPORT_HANDLE(t) HANDLE pydx12_##t##_check(PyObject* py_object);
 
 #define PYDX12_METHODS(t) static PyMethodDef pydx12_##t##_methods[]
 #define PYDX12_GETSETTERS(t) static PyGetSetDef pydx12_##t##_getsetters[]
@@ -610,6 +697,10 @@ if (!name)\
 #define PYDX12_ARG_CHECK(t, name) t* name = pydx12_##t##_check(py_##name);\
 if (!name)\
 	return PyErr_Format(PyExc_TypeError, "argument must be a " #t);
+
+#define PYDX12_ARG_CHECK_HANDLE(t, name) HANDLE name = pydx12_##t##_check(py_##name);\
+if (!name)\
+	return PyErr_Format(PyExc_TypeError, "argument must be a raw numeric HANDLE or " #t);
 
 #define PYDX12_ARG_CHECK_NONE(t, name) t* name = NULL;\
 if (py_##name && py_##name != Py_None)\

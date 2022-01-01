@@ -10,6 +10,7 @@ PYDX12_IMPORT(D3D12_DESCRIPTOR_HEAP_DESC);
 PYDX12_IMPORT(D3D12_RENDER_TARGET_VIEW_DESC);
 PYDX12_IMPORT(D3D12_CPU_DESCRIPTOR_HANDLE);
 PYDX12_IMPORT(D3D12_GRAPHICS_PIPELINE_STATE_DESC);
+PYDX12_IMPORT(D3D12_PLACED_SUBRESOURCE_FOOTPRINT);
 
 PYDX12_IMPORT_COM(ID3D12Object);
 PYDX12_IMPORT_COM(ID3D12Resource);
@@ -130,9 +131,9 @@ static PyObject* pydx12_ID3D12Device_CreateCommandList(pydx12_ID3D12Device* self
 
 static PyObject* pydx12_ID3D12Device_CreateFence(pydx12_ID3D12Device* self, PyObject* args)
 {
-	UINT64 initial_value;
-	D3D12_FENCE_FLAGS flags;
-	if (!PyArg_ParseTuple(args, "KL", &initial_value, &flags))
+	UINT64 initial_value = 0;
+	D3D12_FENCE_FLAGS flags = D3D12_FENCE_FLAG_NONE;
+	if (!PyArg_ParseTuple(args, "|KL", &initial_value, &flags))
 		return NULL;
 
 	ID3D12Fence* fence;
@@ -203,6 +204,54 @@ static PyObject* pydx12_ID3D12Device_CreateGraphicsPipelineState(pydx12_ID3D12De
 	return PYDX12_COM_INSTANTIATE(ID3D12PipelineState, pipeline_state, false);
 }
 
+static PyObject* pydx12_ID3D12Device_GetNodeCount(pydx12_ID3D12Device* self)
+{
+	return PyLong_FromUnsignedLong(self->com_ptr->GetNodeCount());
+}
+
+static PyObject* pydx12_ID3D12Device_GetCopyableFootprints(pydx12_ID3D12Device* self, PyObject* args)
+{
+	PyObject* py_resource_desc;
+	UINT first_subresource;
+	UINT num_subresources;
+	UINT64 base_offset;
+	if (!PyArg_ParseTuple(args, "OIIK", &py_resource_desc, &first_subresource, &num_subresources, &base_offset))
+		return NULL;
+
+	if (num_subresources < 1 || num_subresources >(D3D12_REQ_SUBRESOURCES - first_subresource))
+		return PyErr_Format(PyExc_Exception, "invalid number of subresources: %u", num_subresources);
+
+	PYDX12_ARG_CHECK(D3D12_RESOURCE_DESC, resource_desc);
+
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT layouts;
+	UINT* num_rows = (UINT*)PyMem_Malloc(sizeof(UINT) * num_subresources);
+	if (!num_rows)
+		return PyErr_NoMemory();
+
+	UINT64* row_size_in_bytes = (UINT64*)PyMem_Malloc(sizeof(UINT64) * num_subresources);
+	if (!row_size_in_bytes)
+	{
+		PyMem_Free(num_rows);
+		return PyErr_NoMemory();
+	}
+
+	UINT64 total_bytes;
+
+	PYDX12_COM_CALL(GetCopyableFootprints, resource_desc, first_subresource, num_subresources, base_offset, &layouts, num_rows, row_size_in_bytes, &total_bytes);
+
+	PyObject* py_num_rows = PyTuple_New(num_subresources);
+	PyObject* py_row_size_in_bytes = PyTuple_New(num_subresources);
+	for (UINT i = 0; i < num_subresources; i++)
+	{
+		PyTuple_SetItem(py_num_rows, i, PyLong_FromUnsignedLong(num_rows[i]));
+		PyTuple_SetItem(py_row_size_in_bytes, i, PyLong_FromUnsignedLongLong(row_size_in_bytes[i]));
+	}
+	PyObject* py_ret = Py_BuildValue("(NNNK)", pydx12_D3D12_PLACED_SUBRESOURCE_FOOTPRINT_instantiate(&layouts, NULL, NULL), py_num_rows, py_row_size_in_bytes, total_bytes);
+	PyMem_Free(num_rows);
+	PyMem_Free(row_size_in_bytes);
+	return py_ret;
+}
+
 PYDX12_METHODS(ID3D12Device) = {
 	{"CreateCommittedResource", (PyCFunction)pydx12_ID3D12Device_CreateCommittedResource, METH_VARARGS, "Creates a new D3D12 Resource over an implicitely created Heap"},
 	{"GetAdapterLuid", (PyCFunction)pydx12_ID3D12Device_GetAdapterLuid, METH_NOARGS, "Get the Adapter LUID"},
@@ -214,6 +263,8 @@ PYDX12_METHODS(ID3D12Device) = {
 	{"CreateRenderTargetView", (PyCFunction)pydx12_ID3D12Device_CreateRenderTargetView, METH_VARARGS, "Creates a render-target view for accessing resource data"},
 	{"CreateRootSignature", (PyCFunction)pydx12_ID3D12Device_CreateRootSignature, METH_VARARGS, "Creates a root signature layout"},
 	{"CreateGraphicsPipelineState", (PyCFunction)pydx12_ID3D12Device_CreateGraphicsPipelineState, METH_VARARGS, "Creates a graphics pipeline state object"},
+	{"GetNodeCount", (PyCFunction)pydx12_ID3D12Device_GetNodeCount, METH_NOARGS, "Reports the number of physical adapters (nodes) that are associated with this device"},
+	{"GetCopyableFootprints", (PyCFunction)pydx12_ID3D12Device_GetCopyableFootprints, METH_VARARGS, "Gets a resource layout that can be copied"},
 	{NULL}  /* Sentinel */
 };
 

@@ -188,9 +188,9 @@ PYDX12_GETSETTERS(D3D12_VERTEX_BUFFER_VIEW) = {
 
 static PyObject* pydx12_ID3D12Resource_Map(pydx12_ID3D12Resource* self, PyObject* args)
 {
-	UINT sub_resource;
+	UINT sub_resource = 0;
 	PyObject* py_read_range = NULL;
-	if (!PyArg_ParseTuple(args, "I|O", &sub_resource, &py_read_range))
+	if (!PyArg_ParseTuple(args, "|IO", &sub_resource, &py_read_range))
 		return NULL;
 
 	PYDX12_ARG_CHECK_NONE(D3D12_RANGE, read_range);
@@ -242,9 +242,9 @@ static PyObject* pydx12_ID3D12Resource_Map(pydx12_ID3D12Resource* self, PyObject
 
 static PyObject* pydx12_ID3D12Resource_Unmap(pydx12_ID3D12Resource* self, PyObject* args)
 {
-	UINT sub_resource;
+	UINT sub_resource = 0;
 	PyObject* py_written_range;
-	if (!PyArg_ParseTuple(args, "I|O", &sub_resource, &py_written_range))
+	if (!PyArg_ParseTuple(args, "|IO", &sub_resource, &py_written_range))
 		return NULL;
 
 	PYDX12_ARG_CHECK_NONE(D3D12_RANGE, written_range);
@@ -269,7 +269,7 @@ static PyObject* pydx12_ID3D12Resource_upload(pydx12_ID3D12Resource* self, PyObj
 {
 	Py_buffer view;
 	UINT sub_resource = 0;
-	if (!PyArg_ParseTuple(args, "w*|I", &view, &sub_resource))
+	if (!PyArg_ParseTuple(args, "y*|I", &view, &sub_resource))
 		return NULL;
 
 	ID3D12Device* device = NULL;
@@ -285,7 +285,7 @@ static PyObject* pydx12_ID3D12Resource_upload(pydx12_ID3D12Resource* self, PyObj
 		return PyErr_Format(PyExc_Exception, "unable to retrieve ID3D12Resource size");
 	}
 
-	if (view.len > mem_size)
+	if ((UINT64)view.len > mem_size)
 	{
 		PyBuffer_Release(&view);
 		return PyErr_Format(PyExc_ValueError, "supplied buffer is too big: %llu bytes available in the subresource", mem_size);
@@ -307,16 +307,52 @@ static PyObject* pydx12_ID3D12Resource_upload(pydx12_ID3D12Resource* self, PyObj
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_ID3D12Resource_download(pydx12_ID3D12Resource* self, PyObject* args)
+{
+	UINT sub_resource = 0;
+	if (!PyArg_ParseTuple(args, "|I", &sub_resource))
+		return NULL;
+
+	ID3D12Device* device = NULL;
+	PYDX12_COM_CALL_HRESULT(ID3D12Resource, GetDevice, __uuidof(ID3D12Device), (void**)&device);
+
+	D3D12_RESOURCE_DESC resource_desc = PYDX12_COM_CALL(GetDesc);
+
+	UINT64 mem_size = 0;
+	device->GetCopyableFootprints(&resource_desc, sub_resource, 1, 0, NULL, NULL, NULL, &mem_size);
+	if (!mem_size)
+	{
+		return PyErr_Format(PyExc_Exception, "unable to retrieve ID3D12Resource size");
+	}
+
+	char* mem;
+	PYDX12_COM_CALL_HRESULT(ID3D12Resource, Map, sub_resource, NULL, (void**)&mem);
+
+	PyObject* py_bytes = PyBytes_FromStringAndSize(mem, mem_size);
+
+	PYDX12_COM_CALL(Unmap, sub_resource, NULL);
+
+	return py_bytes;
+}
+
 static PyObject* pydx12_ID3D12Resource_GetGPUVirtualAddress(pydx12_ID3D12Resource* self, PyObject* args)
 {
 	return PyLong_FromUnsignedLongLong(self->com_ptr->GetGPUVirtualAddress());
+}
+
+static PyObject* pydx12_ID3D12Resource_GetDesc(pydx12_ID3D12Resource* self)
+{
+	D3D12_RESOURCE_DESC desc = self->com_ptr->GetDesc();
+	return pydx12_D3D12_RESOURCE_DESC_instantiate(&desc, NULL, NULL);
 }
 
 PYDX12_METHODS(ID3D12Resource) = {
 	{"Map", (PyCFunction)pydx12_ID3D12Resource_Map, METH_VARARGS, "Gets a CPU pointer to the specified subresource in the resource"},
 	{"Unmap", (PyCFunction)pydx12_ID3D12Resource_Unmap, METH_VARARGS, "Invalidates the CPU pointer to the specified subresource in the resource"},
 	{"GetGPUVirtualAddress", (PyCFunction)pydx12_ID3D12Resource_GetGPUVirtualAddress, METH_VARARGS, "This method returns the GPU virtual address of a buffer resource"},
+	{"GetDesc", (PyCFunction)pydx12_ID3D12Resource_GetDesc, METH_NOARGS, "Gets the resource description"},
 	{"upload", (PyCFunction)pydx12_ID3D12Resource_upload, METH_VARARGS, "upload a python buffer to the specified subresource"},
+	{"download", (PyCFunction)pydx12_ID3D12Resource_download, METH_VARARGS, "download a python bytes object from the specified subresource"},
 	{NULL} /* Sentinel */
 };
 

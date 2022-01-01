@@ -23,10 +23,13 @@ int pydx12_init_descriptor(PyObject* m);
 int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
 
+PYDX12_TYPE_HANDLE(Event);
+
 PYDX12_TYPE_COM(IUnknown);
 PYDX12_TYPE_COM(IDXGIObject);
 PYDX12_TYPE_COM(ID3D12Object);
 PYDX12_TYPE_COM(IDXGIDeviceSubObject);
+PYDX12_TYPE_COM(ID3D12Debug);
 
 static PyObject* pydx12_CreateDXGIFactory(PyObject* self, PyObject* args)
 {
@@ -52,8 +55,8 @@ static PyObject* pydx12_CreateDXGIFactory1(PyObject* self, PyObject* args)
 
 static PyObject* pydx12_CreateDXGIFactory2(PyObject* self, PyObject* args)
 {
-	UINT flags;
-	if (!PyArg_ParseTuple(args, "I", &flags))
+	UINT flags = 0;
+	if (!PyArg_ParseTuple(args, "|I", &flags))
 		return NULL;
 
 	IDXGIFactory2* factory;
@@ -152,6 +155,41 @@ static PyObject* pydx12_D3D12SerializeVersionedRootSignature(PyObject* self, PyO
 	return PYDX12_COM_INSTANTIATE(ID3DBlob, blob, false);
 }
 
+static PyObject* pydx12_D3D12GetDebugInterface(PyObject* self)
+{
+	ID3D12Debug* debug;
+	D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&debug);
+
+	return PYDX12_COM_INSTANTIATE(ID3D12Debug, debug, false);
+}
+
+static int pydx12_Event_init(pydx12_Event* self, PyObject* args, PyObject* kwds)
+{
+	self->handle = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+	return 0;
+}
+
+static PyObject* pydx12_Event_wait(pydx12_Event* self, PyObject* args)
+{
+	DWORD milliseconds = INFINITE;
+	if (!PyArg_ParseTuple(args, "|I", &milliseconds))
+		return NULL;
+
+	Py_BEGIN_ALLOW_THREADS;
+
+	WaitForSingleObject(self->handle, milliseconds);
+
+	Py_END_ALLOW_THREADS;
+
+	Py_RETURN_NONE;
+}
+
+PYDX12_METHODS(Event) = {
+	{"wait", (PyCFunction)pydx12_Event_wait, METH_VARARGS, "WaitForSingleObject() wrapper"},
+	{NULL}  /* Sentinel */
+};
+
 static PyMethodDef pydx12_methods[] =
 {
 	{"CreateDXGIFactory", pydx12_CreateDXGIFactory, METH_VARARGS, "Creates a DXGI 1.0 factory that you can use to generate other DXGI objects"},
@@ -160,6 +198,7 @@ static PyMethodDef pydx12_methods[] =
 	{"D3D12CreateDevice", pydx12_D3D12CreateDevice, METH_VARARGS, "Creates a device that represents the display adapter"},
 	{"D3DCompile", pydx12_D3DCompile, METH_VARARGS, "Compile HLSL code or an effect file into bytecode for a given target"},
 	{"D3D12SerializeVersionedRootSignature", pydx12_D3D12SerializeVersionedRootSignature, METH_VARARGS, "Serializes a root signature of any version that can be passed to ID3D12Device::CreateRootSignature"},
+	{"D3D12GetDebugInterface", (PyCFunction)pydx12_D3D12GetDebugInterface, METH_NOARGS, "Gets a debug interface"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -191,10 +230,30 @@ PYDX12_METHODS(ID3D12Object) = {
 	{NULL}  /* Sentinel */
 };
 
+
+static PyObject* pydx12_ID3D12Debug_EnableDebugLayer(pydx12_ID3D12Debug* self)
+{
+	PYDX12_COM_CALL(EnableDebugLayer);
+	Py_RETURN_NONE;
+}
+
+
+PYDX12_METHODS(ID3D12Debug) = {
+	{"EnableDebugLayer", (PyCFunction)pydx12_ID3D12Debug_EnableDebugLayer, METH_NOARGS, "Enables the debug layer"},
+	{NULL}  /* Sentinel */
+};
+
+
 static int pydx12_init_base(PyObject* m)
 {
+	pydx12_EventType.tp_methods = pydx12_Event_methods;
+	PYDX12_REGISTER_HANDLE(Event);
+
 	PYDX12_REGISTER_COM_BASE(IUnknown);
 	PYDX12_REGISTER_COM(IDXGIObject, IUnknown);
+
+	pydx12_ID3D12DebugType.tp_methods = pydx12_ID3D12Debug_methods;
+	PYDX12_REGISTER_COM(ID3D12Debug, IUnknown);
 
 	pydx12_ID3D12ObjectType.tp_methods = pydx12_ID3D12Object_methods;
 	PYDX12_REGISTER_COM(ID3D12Object, IUnknown);
@@ -205,10 +264,6 @@ static int pydx12_init_base(PyObject* m)
 PyMODINIT_FUNC
 PyInit_api(void)
 {
-	ID3D12Debug* debug;
-	D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&debug);
-	debug->EnableDebugLayer();
-
 	PyObject* m = PyModule_Create(&pydx12_module);
 	if (m == NULL)
 		return NULL;

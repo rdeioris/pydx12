@@ -489,6 +489,45 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetScissorRects(pydx12_ID3D1
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	UINT root_parameter_index;
+	PyObject* py_src_data;
+	UINT dest_offset;
+	if (!PyArg_ParseTuple(args, "IOI", &root_parameter_index, &py_src_data, &dest_offset))
+		return NULL;
+
+	UINT src_data = 0;
+	if (PyLong_Check(py_src_data))
+	{
+		src_data = PyLong_AsUnsignedLong(py_src_data);
+	}
+	else if (PyFloat_Check(py_src_data))
+	{
+		float float_value = (float)PyFloat_AsDouble(py_src_data);
+		UINT* float_as_uint_ptr = (UINT*)&float_value;
+		src_data = *float_as_uint_ptr;
+	}
+	else if (PyObject_CheckBuffer(py_src_data))
+	{
+		Py_buffer view;
+		if (PyObject_GetBuffer(py_src_data, &view, 0))
+		{
+			return NULL;
+		}
+		if (view.len < 4)
+		{
+			PyBuffer_Release(&view);
+			return PyErr_Format(PyExc_ValueError, "expected a buffer of at least 4 bytes");
+		}
+		memcpy(&src_data, view.buf, 4);
+		PyBuffer_Release(&view);
+	}
+
+	PYDX12_COM_CALL(SetGraphicsRoot32BitConstant, root_parameter_index, src_data, dest_offset);
+
+	Py_RETURN_NONE;
+}
 
 
 PYDX12_METHODS(ID3D12GraphicsCommandList) = {
@@ -506,6 +545,7 @@ PYDX12_METHODS(ID3D12GraphicsCommandList) = {
 	{"OMSetRenderTargets", (PyCFunction)pydx12_ID3D12GraphicsCommandList_OMSetRenderTargets, METH_VARARGS, "Sets CPU descriptor handles for the render targets and depth stencil"},
 	{"RSSetViewports", (PyCFunction)pydx12_ID3D12GraphicsCommandList_RSSetViewports, METH_VARARGS, "Bind an array of viewports to the rasterizer stage of the pipeline"},
 	{"RSSetScissorRects", (PyCFunction)pydx12_ID3D12GraphicsCommandList_RSSetScissorRects, METH_VARARGS, "Binds an array of scissor rectangles to the rasterizer stage"},
+	{"SetGraphicsRoot32BitConstant", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant, METH_VARARGS, "Sets a constant in the graphics root signature"},
 	{NULL}  /* Sentinel */
 };
 
@@ -573,9 +613,26 @@ static PyObject* pydx12_ID3D12CommandQueue_Signal(pydx12_ID3D12CommandQueue* sel
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_ID3D12CommandQueue_GetClockCalibration(pydx12_ID3D12CommandQueue* self)
+{
+	UINT64 gpu_timestamp;
+	UINT64 cpu_timestamp;
+	PYDX12_COM_CALL_HRESULT(ID3D12CommandQueue, GetClockCalibration, &gpu_timestamp, &cpu_timestamp);
+	return Py_BuildValue("(KK)", gpu_timestamp, cpu_timestamp);
+}
+
+static PyObject* pydx12_ID3D12CommandQueue_GetTimestampFrequency(pydx12_ID3D12CommandQueue* self)
+{
+	UINT64 frequency;
+	PYDX12_COM_CALL_HRESULT(ID3D12CommandQueue, GetTimestampFrequency, &frequency);
+	return PyLong_FromUnsignedLongLong(frequency);
+}
+
 PYDX12_METHODS(ID3D12CommandQueue) = {
 	{"ExecuteCommandLists", (PyCFunction)pydx12_ID3D12CommandQueue_ExecuteCommandLists, METH_VARARGS, "Submits an array of command lists for execution"},
 	{"Signal", (PyCFunction)pydx12_ID3D12CommandQueue_Signal, METH_VARARGS, "Updates a fence to a specified value"},
+	{"GetClockCalibration", (PyCFunction)pydx12_ID3D12CommandQueue_GetClockCalibration, METH_NOARGS, "This method samples the CPU and GPU timestamp counters at the same moment in time"},
+	{"GetTimestampFrequency", (PyCFunction)pydx12_ID3D12CommandQueue_GetTimestampFrequency, METH_NOARGS, "This method is used to determine the rate at which the GPU timestamp counter increments"},
 	{NULL}  /* Sentinel */
 };
 
