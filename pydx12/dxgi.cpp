@@ -6,6 +6,8 @@ PYDX12_IMPORT_COM(IDXGISwapChain3);
 PYDX12_IMPORT_COM(ID3D12CommandQueue);
 PYDX12_IMPORT(DXGI_SWAP_CHAIN_DESC1);
 
+PYDX12_IMPORT_HANDLE(Window, HWND);
+
 PYDX12_TYPE_COM(IDXGIFactory);
 PYDX12_TYPE_COM(IDXGIFactory1);
 PYDX12_TYPE_COM(IDXGIFactory2);
@@ -28,17 +30,19 @@ static PyObject* pydx12_IDXGIFactory_EnumAdapters(pydx12_IDXGIFactory* self)
 static PyObject* pydx12_IDXGIFactory2_CreateSwapChainForHwnd(pydx12_IDXGIFactory2* self, PyObject* args)
 {
 	PyObject* py_queue;
-	HWND handle;
+	PyObject* py_handle;
 	PyObject* py_swap_chain_desc1;
-	PyObject* py_full_screen_desc;
-	PyObject* py_restrict_to_output;
+	PyObject* py_full_screen_desc = NULL;
+	PyObject* py_restrict_to_output = NULL;
 
-	if (!PyArg_ParseTuple(args, "OLOOO", &py_queue, &handle, &py_swap_chain_desc1, &py_full_screen_desc, &py_restrict_to_output))
+	if (!PyArg_ParseTuple(args, "OOO|OO", &py_queue, &py_handle, &py_swap_chain_desc1, &py_full_screen_desc, &py_restrict_to_output))
 		return NULL;
 
 	ID3D12CommandQueue* queue = pydx12_ID3D12CommandQueue_check(py_queue);
 	if (!queue)
 		return PyErr_Format(PyExc_TypeError, "first argument must be a ID3D12CommandQueue");
+
+	PYDX12_ARG_CHECK_HANDLE(Window, HWND, handle);
 
 	DXGI_SWAP_CHAIN_DESC1* swap_chain_desc1 = pydx12_DXGI_SWAP_CHAIN_DESC1_check(py_swap_chain_desc1);
 	if (!swap_chain_desc1)

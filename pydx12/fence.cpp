@@ -1,6 +1,6 @@
 #include "pydx12.h"
 
-PYDX12_IMPORT_HANDLE(Event);
+PYDX12_IMPORT_HANDLE(Event, HANDLE);
 PYDX12_IMPORT_COM(ID3D12Pageable);
 
 PYDX12_TYPE_COM(ID3D12Fence);
@@ -15,7 +15,7 @@ static PyObject* pydx12_ID3D12Fence_Signal(pydx12_ID3D12Fence* self, PyObject* a
 	UINT64 value = 0;
 	if (!PyArg_ParseTuple(args, "K", &value))
 		return NULL;
-	
+
 	PYDX12_COM_CALL_HRESULT(ID3D12Fence, Signal, value);
 
 	Py_RETURN_NONE;
@@ -28,7 +28,7 @@ static PyObject* pydx12_ID3D12Fence_SetEventOnCompletion(pydx12_ID3D12Fence* sel
 	if (!PyArg_ParseTuple(args, "KO", &value, &py_handle_event))
 		return NULL;
 
-	PYDX12_ARG_CHECK_HANDLE(Event, handle_event);
+	PYDX12_ARG_CHECK_HANDLE(Event, HANDLE, handle_event);
 
 	PYDX12_COM_CALL_HRESULT(ID3D12Fence, SetEventOnCompletion, value, handle_event);
 

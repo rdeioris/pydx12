@@ -48,14 +48,14 @@ static PyObject* pydx12_IDXGISwapChain_GetBuffer(pydx12_IDXGISwapChain* self, Py
 		return PyErr_Format(PyExc_Exception, "unable to retrieve SwapChain buffer %u", buffer_index);
 	}
 
-	return pydx12_ID3D12Resource_instantiate(resource, true);
+	return pydx12_ID3D12Resource_instantiate(resource, false);
 }
 
 static PyObject* pydx12_IDXGISwapChain_Present(pydx12_IDXGISwapChain* self, PyObject* args)
 {
 	UINT sync_interval;
-	UINT flags;
-	if (!PyArg_ParseTuple(args, "II", &sync_interval, &flags))
+	UINT flags = 0;
+	if (!PyArg_ParseTuple(args, "I|I", &sync_interval, &flags))
 		return NULL;
 
 	if (self->com_ptr->Present(sync_interval, flags) != S_OK)

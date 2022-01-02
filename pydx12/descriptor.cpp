@@ -131,6 +131,24 @@ PYDX12_GETSETTERS(D3D12_RENDER_TARGET_VIEW_DESC) = {
 	{ NULL }  /* Sentinel */
 };
 
+PYDX12_TYPE(D3D12_SHADER_RESOURCE_VIEW_DESC);
+PYDX12_GETTER_SETTER(D3D12_SHADER_RESOURCE_VIEW_DESC, Format, LongLong, DXGI_FORMAT);
+PYDX12_GETTER_SETTER(D3D12_SHADER_RESOURCE_VIEW_DESC, ViewDimension, LongLong, D3D12_SRV_DIMENSION);
+PYDX12_GETSETTERS(D3D12_SHADER_RESOURCE_VIEW_DESC) = {
+	PYDX12_DECLARE_GETTER_SETTER(D3D12_SHADER_RESOURCE_VIEW_DESC , Format),
+	PYDX12_DECLARE_GETTER_SETTER(D3D12_SHADER_RESOURCE_VIEW_DESC , ViewDimension),
+	{ NULL }  /* Sentinel */
+};
+
+PYDX12_TYPE(D3D12_UNORDERED_ACCESS_VIEW_DESC);
+PYDX12_GETTER_SETTER(D3D12_UNORDERED_ACCESS_VIEW_DESC, Format, LongLong, DXGI_FORMAT);
+PYDX12_GETTER_SETTER(D3D12_UNORDERED_ACCESS_VIEW_DESC, ViewDimension, LongLong, D3D12_UAV_DIMENSION);
+PYDX12_GETSETTERS(D3D12_UNORDERED_ACCESS_VIEW_DESC) = {
+	PYDX12_DECLARE_GETTER_SETTER(D3D12_UNORDERED_ACCESS_VIEW_DESC  , Format),
+	PYDX12_DECLARE_GETTER_SETTER(D3D12_UNORDERED_ACCESS_VIEW_DESC  , ViewDimension),
+	{ NULL }  /* Sentinel */
+};
+
 PYDX12_TYPE_COM(ID3D12DescriptorHeap);
 
 static PyObject* pydx12_ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(pydx12_ID3D12DescriptorHeap* self)
@@ -162,7 +180,7 @@ static PyObject* pydx12_ID3D12DescriptorHeap_cpu(pydx12_ID3D12DescriptorHeap* se
 		{
 			return PyErr_Format(PyExc_IndexError, "invalid descriptor index %u", index);
 		}
-		descriptor_start.ptr +=  index * increment;
+		descriptor_start.ptr += index * increment;
 		return pydx12_D3D12_CPU_DESCRIPTOR_HANDLE_instantiate(&descriptor_start, NULL, self->com_ptr);
 	}
 
@@ -206,7 +224,76 @@ static PyObject* pydx12_ID3D12DescriptorHeap_cpu(pydx12_ID3D12DescriptorHeap* se
 
 		Py_DECREF(py_item);
 	}
-	
+
+	Py_DECREF(py_iter);
+
+	return py_list;
+}
+
+static PyObject* pydx12_ID3D12DescriptorHeap_gpu(pydx12_ID3D12DescriptorHeap* self, PyObject* args)
+{
+	PyObject* py_index;
+	if (!PyArg_ParseTuple(args, "O", &py_index))
+		return NULL;
+
+	D3D12_DESCRIPTOR_HEAP_DESC desc = self->com_ptr->GetDesc();
+	D3D12_GPU_DESCRIPTOR_HANDLE descriptor_start = self->com_ptr->GetGPUDescriptorHandleForHeapStart();
+	ID3D12Device* device;
+	self->com_ptr->GetDevice(__uuidof(ID3D12Device), (void**)&device);
+	UINT increment = device->GetDescriptorHandleIncrementSize(desc.Type);
+
+	if (PyNumber_Check(py_index))
+	{
+		UINT index = PyLong_AsUnsignedLong(py_index);
+		if (index >= desc.NumDescriptors)
+		{
+			return PyErr_Format(PyExc_IndexError, "invalid descriptor index %u", index);
+		}
+		descriptor_start.ptr += index * increment;
+		return pydx12_D3D12_GPU_DESCRIPTOR_HANDLE_instantiate(&descriptor_start, NULL, self->com_ptr);
+	}
+
+	PyObject* py_iter = PyObject_GetIter(py_index);
+	if (!py_iter)
+		return NULL;
+
+	PyObject* py_list = PyList_New(0);
+
+	while (PyObject* py_item = PyIter_Next(py_iter))
+	{
+		if (!PyNumber_Check(py_item))
+		{
+			Py_DECREF(py_item);
+			Py_DECREF(py_iter);
+			Py_DECREF(py_list);
+			return PyErr_Format(PyExc_ValueError, "argument must be an iterable of indexes");
+		}
+
+		UINT index = PyLong_AsUnsignedLong(py_item);
+		if (index >= desc.NumDescriptors)
+		{
+			Py_DECREF(py_item);
+			Py_DECREF(py_iter);
+			Py_DECREF(py_list);
+			return PyErr_Format(PyExc_IndexError, "invalid descriptor index %u", index);
+		}
+		D3D12_GPU_DESCRIPTOR_HANDLE descriptor = descriptor_start;
+		descriptor.ptr += index * increment;
+
+		PyObject* py_descriptor = pydx12_D3D12_GPU_DESCRIPTOR_HANDLE_instantiate(&descriptor, NULL, self->com_ptr);
+		if (!py_descriptor)
+		{
+			Py_DECREF(py_item);
+			Py_DECREF(py_iter);
+			Py_DECREF(py_list);
+			return NULL;
+		}
+		PyList_Append(py_list, py_descriptor);
+		Py_DECREF(py_descriptor);
+
+		Py_DECREF(py_item);
+	}
+
 	Py_DECREF(py_iter);
 
 	return py_list;
@@ -216,6 +303,7 @@ PYDX12_METHODS(ID3D12DescriptorHeap) = {
 	{"GetCPUDescriptorHandleForHeapStart", (PyCFunction)pydx12_ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart, METH_NOARGS, "Gets the CPU descriptor handle that represents the start of the heap"},
 	{"GetGPUDescriptorHandleForHeapStart", (PyCFunction)pydx12_ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart, METH_NOARGS, "Gets the GPU descriptor handle that represents the start of the heap"},
 	{"cpu", (PyCFunction)pydx12_ID3D12DescriptorHeap_cpu, METH_VARARGS, "Gets the CPU descriptor handle at the specified index"},
+	{"gpu", (PyCFunction)pydx12_ID3D12DescriptorHeap_gpu, METH_VARARGS, "Gets the GPU descriptor handle at the specified index"},
 	{NULL}  /* Sentinel */
 };
 
@@ -224,7 +312,6 @@ int pydx12_init_descriptor(PyObject* m)
 	PYDX12_REGISTER_STRUCT(D3D12_CPU_DESCRIPTOR_HANDLE);
 	PYDX12_REGISTER_STRUCT(D3D12_GPU_DESCRIPTOR_HANDLE);
 	PYDX12_REGISTER_STRUCT(D3D12_DESCRIPTOR_HEAP_DESC);
-	PYDX12_REGISTER_STRUCT(D3D12_RENDER_TARGET_VIEW_DESC);
 
 	PYDX12_REGISTER_STRUCT(D3D12_BUFFER_RTV);
 	PYDX12_REGISTER_STRUCT(D3D12_TEX1D_RTV);
@@ -234,6 +321,11 @@ int pydx12_init_descriptor(PyObject* m)
 	PYDX12_REGISTER_STRUCT(D3D12_TEX2DMS_RTV);
 	PYDX12_REGISTER_STRUCT(D3D12_TEX2DMS_ARRAY_RTV);
 	PYDX12_REGISTER_STRUCT(D3D12_TEX3D_RTV);
+	PYDX12_REGISTER_STRUCT(D3D12_RENDER_TARGET_VIEW_DESC);
+
+	PYDX12_REGISTER_STRUCT(D3D12_SHADER_RESOURCE_VIEW_DESC);
+	PYDX12_REGISTER_STRUCT(D3D12_UNORDERED_ACCESS_VIEW_DESC);
+
 
 	pydx12_ID3D12DescriptorHeapType.tp_methods = pydx12_ID3D12DescriptorHeap_methods;
 	PYDX12_REGISTER_COM(ID3D12DescriptorHeap, ID3D12Pageable);
@@ -256,6 +348,8 @@ int pydx12_init_descriptor(PyObject* m)
 	PYDX12_ENUM(D3D12_RTV_DIMENSION_TEXTURE2DMS);
 	PYDX12_ENUM(D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY);
 	PYDX12_ENUM(D3D12_RTV_DIMENSION_TEXTURE3D);
+
+	PYDX12_ENUM(D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 
 	return 0;
 }

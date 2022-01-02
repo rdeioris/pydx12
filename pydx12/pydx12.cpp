@@ -23,7 +23,8 @@ int pydx12_init_descriptor(PyObject* m);
 int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
 
-PYDX12_TYPE_HANDLE(Event);
+PYDX12_TYPE_HANDLE(Event, HANDLE);
+PYDX12_TYPE_HANDLE(Window, HWND);
 
 PYDX12_TYPE_COM(IUnknown);
 PYDX12_TYPE_COM(IDXGIObject);
@@ -96,11 +97,11 @@ static PyObject* pydx12_D3DCompile(PyObject* self, PyObject* args)
 	PyObject* py_include;
 	const char* entry_point = NULL;
 	const char* target = "xx_x_x"; // shut up the warning ;)
-	UINT flags1;
-	UINT flags2;
+	UINT flags1 = 0;
+	UINT flags2 = 0;
 
 	D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
-	if (!PyArg_ParseTuple(args, "OzOOzsLL", &py_src_data, &source_name, &py_defines, &py_include, &entry_point, &target, &flags1, &flags2))
+	if (!PyArg_ParseTuple(args, "OzOOzs|LL", &py_src_data, &source_name, &py_defines, &py_include, &entry_point, &target, &flags1, &flags2))
 		return NULL;
 
 	if (!PyUnicode_Check(py_src_data))
@@ -163,6 +164,13 @@ static PyObject* pydx12_D3D12GetDebugInterface(PyObject* self)
 	return PYDX12_COM_INSTANTIATE(ID3D12Debug, debug, false);
 }
 
+static void pydx12_Event_dealloc(pydx12_Event* self)\
+{
+	if (self->handle)
+		CloseHandle(self->handle);
+	Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
 static int pydx12_Event_init(pydx12_Event* self, PyObject* args, PyObject* kwds)
 {
 	self->handle = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -187,6 +195,105 @@ static PyObject* pydx12_Event_wait(pydx12_Event* self, PyObject* args)
 
 PYDX12_METHODS(Event) = {
 	{"wait", (PyCFunction)pydx12_Event_wait, METH_VARARGS, "WaitForSingleObject() wrapper"},
+	{NULL}  /* Sentinel */
+};
+
+static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwds)
+{
+	PyObject* py_title;
+	int width;
+	int height;
+	if (!PyArg_ParseTuple(args, "Oii", &py_title, &width, &height))
+		return NULL;
+
+	if (!PyUnicode_Check(py_title))
+	{
+		PyErr_SetString(PyExc_ValueError, "title must be a unicode object");
+		return -1;
+	}
+
+	wchar_t* title = PyUnicode_AsWideCharString(py_title, NULL);
+	if (!title)
+	{
+		return -1;
+	}
+
+	self->handle = CreateWindowExW(
+		WS_EX_APPWINDOW,
+		L"pydx12",
+		title,
+		WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME | WS_BORDER,
+		CW_USEDEFAULT, CW_USEDEFAULT,
+		width, height,
+		NULL,
+		NULL, GetModuleHandle(NULL), NULL);
+
+	PyMem_Free(title);
+
+	if (!self->handle)
+	{
+		PyErr_SetString(PyExc_Exception, "unable to create Window");
+		return -1;
+	}
+
+	ShowWindow(self->handle, SW_SHOW);
+
+	return 0;
+}
+
+static void pydx12_Window_dealloc(pydx12_Window* self)\
+{
+	if (self->handle)
+		DestroyWindow(self->handle);
+	Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject* pydx12_Window_show(pydx12_Window* self, PyObject* args)
+{
+	ShowWindow(self->handle, SW_SHOW);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_Window_hide(pydx12_Window* self, PyObject* args)
+{
+	ShowWindow(self->handle, SW_HIDE);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_Window_minimize(pydx12_Window* self, PyObject* args)
+{
+	ShowWindow(self->handle, SW_MINIMIZE);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_Window_maximize(pydx12_Window* self, PyObject* args)
+{
+	ShowWindow(self->handle, SW_MAXIMIZE);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
+{
+	MSG message;
+	if (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
+	{
+		TranslateMessage(&message);
+		DispatchMessage(&message);
+		Py_RETURN_TRUE;
+	}
+	Py_RETURN_FALSE;
+}
+
+PYDX12_METHODS(Window) = {
+	{"show", (PyCFunction)pydx12_Window_show, METH_VARARGS, "Show the Window"},
+	{"hide", (PyCFunction)pydx12_Window_hide, METH_VARARGS, "Hide the Window"},
+	{"minimize", (PyCFunction)pydx12_Window_minimize, METH_VARARGS, "Minimize the Window"},
+	{"maximize", (PyCFunction)pydx12_Window_maximize, METH_VARARGS, "Maximize the Window"},
+	{"dequeue", (PyCFunction)pydx12_Window_dequeue, METH_VARARGS, "Dequeue events from the Window"},
 	{NULL}  /* Sentinel */
 };
 
@@ -246,8 +353,22 @@ PYDX12_METHODS(ID3D12Debug) = {
 
 static int pydx12_init_base(PyObject* m)
 {
+	WNDCLASSW window_class = {};
+	window_class.lpfnWndProc = DefWindowProcW;
+	window_class.hInstance = GetModuleHandle(NULL);
+	window_class.lpszClassName = L"pydx12";
+
+	if (!RegisterClassW(&window_class))
+	{
+		return -1;
+	}
+
+
 	pydx12_EventType.tp_methods = pydx12_Event_methods;
 	PYDX12_REGISTER_HANDLE(Event);
+
+	pydx12_WindowType.tp_methods = pydx12_Window_methods;
+	PYDX12_REGISTER_HANDLE(Window);
 
 	PYDX12_REGISTER_COM_BASE(IUnknown);
 	PYDX12_REGISTER_COM(IDXGIObject, IUnknown);

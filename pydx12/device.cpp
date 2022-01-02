@@ -11,6 +11,10 @@ PYDX12_IMPORT(D3D12_RENDER_TARGET_VIEW_DESC);
 PYDX12_IMPORT(D3D12_CPU_DESCRIPTOR_HANDLE);
 PYDX12_IMPORT(D3D12_GRAPHICS_PIPELINE_STATE_DESC);
 PYDX12_IMPORT(D3D12_PLACED_SUBRESOURCE_FOOTPRINT);
+PYDX12_IMPORT(D3D12_COMPUTE_PIPELINE_STATE_DESC);
+PYDX12_IMPORT(D3D12_SHADER_RESOURCE_VIEW_DESC);
+PYDX12_IMPORT(D3D12_UNORDERED_ACCESS_VIEW_DESC);
+
 
 PYDX12_IMPORT_COM(ID3D12Object);
 PYDX12_IMPORT_COM(ID3D12Resource);
@@ -116,7 +120,7 @@ static PyObject* pydx12_ID3D12Device_CreateCommandList(pydx12_ID3D12Device* self
 	UINT node_mask;
 	D3D12_COMMAND_LIST_TYPE type;
 	PyObject* py_command_allocator;
-	PyObject* py_initial_state;
+	PyObject* py_initial_state = NULL;
 	if (!PyArg_ParseTuple(args, "ILO|O", &node_mask, &type, &py_command_allocator, &py_initial_state))
 		return NULL;
 
@@ -154,6 +158,42 @@ static PyObject* pydx12_ID3D12Device_CreateDescriptorHeap(pydx12_ID3D12Device* s
 	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateDescriptorHeap, descriptor_heap_desc, __uuidof(ID3D12DescriptorHeap), (void**)&descriptor_heap);
 
 	return PYDX12_COM_INSTANTIATE(ID3D12DescriptorHeap, descriptor_heap, false);
+}
+
+static PyObject* pydx12_ID3D12Device_CreateShaderResourceView(pydx12_ID3D12Device* self, PyObject* args)
+{
+	PyObject* py_resource;
+	PyObject* py_shader_resource_view_desc;
+	PyObject* py_dest_descriptor;
+	if (!PyArg_ParseTuple(args, "OOO", &py_resource, &py_shader_resource_view_desc, &py_dest_descriptor))
+		return NULL;
+
+	PYDX12_ARG_CHECK_NONE(ID3D12Resource, resource);
+	PYDX12_ARG_CHECK_NONE(D3D12_SHADER_RESOURCE_VIEW_DESC, shader_resource_view_desc);
+	PYDX12_ARG_CHECK(D3D12_CPU_DESCRIPTOR_HANDLE, dest_descriptor);
+
+	PYDX12_COM_CALL(CreateShaderResourceView, resource, shader_resource_view_desc, *dest_descriptor);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_ID3D12Device_CreateUnorderedAccessView(pydx12_ID3D12Device* self, PyObject* args)
+{
+	PyObject* py_resource;
+	PyObject* py_counter_resource;
+	PyObject* py_unordered_access_view_desc;
+	PyObject* py_dest_descriptor;
+	if (!PyArg_ParseTuple(args, "OOOO", &py_resource, &py_counter_resource, &py_unordered_access_view_desc, &py_dest_descriptor))
+		return NULL;
+
+	PYDX12_ARG_CHECK_NONE(ID3D12Resource, resource);
+	PYDX12_ARG_CHECK_NONE(ID3D12Resource, counter_resource);
+	PYDX12_ARG_CHECK_NONE(D3D12_UNORDERED_ACCESS_VIEW_DESC, unordered_access_view_desc);
+	PYDX12_ARG_CHECK(D3D12_CPU_DESCRIPTOR_HANDLE, dest_descriptor);
+
+	PYDX12_COM_CALL(CreateUnorderedAccessView, resource, counter_resource, unordered_access_view_desc, *dest_descriptor);
+
+	Py_RETURN_NONE;
 }
 
 static PyObject* pydx12_ID3D12Device_CreateRenderTargetView(pydx12_ID3D12Device* self, PyObject* args)
@@ -252,6 +292,20 @@ static PyObject* pydx12_ID3D12Device_GetCopyableFootprints(pydx12_ID3D12Device* 
 	return py_ret;
 }
 
+static PyObject* pydx12_ID3D12Device_CreateComputePipelineState(pydx12_ID3D12Device* self, PyObject* args)
+{
+	PyObject* py_desc;
+	if (!PyArg_ParseTuple(args, "O", &py_desc))
+		return NULL;
+
+	PYDX12_ARG_CHECK(D3D12_COMPUTE_PIPELINE_STATE_DESC, desc);
+
+	ID3D12PipelineState* pipeline_state;
+	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateComputePipelineState, desc, __uuidof(ID3D12PipelineState), (void**)&pipeline_state);
+
+	return PYDX12_COM_INSTANTIATE(ID3D12PipelineState, pipeline_state, false);
+}
+
 PYDX12_METHODS(ID3D12Device) = {
 	{"CreateCommittedResource", (PyCFunction)pydx12_ID3D12Device_CreateCommittedResource, METH_VARARGS, "Creates a new D3D12 Resource over an implicitely created Heap"},
 	{"GetAdapterLuid", (PyCFunction)pydx12_ID3D12Device_GetAdapterLuid, METH_NOARGS, "Get the Adapter LUID"},
@@ -261,10 +315,13 @@ PYDX12_METHODS(ID3D12Device) = {
 	{"CreateFence", (PyCFunction)pydx12_ID3D12Device_CreateFence, METH_VARARGS, "Creates a fence object"},
 	{"CreateDescriptorHeap", (PyCFunction)pydx12_ID3D12Device_CreateDescriptorHeap, METH_VARARGS, "Creates a descriptor heap object"},
 	{"CreateRenderTargetView", (PyCFunction)pydx12_ID3D12Device_CreateRenderTargetView, METH_VARARGS, "Creates a render-target view for accessing resource data"},
+	{"CreateUnorderedAccessView", (PyCFunction)pydx12_ID3D12Device_CreateUnorderedAccessView, METH_VARARGS, "Creates a view for unordered accessing"},
+	{"CreateShaderResourceView", (PyCFunction)pydx12_ID3D12Device_CreateShaderResourceView, METH_VARARGS, "Creates a shader-resource view for accessing data in a resource"},
 	{"CreateRootSignature", (PyCFunction)pydx12_ID3D12Device_CreateRootSignature, METH_VARARGS, "Creates a root signature layout"},
 	{"CreateGraphicsPipelineState", (PyCFunction)pydx12_ID3D12Device_CreateGraphicsPipelineState, METH_VARARGS, "Creates a graphics pipeline state object"},
 	{"GetNodeCount", (PyCFunction)pydx12_ID3D12Device_GetNodeCount, METH_NOARGS, "Reports the number of physical adapters (nodes) that are associated with this device"},
 	{"GetCopyableFootprints", (PyCFunction)pydx12_ID3D12Device_GetCopyableFootprints, METH_VARARGS, "Gets a resource layout that can be copied"},
+	{"CreateComputePipelineState", (PyCFunction)pydx12_ID3D12Device_CreateComputePipelineState, METH_VARARGS, "Creates a compute pipeline state object"},
 	{NULL}  /* Sentinel */
 };
 

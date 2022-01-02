@@ -3,6 +3,7 @@
 PYDX12_IMPORT(D3D12_TEXTURE_COPY_LOCATION);
 PYDX12_IMPORT(D3D12_RESOURCE_BARRIER);
 PYDX12_IMPORT(D3D12_CPU_DESCRIPTOR_HANDLE);
+PYDX12_IMPORT(D3D12_GPU_DESCRIPTOR_HANDLE);
 PYDX12_IMPORT(D3D12_VERTEX_BUFFER_VIEW);
 PYDX12_IMPORT(D3D12_VIEWPORT);
 PYDX12_IMPORT(D3D12_RECT);
@@ -13,6 +14,7 @@ PYDX12_IMPORT_COM(ID3D12DeviceChild);
 PYDX12_IMPORT_COM(ID3D12Fence);
 PYDX12_IMPORT_COM(ID3D12PipelineState);
 PYDX12_IMPORT_COM(ID3D12RootSignature);
+PYDX12_IMPORT_COM(ID3D12DescriptorHeap);
 
 PYDX12_TYPE(D3D12_COMMAND_QUEUE_DESC);
 PYDX12_GETTER_SETTER(D3D12_COMMAND_QUEUE_DESC, Type, LongLong, D3D12_COMMAND_LIST_TYPE);
@@ -87,7 +89,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_Dispatch(pydx12_ID3D12Graphics
 	if (!PyArg_ParseTuple(args, "III", &ThreadGroupCountX, &ThreadGroupCountY, &ThreadGroupCountZ))
 		return NULL;
 
-	self->com_ptr->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+	PYDX12_COM_CALL(Dispatch, ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 	Py_RETURN_NONE;
 }
 
@@ -278,12 +280,23 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootSignature(pydx1
 	if (!PyArg_ParseTuple(args, "O", &py_root_signature))
 		return NULL;
 
-	PYDX12_ARG_CHECK(ID3D12RootSignature, root_signature);
+	PYDX12_ARG_CHECK_NONE(ID3D12RootSignature, root_signature);
 	PYDX12_COM_CALL(SetGraphicsRootSignature, root_signature);
 
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootSignature(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	PyObject* py_root_signature;
+	if (!PyArg_ParseTuple(args, "O", &py_root_signature))
+		return NULL;
+
+	PYDX12_ARG_CHECK_NONE(ID3D12RootSignature, root_signature);
+	PYDX12_COM_CALL(SetComputeRootSignature, root_signature);
+
+	Py_RETURN_NONE;
+}
 
 static PyObject* pydx12_ID3D12GraphicsCommandList_IASetVertexBuffers(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
 {
@@ -529,10 +542,75 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant(p
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	UINT root_parameter_index;
+	PyObject* py_base_descriptor;
+	if (!PyArg_ParseTuple(args, "IO", &root_parameter_index, &py_base_descriptor))
+		return NULL;
+
+	PYDX12_ARG_CHECK(D3D12_GPU_DESCRIPTOR_HANDLE, base_descriptor);
+
+	PYDX12_COM_CALL(SetComputeRootDescriptorTable, root_parameter_index, *base_descriptor);
+
+	Py_RETURN_NONE;
+
+}
+
+
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetDescriptorHeaps(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	PyObject* py_descriptor_heaps;
+	if (!PyArg_ParseTuple(args, "O", &py_descriptor_heaps))
+		return NULL;
+
+	PyObject* py_iter = PyObject_GetIter(py_descriptor_heaps);
+	if (!py_iter)
+	{
+		return NULL;
+	}
+
+	ID3D12DescriptorHeap** descriptor_heaps = NULL;
+	UINT descriptor_heaps_counter = 0;
+
+	while (PyObject* py_item = PyIter_Next(py_iter))
+	{
+		ID3D12DescriptorHeap* descriptor_heap = pydx12_ID3D12DescriptorHeap_check(py_item);
+		if (!descriptor_heap)
+		{
+			Py_DECREF(py_item);
+			Py_DECREF(py_iter);
+			if (descriptor_heaps)
+				PyMem_Free(descriptor_heaps);
+			return PyErr_Format(PyExc_TypeError, "argument must be an iterable of ID3D12DescriptorHeap");
+		}
+		descriptor_heaps_counter++;
+		ID3D12DescriptorHeap** new_descriptor_heaps = (ID3D12DescriptorHeap**)PyMem_Realloc(descriptor_heaps, sizeof(ID3D12DescriptorHeap*) * descriptor_heaps_counter);
+		if (!new_descriptor_heaps)
+		{
+			Py_DECREF(py_item);
+			Py_DECREF(py_iter);
+			if (descriptor_heaps)
+				PyMem_Free(descriptor_heaps);
+			return PyErr_Format(PyExc_TypeError, "unable to allocate memory for D3D12_RECT's array");
+		}
+		descriptor_heaps = new_descriptor_heaps;
+		descriptor_heaps[descriptor_heaps_counter - 1] = descriptor_heap;
+		Py_DECREF(py_item);
+	}
+	Py_DECREF(py_iter);
+
+	self->com_ptr->SetDescriptorHeaps(descriptor_heaps_counter, descriptor_heaps);
+
+	if (descriptor_heaps)
+		PyMem_Free(descriptor_heaps);
+
+	Py_RETURN_NONE;
+}
 
 PYDX12_METHODS(ID3D12GraphicsCommandList) = {
 	{"Close", (PyCFunction)pydx12_ID3D12GraphicsCommandList_Close, METH_NOARGS, "Indicates that recording to the command list has finished"},
-	{"Dispatch", (PyCFunction)pydx12_ID3D12GraphicsCommandList_Dispatch, METH_NOARGS, "Executes a command list from a thread group"},
+	{"Dispatch", (PyCFunction)pydx12_ID3D12GraphicsCommandList_Dispatch, METH_VARARGS, "Executes a command list from a thread group"},
 	{"Reset", (PyCFunction)pydx12_ID3D12GraphicsCommandList_Reset, METH_VARARGS, "Resets a command list back to its initial state as if a new command list was just created"},
 	{"CopyResource", (PyCFunction)pydx12_ID3D12GraphicsCommandList_CopyResource, METH_VARARGS, "Copies the entire contents of the source resource to the destination resource"},
 	{"CopyTextureRegion", (PyCFunction)pydx12_ID3D12GraphicsCommandList_CopyTextureRegion, METH_VARARGS, "This method uses the GPU to copy texture data between two locations"},
@@ -541,11 +619,14 @@ PYDX12_METHODS(ID3D12GraphicsCommandList) = {
 	{"DrawInstanced", (PyCFunction)pydx12_ID3D12GraphicsCommandList_DrawInstanced, METH_VARARGS, "Draws non-indexed, instanced primitives"},
 	{"IASetPrimitiveTopology", (PyCFunction)pydx12_ID3D12GraphicsCommandList_IASetPrimitiveTopology, METH_VARARGS, "Bind information about the primitive type, and data order that describes input data for the input assembler stage"},
 	{"SetGraphicsRootSignature", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRootSignature, METH_VARARGS, "Sets the layout of the graphics root signature"},
+	{"SetComputeRootSignature", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetComputeRootSignature, METH_VARARGS, "Sets the layout of the compute root signature"},
 	{"IASetVertexBuffers", (PyCFunction)pydx12_ID3D12GraphicsCommandList_IASetVertexBuffers, METH_VARARGS, "Sets a CPU descriptor handle for the vertex buffers"},
 	{"OMSetRenderTargets", (PyCFunction)pydx12_ID3D12GraphicsCommandList_OMSetRenderTargets, METH_VARARGS, "Sets CPU descriptor handles for the render targets and depth stencil"},
 	{"RSSetViewports", (PyCFunction)pydx12_ID3D12GraphicsCommandList_RSSetViewports, METH_VARARGS, "Bind an array of viewports to the rasterizer stage of the pipeline"},
 	{"RSSetScissorRects", (PyCFunction)pydx12_ID3D12GraphicsCommandList_RSSetScissorRects, METH_VARARGS, "Binds an array of scissor rectangles to the rasterizer stage"},
 	{"SetGraphicsRoot32BitConstant", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant, METH_VARARGS, "Sets a constant in the graphics root signature"},
+	{"SetComputeRootDescriptorTable", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable, METH_VARARGS, "Sets a descriptor table into the compute root signature"},
+	{"SetDescriptorHeaps", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetDescriptorHeaps, METH_VARARGS, "Changes the currently bound descriptor heaps that are associated with a command list"},
 	{NULL}  /* Sentinel */
 };
 
