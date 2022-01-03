@@ -83,7 +83,6 @@ class RefCountTests(unittest.TestCase):
         self.assertIsNone(d3d12_shader_bytecode.pShaderBytecode)
         ref = weakref.ref(d3d12_shader_bytecode)
         data = b'\xde\xad\xbe\xef'
-        print("assigning...")
         d3d12_shader_bytecode.pShaderBytecode = data
         d3d12_shader_bytecode.BytecodeLength = 4
         data = None
