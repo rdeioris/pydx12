@@ -30,6 +30,13 @@
 	#t,           /* tp_doc */\
 }
 
+typedef struct
+{
+	void* ptr;
+	size_t number_of_items;
+	void (*hook)(void*, const size_t);
+} pydx12_allocated_chunk;
+
 #define PYDX12_TYPE_INSTANTIATE(t) PyObject* pydx12_##t##_instantiate_with_size(t* data, PyObject* data_owner, IUnknown* com_owner, const size_t len)\
 {\
 	printf("allocing " #t " com_owner: %p\n", com_owner);\
@@ -81,11 +88,26 @@ t* pydx12_##t##_check(PyObject* py_object)\
 	pydx12_##t##* pydx12_object = (pydx12_##t*)py_object; \
 	return pydx12_object->data; \
 }\
-void pydx12_##t##_add_refs(pydx12_##t* self, t* data);\
-void pydx12_##t##_release_refs(pydx12_##t* self, t* data);\
+void pydx12_##t##_add_refs(t* data);\
+void pydx12_##t##_release_refs(t* data);\
 static void pydx12_##t##_dealloc(pydx12_##t* self)\
 {\
 	printf("dealloc " #t " %p %p\n", self, self->com_owner);\
+	if (self->mem_list)\
+	{\
+		printf("about to clean %d items\n", self->mem_list_size);\
+		for(size_t i = 0; i < self->mem_list_size;i++)\
+		{\
+				pydx12_allocated_chunk* allocated_chunk = &self->mem_list[i];\
+				if (allocated_chunk->ptr)\
+				{\
+					printf("chunk at %p %p\n", allocated_chunk, allocated_chunk->hook); \
+					allocated_chunk->hook(allocated_chunk->ptr, allocated_chunk->number_of_items); \
+					PyMem_Free(allocated_chunk->ptr); \
+				}\
+		}\
+		PyMem_Free(self->mem_list);\
+	}\
 	if (self->data)\
 	{\
 		pydx12_##t##_release_refs(self->data);\
@@ -150,7 +172,13 @@ static int pydx12_##t##_init(pydx12_##t* self, PyObject *args, PyObject *kwds)\
 }\
 static PyObject* pydx12_##t##_sq_item(pydx12_##t* self, Py_ssize_t index)\
 {\
-	return pydx12_##t##_instantiate(self->data + index, (PyObject*)self, self->com_owner);\
+	printf("getting index %lld\n", index);\
+	if (PyObject* py_struct = pydx12_##t##_instantiate(self->data + index, (PyObject*)self, self->com_owner))\
+	{\
+		pydx12_##t##_add_refs(self->data + index);\
+		return py_struct;\
+	}\
+	return NULL;\
 }\
 static PySequenceMethods pydx12_##t##_sequence_methods = {\
 	NULL,\
@@ -204,13 +232,145 @@ static PyObject* pydx12_##t##_to_bytearray(pydx12_##t* self)\
 		Py_RETURN_NONE;\
 	return PyByteArray_FromStringAndSize((const char*)self->data, self->data_len);\
 }\
+static PyObject* pydx12_##t##_get_tracked_refs(PyObject* cls)\
+{\
+	Py_INCREF(pydx12_##t##_refs_tracker);\
+	return pydx12_##t##_refs_tracker;\
+}\
 static PyMethodDef pydx12_##t##_methods[] = {\
 	{"get_fields", (PyCFunction)pydx12_##t##_get_fields, METH_NOARGS, "returns a list of structure's fields"},\
 	{"to_dict", (PyCFunction)pydx12_##t##_to_dict, METH_NOARGS, "returns a dictionary representation of the structure"},\
 	{"to_bytes", (PyCFunction)pydx12_##t##_to_bytes, METH_NOARGS, "returns structure's content as a bytes object"},\
 	{"to_bytearray", (PyCFunction)pydx12_##t##_to_bytearray, METH_NOARGS, "returns structure's content as a bytearray object"},\
+	{"get_tracked_refs", (PyCFunction)pydx12_##t##_get_tracked_refs, METH_NOARGS | METH_CLASS, "returns structure's type tracked references"},\
 	{NULL}\
-};
+};\
+void pydx12_##t##_track(unsigned long long addr, PyObject* py_object)\
+{\
+	PyObject* py_tracked_key = PyLong_FromUnsignedLongLong(addr);\
+	PyObject* py_already_tracked_ref = PyDict_GetItem(pydx12_##t##_refs_tracker, py_tracked_key);\
+	if (py_already_tracked_ref)\
+	{\
+		PyObject* py_ref_counter = PyTuple_GetItem(py_already_tracked_ref, 1);\
+		unsigned long long ref_counter = PyLong_AsUnsignedLongLong(py_ref_counter);\
+		printf("[already tracked] increasing address " #t " %p\n", addr);\
+		PyTuple_SetItem(py_already_tracked_ref, 1, PyLong_FromUnsignedLongLong(ref_counter + 1));\
+	}\
+	else\
+	{\
+			PyObject* py_tracked_new_ref = PyTuple_New(2); \
+			Py_INCREF(py_object); \
+			PyTuple_SetItem(py_tracked_new_ref, 0, py_object); \
+			PyTuple_SetItem(py_tracked_new_ref, 1, PyLong_FromUnsignedLongLong(1)); \
+			printf("py_tracked_new_ref for " #t " %p %p\n", py_tracked_new_ref, py_object); \
+			PyDict_SetItem(pydx12_##t##_refs_tracker, py_tracked_key, py_tracked_new_ref); \
+			Py_DECREF(py_tracked_new_ref);\
+			printf("tracking " #t " %p %p\n", addr, py_object);\
+	}\
+	Py_DECREF(py_tracked_key);\
+}\
+void pydx12_##t##_track_mem(unsigned long long addr)\
+{\
+	PyObject* py_tracked_key = PyLong_FromUnsignedLongLong(addr);\
+	PyObject* py_already_tracked_ref = PyDict_GetItem(pydx12_##t##_refs_tracker, py_tracked_key);\
+	if (py_already_tracked_ref)\
+	{\
+		unsigned long long ref_counter = PyLong_AsUnsignedLongLong(py_already_tracked_ref);\
+		printf("[already tracked] increasing address " #t " %p\n", addr);\
+		PyObject* py_new_ref = PyLong_FromUnsignedLongLong(ref_counter + 1);\
+		PyDict_SetItem(pydx12_##t##_refs_tracker, py_tracked_key, py_new_ref);\
+		Py_DECREF(py_new_ref);\
+	}\
+	else\
+	{\
+			PyObject* py_new_ref = PyLong_FromUnsignedLongLong(1); \
+			PyDict_SetItem(pydx12_##t##_refs_tracker, py_tracked_key, py_new_ref); \
+			Py_DECREF(py_new_ref); \
+			printf("[MEM] tracking " #t " %p\n", addr); \
+	}\
+	Py_DECREF(py_tracked_key);\
+}\
+void pydx12_##t##_incref(unsigned long long addr)\
+{\
+	if (addr)\
+	{\
+		PyObject* py_tracked_key = PyLong_FromUnsignedLongLong(addr); \
+		PyObject* py_tracked_ref = PyDict_GetItem(pydx12_##t##_refs_tracker, py_tracked_key); \
+		if (py_tracked_ref)\
+		{\
+			if (PyLong_Check(py_tracked_ref))\
+			{\
+				PyObject* py_new_ref = PyLong_FromUnsignedLongLong(PyLong_AsUnsignedLong(py_tracked_ref) + 1); \
+				PyDict_SetItem(pydx12_##t##_refs_tracker, py_tracked_key, py_new_ref); \
+				Py_DECREF(py_new_ref); \
+				printf("add tracking " #t " %p\n", addr); \
+			}\
+			else\
+			{\
+				PyObject* py_ref_counter = PyTuple_GetItem(py_tracked_ref, 1); \
+				unsigned long long ref_counter = PyLong_AsUnsignedLongLong(py_ref_counter); \
+				printf("INCREF " #t " %p\n", addr); \
+				PyTuple_SetItem(py_tracked_ref, 1, PyLong_FromUnsignedLongLong(ref_counter + 1)); \
+			}\
+		}\
+		Py_DECREF(py_tracked_key); \
+	}\
+}\
+void pydx12_##t##_decref(unsigned long long addr)\
+{\
+	if (addr)\
+	{\
+		PyObject* py_tracked_key = PyLong_FromUnsignedLongLong((unsigned long long)addr);\
+		PyObject* py_tracked_ref = PyDict_GetItem(pydx12_##t##_refs_tracker, py_tracked_key);\
+		if (py_tracked_ref)\
+		{\
+			if (PyLong_Check(py_tracked_ref))\
+			{\
+				unsigned long long ref_counter = PyLong_AsUnsignedLongLong(py_tracked_ref);\
+				ref_counter--;\
+				if (ref_counter == 0)\
+				{\
+					PyDict_DelItem(pydx12_##t##_refs_tracker, py_tracked_key);\
+					printf("[FINAL] destroyng mem address " #t " %p\n", addr);\
+					PyMem_Free((void*)addr);\
+				}\
+				else\
+				{\
+					PyObject* py_new_ref = PyLong_FromUnsignedLongLong(ref_counter); \
+					PyDict_SetItem(pydx12_##t##_refs_tracker, py_tracked_key, py_new_ref); \
+					Py_DECREF(py_new_ref); \
+					printf("DECREF " #t " %p %llu\n", addr, ref_counter); \
+				}\
+			}\
+			else\
+			{\
+				PyObject* py_ref_counter = PyTuple_GetItem(py_tracked_ref, 1);\
+				unsigned long long ref_counter = PyLong_AsUnsignedLongLong(py_ref_counter);\
+				ref_counter--;\
+				printf("decreasing address " #t " %p %llu\n", addr, ref_counter);\
+				if (ref_counter == 0)\
+				{\
+						PyDict_DelItem(pydx12_##t##_refs_tracker, py_tracked_key);\
+						printf("destroyng address " #t " %p\n", addr);\
+				}\
+				else\
+				{\
+					PyTuple_SetItem(py_tracked_ref, 1, PyLong_FromUnsignedLongLong(ref_counter));\
+				}\
+			}\
+		}\
+		Py_DECREF(py_tracked_key);\
+	}\
+}\
+static void pydx12_##t##_cleanup(void* data, const size_t number_of_elements)\
+{\
+	printf("cleaning " #t " up %p\n", data);\
+	t* items = (t*)data;\
+	for(size_t i = 0; i < number_of_elements; i++)\
+	{\
+		pydx12_##t##_release_refs((t*)&items[i]);\
+	}\
+}
 
 #define PYDX12_TYPE_INSTANTIATE_COM(t) PyObject* pydx12_##t##_instantiate(t* com_ptr, const bool add_ref)\
 {\
@@ -283,14 +443,17 @@ PyTypeObject* pydx12_##t##_get_type()\
 	PyObject* data_owner;\
 	IUnknown* com_owner;\
 	PyObject *weakreflist;\
+	size_t mem_list_size;\
+	pydx12_allocated_chunk *mem_list;\
 	__VA_ARGS__;\
 } pydx12_##t;\
+static PyObject* pydx12_##t##_refs_tracker = NULL;\
 PYDX12_TYPE_MEMBERS(t);\
 PYDX12_TYPE_INSTANTIATE(t)
 
 #define PYDX12_TYPE(t, ...) PYDX12_TYPE_WITH_REFS(t, __VA_ARGS__);\
-void pydx12_##t##_add_refs(pydx12_##t* self, t* data) {}\
-void pydx12_##t##_release_refs(pydx12_##t* self, t* data) {}
+void pydx12_##t##_add_refs(t* data) {}\
+void pydx12_##t##_release_refs(t* data) {}
 
 #define PYDX12_TYPE_COM(t, ...) typedef struct\
 {\
@@ -320,7 +483,7 @@ ht pydx12_##t##_check(PyObject* py_object)\
 	}\
 	pydx12_##t##* pydx12_object = (pydx12_##t*)py_object; \
 	return pydx12_object->handle; \
-}\
+}
 
 #define PYDX12_ENUM(t) PyModule_AddObject(m, #t, PyLong_FromLongLong(t))
 
@@ -341,6 +504,7 @@ pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
 pydx12_##t##Type.tp_as_sequence = &pydx12_##t##_sequence_methods;\
 pydx12_##t##Type.tp_methods = pydx12_##t##_methods;\
 pydx12_##t##Type.tp_weaklistoffset  = offsetof(pydx12_##t, weakreflist);\
+pydx12_##t##_refs_tracker = PyDict_New();\
 PYDX12_REGISTER(t)
 
 #define PYDX12_REGISTER_COM(t, s) pydx12_##t##Type.tp_base = pydx12_##s##_get_type();\
@@ -355,6 +519,14 @@ PYDX12_REGISTER(t)
 
 #define PYDX12_REGISTER_COM_BASE(t) pydx12_##t##Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
 PYDX12_REGISTER(t)
+
+#define PYDX12_TRACK(t, addr, py_object) pydx12_##t##_track((unsigned long long)addr, py_object)
+
+#define PYDX12_TRACK_MEM(t, addr) pydx12_##t##_track_mem((unsigned long long)addr)
+
+#define PYDX12_INCREF(t, addr) pydx12_##t##_incref((unsigned long long)addr)
+
+#define PYDX12_DECREF(t, addr) pydx12_##t##_decref((unsigned long long)addr)
 
 
 #define PYDX12_GETTER(t, field, py_type) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
@@ -438,7 +610,7 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 {\
 	if (PyObject* py_struct = pydx12_##type##_instantiate(&self->data->##field, (PyObject*)self, self->com_owner))\
 	{\
-		pydx12_##type##_add_refs((pydx12_##t*)py_struct, &self->data->##field);\
+		pydx12_##type##_add_refs(&self->data->##field);\
 		return (PyObject*)py_struct;\
 	}\
 	return NULL;\
@@ -454,7 +626,7 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 	}\
 	pydx12_##type##_release_refs(&self->data->##field);\
 	self->data->##field = *data;\
-	pydx12_##type##_add_refs((pydx12_##t*)value, &self->data->##field);\
+	pydx12_##type##_add_refs(&self->data->##field);\
 	return 0;\
 }
 
@@ -465,7 +637,7 @@ PYDX12_STRUCT_SETTER(t, field, type)
 {\
 	if (PyObject* py_struct = pydx12_##type##_instantiate(&self->data->##field[0], (PyObject*)self, self->com_owner))\
 	{\
-		pydx12_##type##_add_refs((pydx12_##t*) py_struct, (type*)&self->data->##field[0]);\
+		pydx12_##type##_add_refs((type*)&self->data->##field[0]);\
 		return py_struct;\
 	}\
 	return NULL;\
@@ -501,7 +673,8 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 			Py_DECREF(py_list);\
 			return NULL;\
 		}\
-		pydx12_##type##_add_refs((pydx12_##t*)py_item, (type*)&self->data->##field[i]);\
+		printf("calling add refs for " #type "\n");\
+		pydx12_##type##_add_refs((type*)&self->data->##field[i]);\
 		PyList_Append(py_list, py_item);\
 		Py_DECREF(py_item);\
 	}\
@@ -513,11 +686,28 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 	PyObject* py_iter = PyObject_GetIter(value);\
 	if (!py_iter)\
 	{\
-		return NULL;\
+		return -1;\
 	}\
 	if (self->data->##field)\
 	{\
-		PyMem_Free((void*)self->data->##field);\
+		pydx12_##type##_release_refs((type*)&self->data->##field);\
+		pydx12_##t* data_owner = self;\
+		while(data_owner->data_owner)\
+		{\
+			data_owner = (pydx12_##t*)data_owner->data_owner;\
+		}\
+		printf("DATA OWNER FOR " #t " IS %p\n", data_owner);\
+		for(size_t i = 0; i < data_owner->mem_list_size;i++)\
+		{\
+			if (data_owner->mem_list[i].ptr == self->data->##field)\
+			{\
+				pydx12_allocated_chunk* allocated_chunk = &data_owner->mem_list[i];\
+				allocated_chunk->hook(allocated_chunk->ptr, allocated_chunk->number_of_items);\
+				PyMem_Free(allocated_chunk->ptr);\
+				data_owner->mem_list[i].ptr = NULL;\
+				break;\
+			}\
+		}\
 		self->data->##field = NULL;\
 	}\
 	Py_ssize_t counter = 0;\
@@ -541,12 +731,45 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 			return -1;\
 		}\
 		new_array[counter-1] = *data;\
-		pydx12_##type##_release_refs((type*)&self->data->##field);\
+		pydx12_##type##_add_refs((type*)&new_array[counter-1]);\
 		self->data->##field = (const type*)new_array;\
-		pydx12_##type##_add_refs((pydx12_##t*)py_item,(type*)&self->data->##field);\
 		Py_DECREF(py_item);\
 	}\
 	Py_DECREF(py_iter);\
+	if (self->data->##field)\
+	{\
+		pydx12_##t* data_owner = self;\
+		while(data_owner->data_owner)\
+		{\
+			data_owner = (pydx12_##t*)data_owner->data_owner;\
+		}\
+		printf("DATA OWNER FOR " #t " IS %p\n", data_owner);\
+		bool tracked = false;\
+		for(size_t i = 0; i < data_owner->mem_list_size;i++)\
+		{\
+			if (data_owner->mem_list[i].ptr == NULL)\
+			{\
+				data_owner->mem_list[i].ptr = (void*)self->data->##field;\
+				data_owner->mem_list[i].number_of_items = counter;\
+				data_owner->mem_list[i].hook = pydx12_##type##_cleanup;\
+				tracked = true;\
+				break;\
+			}\
+		}\
+		if (!tracked)\
+		{\
+			data_owner->mem_list_size++;\
+			pydx12_allocated_chunk* new_mem_list = (pydx12_allocated_chunk*)PyMem_Realloc(data_owner->mem_list, sizeof(pydx12_allocated_chunk) * data_owner->mem_list_size);\
+			if (!new_mem_list)\
+			{\
+				return -1;\
+			}\
+			data_owner->mem_list = new_mem_list;\
+			data_owner->mem_list[data_owner->mem_list_size-1].ptr = (void*)self->data->##field;\
+			data_owner->mem_list[data_owner->mem_list_size-1].number_of_items = counter;\
+			data_owner->mem_list[data_owner->mem_list_size-1].hook = pydx12_##type##_cleanup;\
+		}\
+	}\
 	return 0;\
 }
 
@@ -560,22 +783,21 @@ PYDX12_STRUCT_ARRAY_SETTER(t, field, type)
 	return PyUnicode_FromString(self->data->##field);\
 }
 
-#define PYDX12_STRING_SETTER(t, field, py_ref_field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
+#define PYDX12_STRING_SETTER(t, field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
 {\
 	if (!PyUnicode_Check(value))\
 	{\
 		PyErr_SetString(PyExc_TypeError, "value must be a unicode object");\
 		return -1;\
 	}\
-	Py_XDECREF(self->##py_ref_field);\
+	PYDX12_DECREF(t, self->data->##field);\
 	self->data->##field = PyUnicode_AsUTF8(value);\
-	self->##py_ref_field = value;\
-	Py_INCREF(self->##py_ref_field);\
+	PYDX12_TRACK(t, self->data->##field, value);\
 	return 0;\
 }
 
-#define PYDX12_STRING_GETTER_SETTER(t, field, py_ref_field) PYDX12_STRING_GETTER(t, field)\
-PYDX12_STRING_SETTER(t, field, py_ref_field)
+#define PYDX12_STRING_GETTER_SETTER(t, field) PYDX12_STRING_GETTER(t, field)\
+PYDX12_STRING_SETTER(t, field)
 
 #define PYDX12_WSTRING_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
@@ -614,7 +836,7 @@ PYDX12_BOOL_SETTER(t, field)
 	return PyBytes_FromStringAndSize((const char*)self->data->##field, self->data->##field_size);\
 }
 
-#define PYDX12_BUFFER_SETTER(t, field, py_ref_field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
+#define PYDX12_BUFFER_SETTER(t, field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
 {\
 	Py_buffer view;\
 	if (value != Py_None && !PyObject_CheckBuffer(value))\
@@ -627,24 +849,23 @@ PYDX12_BOOL_SETTER(t, field)
 		PyErr_SetString(PyExc_TypeError, "unable to acquire buffer");\
 		return -1;\
 	}\
-	Py_XDECREF(self->##py_ref_field);\
+	PYDX12_DECREF(t, self->data->##field);\
 	if (value == Py_None)\
 	{\
 		self->data->##field = NULL;\
-		self->##py_ref_field = NULL;\
 	}\
 	else\
 	{\
 		self->data->##field = view.buf;\
-		self->##py_ref_field = value;\
-		Py_INCREF(self->##py_ref_field);\
+		printf("tracking " #t " %p\n", self->data->##field);\
+		PYDX12_TRACK(t, self->data->##field, value);\
 		PyBuffer_Release(&view);\
 	}\
 	return 0;\
 }
 
-#define PYDX12_BUFFER_GETTER_SETTER(t, field, field_size, py_ref_field) PYDX12_BUFFER_GETTER(t, field, field_size)\
-PYDX12_BUFFER_SETTER(t, field, py_ref_field)
+#define PYDX12_BUFFER_GETTER_SETTER(t, field, field_size) PYDX12_BUFFER_GETTER(t, field, field_size)\
+PYDX12_BUFFER_SETTER(t, field)
 
 
 #define PYDX12_COM_GETTER(t, field_t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
@@ -739,10 +960,6 @@ if (py_##name && py_##name != Py_None)\
 #define PYDX12_RELEASE_REFS(t) void pydx12_##t##_release_refs(t* data)
 #define PYDX12_COM_ADD(field) if (data->##field) data->##field->AddRef()
 #define PYDX12_COM_RELEASE(field) if (data->##field) data->##field->Release();
-#define PYDX12_INCREF(t, field) {pydx12_##t* py_value = (pydx12_##t*)(((char *)data) - sizeof(PyObject));\
-Py_XINCREF(py_value->##field);}
-#define PYDX12_DECREF(t, field) {pydx12_##t* py_value = (pydx12_##t*)(((char *)data) - sizeof(PyObject));\
-Py_XDECREF(py_value->##field);}
 
 #define PYDX12_COM_INSTANTIATE(t, object, add_ref) pydx12_##t##_instantiate(object, add_ref)
 
