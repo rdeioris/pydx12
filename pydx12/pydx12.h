@@ -81,8 +81,8 @@ t* pydx12_##t##_check(PyObject* py_object)\
 	pydx12_##t##* pydx12_object = (pydx12_##t*)py_object; \
 	return pydx12_object->data; \
 }\
-void pydx12_##t##_add_refs(t* data);\
-void pydx12_##t##_release_refs(t* data);\
+void pydx12_##t##_add_refs(pydx12_##t* self, t* data);\
+void pydx12_##t##_release_refs(pydx12_##t* self, t* data);\
 static void pydx12_##t##_dealloc(pydx12_##t* self)\
 {\
 	printf("dealloc " #t " %p %p\n", self, self->com_owner);\
@@ -100,6 +100,8 @@ static void pydx12_##t##_dealloc(pydx12_##t* self)\
 	}\
 	if (self->com_owner)\
 		self->com_owner->Release();\
+	if (self->weakreflist)\
+		PyObject_ClearWeakRefs((PyObject*)self);\
 	Py_TYPE(self)->tp_free((PyObject*)self);\
 }\
 static int pydx12_##t##_init(pydx12_##t* self, PyObject *args, PyObject *kwds)\
@@ -280,14 +282,15 @@ PyTypeObject* pydx12_##t##_get_type()\
 	size_t data_len;\
 	PyObject* data_owner;\
 	IUnknown* com_owner;\
+	PyObject *weakreflist;\
 	__VA_ARGS__;\
 } pydx12_##t;\
 PYDX12_TYPE_MEMBERS(t);\
 PYDX12_TYPE_INSTANTIATE(t)
 
 #define PYDX12_TYPE(t, ...) PYDX12_TYPE_WITH_REFS(t, __VA_ARGS__);\
-void pydx12_##t##_add_refs(t* data) {}\
-void pydx12_##t##_release_refs(t* data) {}
+void pydx12_##t##_add_refs(pydx12_##t* self, t* data) {}\
+void pydx12_##t##_release_refs(pydx12_##t* self, t* data) {}
 
 #define PYDX12_TYPE_COM(t, ...) typedef struct\
 {\
@@ -337,6 +340,7 @@ pydx12_##t##Type.tp_getset = pydx12_##t##_getsetters;\
 pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
 pydx12_##t##Type.tp_as_sequence = &pydx12_##t##_sequence_methods;\
 pydx12_##t##Type.tp_methods = pydx12_##t##_methods;\
+pydx12_##t##Type.tp_weaklistoffset  = offsetof(pydx12_##t, weakreflist);\
 PYDX12_REGISTER(t)
 
 #define PYDX12_REGISTER_COM(t, s) pydx12_##t##Type.tp_base = pydx12_##s##_get_type();\
@@ -434,7 +438,7 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 {\
 	if (PyObject* py_struct = pydx12_##type##_instantiate(&self->data->##field, (PyObject*)self, self->com_owner))\
 	{\
-		pydx12_##type##_add_refs(&self->data->##field);\
+		pydx12_##type##_add_refs((pydx12_##t*)py_struct, &self->data->##field);\
 		return (PyObject*)py_struct;\
 	}\
 	return NULL;\
@@ -450,7 +454,7 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 	}\
 	pydx12_##type##_release_refs(&self->data->##field);\
 	self->data->##field = *data;\
-	pydx12_##type##_add_refs(&self->data->##field);\
+	pydx12_##type##_add_refs((pydx12_##t*)value, &self->data->##field);\
 	return 0;\
 }
 
@@ -461,7 +465,7 @@ PYDX12_STRUCT_SETTER(t, field, type)
 {\
 	if (PyObject* py_struct = pydx12_##type##_instantiate(&self->data->##field[0], (PyObject*)self, self->com_owner))\
 	{\
-		pydx12_##type##_add_refs((type*)&self->data->##field[0]);\
+		pydx12_##type##_add_refs((pydx12_##t*) py_struct, (type*)&self->data->##field[0]);\
 		return py_struct;\
 	}\
 	return NULL;\
@@ -497,7 +501,7 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 			Py_DECREF(py_list);\
 			return NULL;\
 		}\
-		pydx12_##type##_add_refs((type*)&self->data->##field[i]);\
+		pydx12_##type##_add_refs((pydx12_##t*)py_item, (type*)&self->data->##field[i]);\
 		PyList_Append(py_list, py_item);\
 		Py_DECREF(py_item);\
 	}\
@@ -539,7 +543,7 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 		new_array[counter-1] = *data;\
 		pydx12_##type##_release_refs((type*)&self->data->##field);\
 		self->data->##field = (const type*)new_array;\
-		pydx12_##type##_add_refs((type*)&self->data->##field);\
+		pydx12_##type##_add_refs((pydx12_##t*)py_item,(type*)&self->data->##field);\
 		Py_DECREF(py_item);\
 	}\
 	Py_DECREF(py_iter);\

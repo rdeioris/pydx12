@@ -31,4 +31,5 @@ Exposes DirectX12 features to python.
       setup_requires=['wheel'],
       packages=['pydx12'],
       package_data={'pydx12': ['api.pyi']},
-      ext_modules=[module])
+      ext_modules=[module],
+      test_suite='tests')
