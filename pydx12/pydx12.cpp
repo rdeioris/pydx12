@@ -24,7 +24,7 @@ int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
 
 PYDX12_TYPE_HANDLE(Event, HANDLE);
-PYDX12_TYPE_HANDLE(Window, HWND);
+PYDX12_TYPE_HANDLE(Window, HWND, bool closed);
 
 PYDX12_TYPE_COM(IUnknown);
 PYDX12_TYPE_COM(IDXGIObject);
@@ -236,6 +236,10 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		return -1;
 	}
 
+	SetWindowLongPtr(self->handle, GWLP_USERDATA, (LONG_PTR)self);
+
+	self->closed = false;
+
 	ShowWindow(self->handle, SW_SHOW);
 
 	return 0;
@@ -283,8 +287,15 @@ static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 	{
 		TranslateMessage(&message);
 		DispatchMessage(&message);
-		Py_RETURN_TRUE;
 	}
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_Window_is_closed(pydx12_Window* self, PyObject* args)
+{
+	if (self->closed)
+		Py_RETURN_TRUE;
 	Py_RETURN_FALSE;
 }
 
@@ -294,6 +305,7 @@ PYDX12_METHODS(Window) = {
 	{"minimize", (PyCFunction)pydx12_Window_minimize, METH_VARARGS, "Minimize the Window"},
 	{"maximize", (PyCFunction)pydx12_Window_maximize, METH_VARARGS, "Maximize the Window"},
 	{"dequeue", (PyCFunction)pydx12_Window_dequeue, METH_VARARGS, "Dequeue events from the Window"},
+	{"is_closed", (PyCFunction)pydx12_Window_is_closed, METH_VARARGS, "Returns True if the Window has been closed"},
 	{NULL}  /* Sentinel */
 };
 
@@ -350,11 +362,24 @@ PYDX12_METHODS(ID3D12Debug) = {
 	{NULL}  /* Sentinel */
 };
 
+static LRESULT pydx12_DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+{
+	pydx12_Window* self = (pydx12_Window*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+	if (self)
+	{
+		if (Msg == WM_CLOSE)
+		{
+			self->closed = true;
+			return 0;
+		}
+	}
+	return DefWindowProcW(hWnd, Msg, wParam, lParam);
+}
 
 static int pydx12_init_base(PyObject* m)
 {
 	WNDCLASSW window_class = {};
-	window_class.lpfnWndProc = DefWindowProcW;
+	window_class.lpfnWndProc = pydx12_DefWindowProcW;
 	window_class.hInstance = GetModuleHandle(NULL);
 	window_class.lpszClassName = L"pydx12";
 
@@ -379,6 +404,10 @@ static int pydx12_init_base(PyObject* m)
 	pydx12_ID3D12ObjectType.tp_methods = pydx12_ID3D12Object_methods;
 	PYDX12_REGISTER_COM(ID3D12Object, IUnknown);
 	PYDX12_REGISTER_COM(IDXGIDeviceSubObject, IDXGIObject);
+
+	PYDX12_ENUM(WM_CLOSE);
+	PYDX12_ENUM(WM_QUIT);
+
 	return 0;
 }
 

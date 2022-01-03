@@ -79,20 +79,19 @@ print(swap_chain)
 
 print('ok')
 
-while True:
+running = True
+
+while not window.is_closed():
     while window.dequeue():
         pass
+
     back_buffer_index = swap_chain.GetCurrentBackBufferIndex()
     back_buffer = swap_chain.GetBuffer(back_buffer_index)
-
-    print('back buffer', back_buffer_index, back_buffer)
 
     command_list.Reset(allocator)
 
     back_buffer_copy_location = D3D12_TEXTURE_COPY_LOCATION(
         Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, pResource=back_buffer)
-
-    print('done release')
 
     barrier000 = D3D12_RESOURCE_BARRIER(
         Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
@@ -121,3 +120,5 @@ while True:
         fence_value += 1
 
     swap_chain.Present(1)
+
+print('END')
