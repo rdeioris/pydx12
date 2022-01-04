@@ -282,12 +282,14 @@ static PyObject* pydx12_Window_maximize(pydx12_Window* self, PyObject* args)
 
 static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 {
+	Py_BEGIN_ALLOW_THREADS;
 	MSG message;
-	if (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
+	while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
 	{
 		TranslateMessage(&message);
 		DispatchMessage(&message);
 	}
+	Py_END_ALLOW_THREADS;
 
 	Py_RETURN_NONE;
 }
@@ -299,6 +301,30 @@ static PyObject* pydx12_Window_is_closed(pydx12_Window* self, PyObject* args)
 	Py_RETURN_FALSE;
 }
 
+static PyObject* pydx12_Window_set_title(pydx12_Window* self, PyObject* args)
+{
+	PyObject* py_title;
+	if (!PyArg_ParseTuple(args, "O", &py_title))
+		return NULL;
+
+	if (!PyUnicode_Check(py_title))
+	{
+		return PyErr_Format(PyExc_ValueError, "title must be a unicode object");
+	}
+
+	wchar_t* title = PyUnicode_AsWideCharString(py_title, NULL);
+	if (!title)
+	{
+		return NULL;
+	}
+
+	SetWindowTextW(self->handle, title);
+
+	PyMem_Free(title);
+
+	Py_RETURN_NONE;
+}
+
 PYDX12_METHODS(Window) = {
 	{"show", (PyCFunction)pydx12_Window_show, METH_VARARGS, "Show the Window"},
 	{"hide", (PyCFunction)pydx12_Window_hide, METH_VARARGS, "Hide the Window"},
@@ -306,8 +332,25 @@ PYDX12_METHODS(Window) = {
 	{"maximize", (PyCFunction)pydx12_Window_maximize, METH_VARARGS, "Maximize the Window"},
 	{"dequeue", (PyCFunction)pydx12_Window_dequeue, METH_VARARGS, "Dequeue events from the Window"},
 	{"is_closed", (PyCFunction)pydx12_Window_is_closed, METH_VARARGS, "Returns True if the Window has been closed"},
+	{"set_title", (PyCFunction)pydx12_Window_set_title, METH_VARARGS, "Set the Window title"},
 	{NULL}  /* Sentinel */
 };
+
+static PyObject* pydx12_QueryPerformanceCounter(PyObject* self, PyObject* args)
+{
+	LARGE_INTEGER counter;
+	QueryPerformanceCounter(&counter);
+
+	return PyLong_FromUnsignedLongLong(counter.QuadPart);
+}
+
+static PyObject* pydx12_QueryPerformanceFrequency(PyObject* self, PyObject* args)
+{
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+
+	return PyLong_FromUnsignedLongLong(frequency.QuadPart);
+}
 
 static PyMethodDef pydx12_methods[] =
 {
@@ -318,6 +361,8 @@ static PyMethodDef pydx12_methods[] =
 	{"D3DCompile", pydx12_D3DCompile, METH_VARARGS, "Compile HLSL code or an effect file into bytecode for a given target"},
 	{"D3D12SerializeVersionedRootSignature", pydx12_D3D12SerializeVersionedRootSignature, METH_VARARGS, "Serializes a root signature of any version that can be passed to ID3D12Device::CreateRootSignature"},
 	{"D3D12GetDebugInterface", (PyCFunction)pydx12_D3D12GetDebugInterface, METH_NOARGS, "Gets a debug interface"},
+	{"QueryPerformanceCounter", (PyCFunction)pydx12_QueryPerformanceCounter, METH_NOARGS, "Retrieves the current value of the performance counter"},
+	{"QueryPerformanceFrequency", (PyCFunction)pydx12_QueryPerformanceFrequency, METH_NOARGS, "Retrieves the frequency of the performance counter"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

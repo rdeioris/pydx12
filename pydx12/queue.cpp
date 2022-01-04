@@ -5,6 +5,7 @@ PYDX12_IMPORT(D3D12_RESOURCE_BARRIER);
 PYDX12_IMPORT(D3D12_CPU_DESCRIPTOR_HANDLE);
 PYDX12_IMPORT(D3D12_GPU_DESCRIPTOR_HANDLE);
 PYDX12_IMPORT(D3D12_VERTEX_BUFFER_VIEW);
+PYDX12_IMPORT(D3D12_INDEX_BUFFER_VIEW);
 PYDX12_IMPORT(D3D12_VIEWPORT);
 PYDX12_IMPORT(D3D12_RECT);
 
@@ -118,7 +119,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_CopyResource(pydx12_ID3D12Grap
 	if (!src_resource)
 		return PyErr_Format(PyExc_TypeError, "second argument must be a ID3D12Resource");
 
-	self->com_ptr->CopyResource(src_resource, dst_resource);
+	self->com_ptr->CopyResource(dst_resource, src_resource);
 	Py_RETURN_NONE;
 }
 
@@ -263,6 +264,21 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_DrawInstanced(pydx12_ID3D12Gra
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_ID3D12GraphicsCommandList_DrawIndexedInstanced(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	UINT index_count_per_instance;
+	UINT instance_count;
+	UINT start_index_location;
+	INT base_vertex_location;
+	UINT start_instance_location;
+	if (!PyArg_ParseTuple(args, "IIIiI", &index_count_per_instance, &instance_count, &start_index_location, &base_vertex_location, &start_instance_location))
+		return NULL;
+
+	PYDX12_COM_CALL(DrawIndexedInstanced, index_count_per_instance, instance_count, start_index_location, base_vertex_location, start_instance_location);
+
+	Py_RETURN_NONE;
+}
+
 static PyObject* pydx12_ID3D12GraphicsCommandList_IASetPrimitiveTopology(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
 {
 	D3D12_PRIMITIVE_TOPOLOGY primitive_topology;
@@ -345,6 +361,20 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_IASetVertexBuffers(pydx12_ID3D
 
 	if (views)
 		PyMem_Free(views);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_ID3D12GraphicsCommandList_IASetIndexBuffer(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	PyObject* py_view;
+	if (!PyArg_ParseTuple(args, "O", &py_view))
+		return NULL;
+
+
+	PYDX12_ARG_CHECK(D3D12_INDEX_BUFFER_VIEW, view);
+
+	PYDX12_COM_CALL(IASetIndexBuffer, view);
 
 	Py_RETURN_NONE;
 }
@@ -617,10 +647,12 @@ PYDX12_METHODS(ID3D12GraphicsCommandList) = {
 	{"ResourceBarrier", (PyCFunction)pydx12_ID3D12GraphicsCommandList_ResourceBarrier, METH_VARARGS, "Notifies the driver that it needs to synchronize multiple accesses to resources"},
 	{"ClearRenderTargetView", (PyCFunction)pydx12_ID3D12GraphicsCommandList_ClearRenderTargetView, METH_VARARGS, "Sets all the elements in a render target to one value"},
 	{"DrawInstanced", (PyCFunction)pydx12_ID3D12GraphicsCommandList_DrawInstanced, METH_VARARGS, "Draws non-indexed, instanced primitives"},
+	{"DrawIndexedInstanced", (PyCFunction)pydx12_ID3D12GraphicsCommandList_DrawIndexedInstanced, METH_VARARGS, "Draws indexed, instanced primitives"},
 	{"IASetPrimitiveTopology", (PyCFunction)pydx12_ID3D12GraphicsCommandList_IASetPrimitiveTopology, METH_VARARGS, "Bind information about the primitive type, and data order that describes input data for the input assembler stage"},
 	{"SetGraphicsRootSignature", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRootSignature, METH_VARARGS, "Sets the layout of the graphics root signature"},
 	{"SetComputeRootSignature", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetComputeRootSignature, METH_VARARGS, "Sets the layout of the compute root signature"},
 	{"IASetVertexBuffers", (PyCFunction)pydx12_ID3D12GraphicsCommandList_IASetVertexBuffers, METH_VARARGS, "Sets a CPU descriptor handle for the vertex buffers"},
+	{"IASetIndexBuffer", (PyCFunction)pydx12_ID3D12GraphicsCommandList_IASetIndexBuffer, METH_VARARGS, "Sets the view for the index buffer"},
 	{"OMSetRenderTargets", (PyCFunction)pydx12_ID3D12GraphicsCommandList_OMSetRenderTargets, METH_VARARGS, "Sets CPU descriptor handles for the render targets and depth stencil"},
 	{"RSSetViewports", (PyCFunction)pydx12_ID3D12GraphicsCommandList_RSSetViewports, METH_VARARGS, "Bind an array of viewports to the rasterizer stage of the pipeline"},
 	{"RSSetScissorRects", (PyCFunction)pydx12_ID3D12GraphicsCommandList_RSSetScissorRects, METH_VARARGS, "Binds an array of scissor rectangles to the rasterizer stage"},

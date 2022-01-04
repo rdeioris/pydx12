@@ -1,9 +1,11 @@
 import time
 from pydx12 import *
-from utils import get_best_adapter, enable_debug, print_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer
+from utils import get_best_adapter, enable_debug, print_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer, Barrier
 from PIL import Image
 import gc
 import sys
+import time
+import random
 
 enable_debug()
 
@@ -14,7 +16,7 @@ setup_debug(device)
 image = Image.open('python-logo.png')
 width, height = image.size
 print(width, height)
-texture = Texture(device, width, height)
+texture = Texture(device, width, height, name='Python Logo')
 footprint, num_rows, row_size_in_bytes, total_bytes = device.GetCopyableFootprints(
     texture.resource.GetDesc(), 0, 1, 0)
 
@@ -57,6 +59,9 @@ upload_buffer_copy_location = D3D12_TEXTURE_COPY_LOCATION(
     Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, pResource=upload_buffer.resource, PlacedFootprint=footprint)
 command_list.CopyTextureRegion(
     texture_copy_location, 0, 0, 0, upload_buffer_copy_location, None)
+
+command_list.ResourceBarrier([Barrier(
+    texture.resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE).barrier_desc])
 command_list.Close()
 
 queue.ExecuteCommandLists([command_list])
@@ -64,7 +69,7 @@ queue.Signal(fence, fence_value)
 if fence.GetCompletedValue() < fence_value:
     fence.SetEventOnCompletion(fence_value, fence_event)
     fence_event.wait()
-    fence_value += 1
+fence_value += 1
 
 window = Window('pydx12: Tutorial 009 (SwapChain)', 1024, 1024)
 
@@ -79,36 +84,46 @@ print(swap_chain)
 
 print('ok')
 
+descriptor_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC(
+    Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+    NumDescriptors=2)
+descriptor_heap = device.CreateDescriptorHeap(descriptor_heap_desc)
+rtvs = descriptor_heap.cpu((0, 1))
+
+device.CreateRenderTargetView(swap_chain.GetBuffer(0), None, rtvs[0])
+device.CreateRenderTargetView(swap_chain.GetBuffer(1), None, rtvs[1])
+
 running = True
+fps = 0
+counter = 0
+frequency = QueryPerformanceFrequency()
+
+now = QueryPerformanceCounter()
 
 while not window.is_closed():
-    while window.dequeue():
-        pass
+    window.dequeue()
 
     back_buffer_index = swap_chain.GetCurrentBackBufferIndex()
     back_buffer = swap_chain.GetBuffer(back_buffer_index)
 
     command_list.Reset(allocator)
 
+    command_list.ResourceBarrier([Barrier(
+        back_buffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET).barrier_desc])
+
+    command_list.ClearRenderTargetView(rtvs[back_buffer_index], (1, 0, 0, 1))
+
     back_buffer_copy_location = D3D12_TEXTURE_COPY_LOCATION(
         Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, pResource=back_buffer)
 
-    barrier000 = D3D12_RESOURCE_BARRIER(
-        Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
-    barrier000.Transition.pResource = texture.resource
-    barrier000.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST
-    barrier000.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-    command_list.ResourceBarrier([barrier000])
+    command_list.ResourceBarrier([Barrier(
+        back_buffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_DEST).barrier_desc])
 
     command_list.CopyTextureRegion(
-        back_buffer_copy_location, 0, 0, 0, texture_copy_location, None)
+        back_buffer_copy_location, random.randint(0, 512), random.randint(0, 512), 0, texture_copy_location, None)
 
-    barrier001 = D3D12_RESOURCE_BARRIER(
-        Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
-    barrier001.Transition.pResource = texture.resource
-    barrier001.Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-    barrier001.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE
-    command_list.ResourceBarrier([barrier001])
+    command_list.ResourceBarrier([Barrier(
+        back_buffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT).barrier_desc])
 
     command_list.Close()
 
@@ -117,8 +132,17 @@ while not window.is_closed():
     if fence.GetCompletedValue() < fence_value:
         fence.SetEventOnCompletion(fence_value, fence_event)
         fence_event.wait()
-        fence_value += 1
+    fence_value += 1
 
     swap_chain.Present(1)
+    new_now = QueryPerformanceCounter()
+    counter += new_now - now
+    now = new_now
+    if counter >= frequency:
+        window.set_title(str(fps))
+        counter -= frequency
+        fps = 1
+    else:
+        fps += 1
 
 print('END')

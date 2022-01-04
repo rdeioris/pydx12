@@ -53,7 +53,7 @@ class UploadBuffer:
 
 class Texture:
 
-    def __init__(self, device, width, height, uav=False):
+    def __init__(self, device, width, height, uav=False, name=None):
         buffer_desc = D3D12_RESOURCE_DESC()
         buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D
         buffer_desc.Width = width
@@ -67,6 +67,8 @@ class Texture:
             buffer_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
         self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
             Type=D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COMMON, None)
+        if name:
+            self.resource.SetName(name)
 
 
 class ReadbackBuffer:
@@ -84,3 +86,13 @@ class ReadbackBuffer:
 
         self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
             Type=D3D12_HEAP_TYPE_READBACK), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, None)
+
+
+class Barrier:
+
+    def __init__(self, resource, before, after):
+        self.barrier_desc = D3D12_RESOURCE_BARRIER(
+            Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
+        self.barrier_desc.Transition.pResource = resource
+        self.barrier_desc.Transition.StateBefore = before
+        self.barrier_desc.Transition.StateAfter = after
