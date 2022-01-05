@@ -93,13 +93,48 @@ class RefCountTests(unittest.TestCase):
 
     def test_string_tracking(self):
         hello = 'HELLO'
+        initial_ref_count = sys.getrefcount(hello)
+        print('REFCNT[0]', sys.getrefcount(hello),
+              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
         d3d12_input_element_desc = D3D12_INPUT_ELEMENT_DESC()
         d3d12_input_element_desc.SemanticName = hello
+        print('REFCNT[1]', sys.getrefcount(hello),
+              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
         d3d12_input_element_desc2 = D3D12_INPUT_ELEMENT_DESC(
             SemanticName=hello)
+        print('REFCNT[1.5]', sys.getrefcount(hello),
+              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
         d3d12_input_element_desc = None
+        print('REFCNT[1.7]', sys.getrefcount(hello),
+              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
         d3d12_input_element_desc2 = None
+        print('REFCNT[2]', sys.getrefcount(hello),
+              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
         self.assertIsNotNone(hello)
+        self.assertEqual(sys.getrefcount(hello), initial_ref_count)
+
+    def test_string_untracking(self):
+        d3d12_input_element_desc = D3D12_INPUT_ELEMENT_DESC(
+            SemanticName='HELLO'.lower())
+        foo = d3d12_input_element_desc.SemanticName
+        d3d12_input_element_desc.SemanticName = 'FOO'
+        self.assertEqual(foo, 'hello')
+
+    def test_struct_array_simple(self):
+        pipeline_state_desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC()
+        pipeline_state_desc.InputLayout.NumElements = 3
+        descs = [
+            D3D12_INPUT_ELEMENT_DESC(
+                SemanticName='POSITION', Format=DXGI_FORMAT_R32G32_FLOAT),
+            D3D12_INPUT_ELEMENT_DESC(),
+            D3D12_INPUT_ELEMENT_DESC(SemanticName='NORMAL')]
+        pipeline_state_desc.InputLayout.pInputElementDescs = descs
+        print('D3D12_GRAPHICS_PIPELINE_STATE_DESC',
+              D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs())
+        print('D3D12_INPUT_LAYOUT_DESC',
+              D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
+        print('D3D12_INPUT_ELEMENT_DESC',
+              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
 
     def test_struct_array(self):
         pipeline_state_desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC()
@@ -124,8 +159,10 @@ class RefCountTests(unittest.TestCase):
         print(D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs())
         print(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
         print(D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
+        print('END OF PIPELINE')
         pipeline_state_desc = None
         pipeline_state_desc2 = None
+        print('PIPELINE CLEARED')
         print(D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs())
         print(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
         print(D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
@@ -135,7 +172,11 @@ class RefCountTests(unittest.TestCase):
         print(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
         print(D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
         descs = None
+        print(D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs())
+        print(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
+        print(D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
         self.assertTrue(
             len(D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs()) == 0)
         self.assertTrue(len(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs()) == 0)
         self.assertTrue(len(D3D12_INPUT_ELEMENT_DESC.get_tracked_refs()) == 0)
+        print("END OF TEST")

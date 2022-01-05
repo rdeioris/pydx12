@@ -32,7 +32,6 @@ static void pydx12_PYDX12_STRUCT_ARRAY_CHUNK_dealloc_wrapper(pydx12_PYDX12_STRUC
 {
 	printf("!!!!!!!STRUCT removal... %p %p %llu\n", self->data->ptr, self->data->hook, self->data->num_elements);
 	self->data->hook(self->data->ptr, self->data->num_elements);
-	Py_DECREF(self->data->owner);
 	PyMem_Free(self->data);
 	pydx12_PYDX12_STRUCT_ARRAY_CHUNK_dealloc(self);
 }
