@@ -1,5 +1,6 @@
 import unittest
 import weakref
+import sys
 from pydx12 import *
 
 
@@ -102,18 +103,38 @@ class RefCountTests(unittest.TestCase):
 
     def test_struct_array(self):
         pipeline_state_desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC()
+        print('START0', sys.getrefcount(pipeline_state_desc))
         pipeline_state_desc.InputLayout.NumElements = 3
-        pipeline_state_desc.InputLayout.pInputElementDescs = [
+        descs = [
             D3D12_INPUT_ELEMENT_DESC(
                 SemanticName='POSITION', Format=DXGI_FORMAT_R32G32_FLOAT),
             D3D12_INPUT_ELEMENT_DESC(),
             D3D12_INPUT_ELEMENT_DESC(SemanticName='NORMAL')]
+        pipeline_state_desc.InputLayout.pInputElementDescs = descs
+        print('START1', sys.getrefcount(pipeline_state_desc))
+        print(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
+        print('adding refs...')
         pipeline_state_desc2 = pipeline_state_desc
+        print(sys.getrefcount(pipeline_state_desc),
+              D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
+        print('CREATING items')
         items = pipeline_state_desc.InputLayout.pInputElementDescs
+        print('ITEMS', [item.to_dict() for item in items])
         self.assertTrue(len(items) == 3)
+        print(D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs())
+        print(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
+        print(D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
         pipeline_state_desc = None
         pipeline_state_desc2 = None
+        print(D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs())
+        print(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
+        print(D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
+        print('releasing items...')
         items = None
+        print(D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs())
+        print(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs())
+        print(D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
+        descs = None
         self.assertTrue(
             len(D3D12_GRAPHICS_PIPELINE_STATE_DESC.get_tracked_refs()) == 0)
         self.assertTrue(len(D3D12_INPUT_LAYOUT_DESC.get_tracked_refs()) == 0)

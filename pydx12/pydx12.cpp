@@ -23,6 +23,20 @@ int pydx12_init_descriptor(PyObject* m);
 int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
 
+PYDX12_TYPE(PYDX12_STRUCT_ARRAY_CHUNK);
+PYDX12_GETSETTERS(PYDX12_STRUCT_ARRAY_CHUNK) = {
+	{NULL} /* Sentinel */
+};
+
+static void pydx12_PYDX12_STRUCT_ARRAY_CHUNK_dealloc_wrapper(pydx12_PYDX12_STRUCT_ARRAY_CHUNK* self)
+{
+	printf("!!!!!!!STRUCT removal... %p %p %llu\n", self->data->ptr, self->data->hook, self->data->num_elements);
+	self->data->hook(self->data->ptr, self->data->num_elements);
+	Py_DECREF(self->data->owner);
+	PyMem_Free(self->data);
+	pydx12_PYDX12_STRUCT_ARRAY_CHUNK_dealloc(self);
+}
+
 PYDX12_TYPE_HANDLE(Event, HANDLE);
 PYDX12_TYPE_HANDLE(Window, HWND, bool closed);
 
@@ -432,6 +446,9 @@ static int pydx12_init_base(PyObject* m)
 	{
 		return -1;
 	}
+
+	pydx12_PYDX12_STRUCT_ARRAY_CHUNKType.tp_dealloc = (destructor)pydx12_PYDX12_STRUCT_ARRAY_CHUNK_dealloc_wrapper;
+	PYDX12_REGISTER_STRUCT(PYDX12_STRUCT_ARRAY_CHUNK);
 
 
 	pydx12_EventType.tp_methods = pydx12_Event_methods;
