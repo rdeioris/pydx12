@@ -14,6 +14,7 @@ PYDX12_IMPORT(D3D12_PLACED_SUBRESOURCE_FOOTPRINT);
 PYDX12_IMPORT(D3D12_COMPUTE_PIPELINE_STATE_DESC);
 PYDX12_IMPORT(D3D12_SHADER_RESOURCE_VIEW_DESC);
 PYDX12_IMPORT(D3D12_UNORDERED_ACCESS_VIEW_DESC);
+PYDX12_IMPORT(D3D12_DEPTH_STENCIL_VIEW_DESC);
 
 
 PYDX12_IMPORT_COM(ID3D12Object);
@@ -196,6 +197,23 @@ static PyObject* pydx12_ID3D12Device_CreateUnorderedAccessView(pydx12_ID3D12Devi
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_ID3D12Device_CreateDepthStencilView(pydx12_ID3D12Device* self, PyObject* args)
+{
+	PyObject* py_resource;
+	PyObject* py_depth_stencil_view_desc;
+	PyObject* py_dest_descriptor;
+	if (!PyArg_ParseTuple(args, "OOO", &py_resource, &py_depth_stencil_view_desc, &py_dest_descriptor))
+		return NULL;
+
+	PYDX12_ARG_CHECK_NONE(ID3D12Resource, resource);
+	PYDX12_ARG_CHECK_NONE(D3D12_DEPTH_STENCIL_VIEW_DESC, depth_stencil_view_desc);
+	PYDX12_ARG_CHECK(D3D12_CPU_DESCRIPTOR_HANDLE, dest_descriptor);
+
+	PYDX12_COM_CALL(CreateDepthStencilView, resource, depth_stencil_view_desc, *dest_descriptor);
+
+	Py_RETURN_NONE;
+}
+
 static PyObject* pydx12_ID3D12Device_CreateRenderTargetView(pydx12_ID3D12Device* self, PyObject* args)
 {
 	PyObject* py_resource;
@@ -315,6 +333,7 @@ PYDX12_METHODS(ID3D12Device) = {
 	{"CreateFence", (PyCFunction)pydx12_ID3D12Device_CreateFence, METH_VARARGS, "Creates a fence object"},
 	{"CreateDescriptorHeap", (PyCFunction)pydx12_ID3D12Device_CreateDescriptorHeap, METH_VARARGS, "Creates a descriptor heap object"},
 	{"CreateRenderTargetView", (PyCFunction)pydx12_ID3D12Device_CreateRenderTargetView, METH_VARARGS, "Creates a render-target view for accessing resource data"},
+	{"CreateDepthStencilView", (PyCFunction)pydx12_ID3D12Device_CreateDepthStencilView, METH_VARARGS, "Creates a depth-stencil view for accessing resource data"},
 	{"CreateUnorderedAccessView", (PyCFunction)pydx12_ID3D12Device_CreateUnorderedAccessView, METH_VARARGS, "Creates a view for unordered accessing"},
 	{"CreateShaderResourceView", (PyCFunction)pydx12_ID3D12Device_CreateShaderResourceView, METH_VARARGS, "Creates a shader-resource view for accessing data in a resource"},
 	{"CreateRootSignature", (PyCFunction)pydx12_ID3D12Device_CreateRootSignature, METH_VARARGS, "Creates a root signature layout"},

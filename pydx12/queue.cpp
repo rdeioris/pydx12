@@ -7,7 +7,6 @@ PYDX12_IMPORT(D3D12_GPU_DESCRIPTOR_HANDLE);
 PYDX12_IMPORT(D3D12_VERTEX_BUFFER_VIEW);
 PYDX12_IMPORT(D3D12_INDEX_BUFFER_VIEW);
 PYDX12_IMPORT(D3D12_VIEWPORT);
-PYDX12_IMPORT(D3D12_RECT);
 
 PYDX12_IMPORT_COM(ID3D12Resource);
 PYDX12_IMPORT_COM(ID3D12Pageable);
@@ -243,6 +242,65 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_ClearRenderTargetView(pydx12_I
 	}
 
 	PYDX12_COM_CALL(ClearRenderTargetView, *render_target_view, color_rgba, rects_counter, rects);
+
+	if (rects)
+		PyMem_Free(rects);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_ID3D12GraphicsCommandList_ClearDepthStencilView(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	PyObject* py_depth_stencil_view;
+	D3D12_CLEAR_FLAGS clear_flags;
+	FLOAT depth;
+	UINT8 stencil;
+	PyObject* py_rects = NULL;
+	if (!PyArg_ParseTuple(args, "OLfB|O", &py_depth_stencil_view, &clear_flags, &depth, &stencil, &py_rects))
+		return NULL;
+
+	PYDX12_ARG_CHECK(D3D12_CPU_DESCRIPTOR_HANDLE, depth_stencil_view);
+
+	D3D12_RECT* rects = NULL;
+	UINT rects_counter = 0;
+
+	if (py_rects && py_rects != Py_None)
+	{
+		PyObject* py_iter = PyObject_GetIter(py_rects);
+		if (!py_iter)
+		{
+			return NULL;
+		}
+
+		while (PyObject* py_item = PyIter_Next(py_iter))
+		{
+			D3D12_RECT* rect = pydx12_D3D12_RECT_check(py_item);
+			if (!rect)
+			{
+				Py_DECREF(py_item);
+				Py_DECREF(py_iter);
+				if (rects)
+					PyMem_Free(rects);
+				return PyErr_Format(PyExc_TypeError, "argument must be an iterable of D3D12_RECT");
+			}
+			rects_counter++;
+			D3D12_RECT* new_rects = (D3D12_RECT*)PyMem_Realloc(rects, sizeof(D3D12_RECT) * rects_counter);
+			if (!new_rects)
+			{
+				Py_DECREF(py_item);
+				Py_DECREF(py_iter);
+				if (rects)
+					PyMem_Free(rects);
+				return PyErr_Format(PyExc_TypeError, "unable to allocate memory for D3D12_RECT's array");
+			}
+			rects = new_rects;
+			rects[rects_counter - 1] = *rect;
+			Py_DECREF(py_item);
+		}
+		Py_DECREF(py_iter);
+	}
+
+	PYDX12_COM_CALL(ClearDepthStencilView, *depth_stencil_view, clear_flags, depth, stencil, rects_counter, rects);
 
 	if (rects)
 		PyMem_Free(rects);
@@ -536,8 +594,8 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant(p
 {
 	UINT root_parameter_index;
 	PyObject* py_src_data;
-	UINT dest_offset;
-	if (!PyArg_ParseTuple(args, "IOI", &root_parameter_index, &py_src_data, &dest_offset))
+	UINT dest_offset = 0;
+	if (!PyArg_ParseTuple(args, "IO|I", &root_parameter_index, &py_src_data, &dest_offset))
 		return NULL;
 
 	UINT src_data = 0;
@@ -570,6 +628,42 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant(p
 	PYDX12_COM_CALL(SetGraphicsRoot32BitConstant, root_parameter_index, src_data, dest_offset);
 
 	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	UINT root_parameter_index;
+	PyObject* py_src_data;
+	UINT dest_offset = 0;
+	if (!PyArg_ParseTuple(args, "IO|I", &root_parameter_index, &py_src_data, &dest_offset))
+		return NULL;
+
+	if (PyObject_CheckBuffer(py_src_data))
+	{
+		Py_buffer view;
+		if (PyObject_GetBuffer(py_src_data, &view, 0))
+		{
+			return NULL;
+		}
+		if (view.len % 4 != 0)
+		{
+			PyBuffer_Release(&view);
+			return PyErr_Format(PyExc_ValueError, "expected a buffer size multiple of 4 bytes");
+		}
+
+		PYDX12_COM_CALL(SetGraphicsRoot32BitConstants, root_parameter_index, view.len / 4, view.buf, dest_offset);
+		PyBuffer_Release(&view);
+		Py_RETURN_NONE;
+	}
+
+	PyObject* py_iter = PyObject_GetIter(py_src_data);
+	if (!py_iter)
+	{
+		return NULL;
+	}
+	Py_DECREF(py_iter);
+
+	return PyErr_Format(PyExc_ValueError, "unsupported 32bit constant values");
 }
 
 static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
@@ -646,6 +740,7 @@ PYDX12_METHODS(ID3D12GraphicsCommandList) = {
 	{"CopyTextureRegion", (PyCFunction)pydx12_ID3D12GraphicsCommandList_CopyTextureRegion, METH_VARARGS, "This method uses the GPU to copy texture data between two locations"},
 	{"ResourceBarrier", (PyCFunction)pydx12_ID3D12GraphicsCommandList_ResourceBarrier, METH_VARARGS, "Notifies the driver that it needs to synchronize multiple accesses to resources"},
 	{"ClearRenderTargetView", (PyCFunction)pydx12_ID3D12GraphicsCommandList_ClearRenderTargetView, METH_VARARGS, "Sets all the elements in a render target to one value"},
+	{"ClearDepthStencilView", (PyCFunction)pydx12_ID3D12GraphicsCommandList_ClearDepthStencilView, METH_VARARGS, "Clears the depth-stencil resource"},
 	{"DrawInstanced", (PyCFunction)pydx12_ID3D12GraphicsCommandList_DrawInstanced, METH_VARARGS, "Draws non-indexed, instanced primitives"},
 	{"DrawIndexedInstanced", (PyCFunction)pydx12_ID3D12GraphicsCommandList_DrawIndexedInstanced, METH_VARARGS, "Draws indexed, instanced primitives"},
 	{"IASetPrimitiveTopology", (PyCFunction)pydx12_ID3D12GraphicsCommandList_IASetPrimitiveTopology, METH_VARARGS, "Bind information about the primitive type, and data order that describes input data for the input assembler stage"},
@@ -657,6 +752,7 @@ PYDX12_METHODS(ID3D12GraphicsCommandList) = {
 	{"RSSetViewports", (PyCFunction)pydx12_ID3D12GraphicsCommandList_RSSetViewports, METH_VARARGS, "Bind an array of viewports to the rasterizer stage of the pipeline"},
 	{"RSSetScissorRects", (PyCFunction)pydx12_ID3D12GraphicsCommandList_RSSetScissorRects, METH_VARARGS, "Binds an array of scissor rectangles to the rasterizer stage"},
 	{"SetGraphicsRoot32BitConstant", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant, METH_VARARGS, "Sets a constant in the graphics root signature"},
+	{"SetGraphicsRoot32BitConstants", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants, METH_VARARGS, "Sets a group of constants in the graphics root signature"},
 	{"SetComputeRootDescriptorTable", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable, METH_VARARGS, "Sets a descriptor table into the compute root signature"},
 	{"SetDescriptorHeaps", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetDescriptorHeaps, METH_VARARGS, "Changes the currently bound descriptor heaps that are associated with a command list"},
 	{NULL}  /* Sentinel */
@@ -774,6 +870,9 @@ int pydx12_init_queue(PyObject* m)
 
 	PYDX12_ENUM(D3D12_COMMAND_QUEUE_FLAG_NONE);
 	PYDX12_ENUM(D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT);
+
+	PYDX12_ENUM(D3D12_CLEAR_FLAG_DEPTH);
+	PYDX12_ENUM(D3D12_CLEAR_FLAG_STENCIL);
 
 	return 0;
 }

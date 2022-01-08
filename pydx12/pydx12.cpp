@@ -23,27 +23,18 @@ int pydx12_init_descriptor(PyObject* m);
 int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
 
-PYDX12_TYPE(PYDX12_STRUCT_ARRAY_CHUNK);
-PYDX12_GETSETTERS(PYDX12_STRUCT_ARRAY_CHUNK) = {
-	{NULL} /* Sentinel */
-};
-
-static void pydx12_PYDX12_STRUCT_ARRAY_CHUNK_dealloc_wrapper(pydx12_PYDX12_STRUCT_ARRAY_CHUNK* self)
-{
-	printf("!!!!!!!STRUCT removal... %p %p %llu\n", self->data->ptr, self->data->hook, self->data->num_elements);
-	self->data->hook(self->data->ptr, self->data->num_elements);
-	PyMem_Free(self->data);
-	pydx12_PYDX12_STRUCT_ARRAY_CHUNK_dealloc(self);
-}
+#include <queue>
+#include <tuple>
 
 PYDX12_TYPE_HANDLE(Event, HANDLE);
-PYDX12_TYPE_HANDLE(Window, HWND, bool closed);
+PYDX12_TYPE_HANDLE(Window, HWND, std::queue<std::tuple<UINT, WPARAM, LPARAM>> messages);
 
 PYDX12_TYPE_COM(IUnknown);
 PYDX12_TYPE_COM(IDXGIObject);
 PYDX12_TYPE_COM(ID3D12Object);
 PYDX12_TYPE_COM(IDXGIDeviceSubObject);
 PYDX12_TYPE_COM(ID3D12Debug);
+
 
 static PyObject* pydx12_CreateDXGIFactory(PyObject* self, PyObject* args)
 {
@@ -219,6 +210,8 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 	if (!PyArg_ParseTuple(args, "Oii", &py_title, &width, &height))
 		return NULL;
 
+	printf("OK\n");
+
 	if (!PyUnicode_Check(py_title))
 	{
 		PyErr_SetString(PyExc_ValueError, "title must be a unicode object");
@@ -231,6 +224,8 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		return -1;
 	}
 
+	printf("WINDOW creating\n");
+
 	self->handle = CreateWindowExW(
 		WS_EX_APPWINDOW,
 		L"pydx12",
@@ -241,6 +236,8 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		NULL,
 		NULL, GetModuleHandle(NULL), NULL);
 
+	printf("WINDOW created\n");
+
 	PyMem_Free(title);
 
 	if (!self->handle)
@@ -249,9 +246,9 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		return -1;
 	}
 
-	SetWindowLongPtr(self->handle, GWLP_USERDATA, (LONG_PTR)self);
 
-	self->closed = false;
+
+	SetWindowLongPtr(self->handle, GWLP_USERDATA, (LONG_PTR)self);
 
 	ShowWindow(self->handle, SW_SHOW);
 
@@ -295,8 +292,8 @@ static PyObject* pydx12_Window_maximize(pydx12_Window* self, PyObject* args)
 
 static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 {
-	Py_BEGIN_ALLOW_THREADS;
 	MSG message;
+	Py_BEGIN_ALLOW_THREADS;
 	while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
 	{
 		TranslateMessage(&message);
@@ -304,14 +301,18 @@ static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 	}
 	Py_END_ALLOW_THREADS;
 
-	Py_RETURN_NONE;
-}
+	PyObject* py_list = PyList_New(0);
+	
+	while (!self->messages.empty())
+	{
+		auto& message = self->messages.front();
+		PyObject* py_message = Py_BuildValue("(IKL)", std::get<0>(message), (unsigned long long)std::get<1>(message), (long long)std::get<2>(message));
+		PyList_Append(py_list, py_message);
+		Py_DECREF(py_message);
+		self->messages.pop();
+	}
 
-static PyObject* pydx12_Window_is_closed(pydx12_Window* self, PyObject* args)
-{
-	if (self->closed)
-		Py_RETURN_TRUE;
-	Py_RETURN_FALSE;
+	return py_list;
 }
 
 static PyObject* pydx12_Window_set_title(pydx12_Window* self, PyObject* args)
@@ -344,7 +345,6 @@ PYDX12_METHODS(Window) = {
 	{"minimize", (PyCFunction)pydx12_Window_minimize, METH_VARARGS, "Minimize the Window"},
 	{"maximize", (PyCFunction)pydx12_Window_maximize, METH_VARARGS, "Maximize the Window"},
 	{"dequeue", (PyCFunction)pydx12_Window_dequeue, METH_VARARGS, "Dequeue events from the Window"},
-	{"is_closed", (PyCFunction)pydx12_Window_is_closed, METH_VARARGS, "Returns True if the Window has been closed"},
 	{"set_title", (PyCFunction)pydx12_Window_set_title, METH_VARARGS, "Set the Window title"},
 	{NULL}  /* Sentinel */
 };
@@ -425,11 +425,7 @@ static LRESULT pydx12_DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM 
 	pydx12_Window* self = (pydx12_Window*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 	if (self)
 	{
-		if (Msg == WM_CLOSE)
-		{
-			self->closed = true;
-			return 0;
-		}
+		self->messages.push({ Msg, wParam, lParam });
 	}
 	return DefWindowProcW(hWnd, Msg, wParam, lParam);
 }
@@ -445,10 +441,6 @@ static int pydx12_init_base(PyObject* m)
 	{
 		return -1;
 	}
-
-	pydx12_PYDX12_STRUCT_ARRAY_CHUNKType.tp_dealloc = (destructor)pydx12_PYDX12_STRUCT_ARRAY_CHUNK_dealloc_wrapper;
-	PYDX12_REGISTER_STRUCT(PYDX12_STRUCT_ARRAY_CHUNK);
-
 
 	pydx12_EventType.tp_methods = pydx12_Event_methods;
 	PYDX12_REGISTER_HANDLE(Event);

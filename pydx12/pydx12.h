@@ -5,8 +5,6 @@
 #include <d3d12.h>
 #include <d3dcompiler.h>
 
-#include <unordered_map>
-
 #define PYDX12_TYPE_MEMBERS(t) static PyTypeObject pydx12_##t##Type = \
 {\
 	PyVarObject_HEAD_INIT(NULL, 0)\
@@ -35,9 +33,9 @@
 typedef struct
 {
 	void* ptr;
-	size_t num_elements;
-	void (*hook)(void*, const size_t);
-} PYDX12_STRUCT_ARRAY_CHUNK;
+	size_t size;
+	size_t elements;
+} pydx12_memory_chunk;
 
 #define PYDX12_TYPE_INSTANTIATE(t) PyObject* pydx12_##t##_instantiate_with_size(t* data, PyObject* data_owner, IUnknown* com_owner, const size_t len)\
 {\
@@ -50,7 +48,6 @@ typedef struct
 	memset(offset + sizeof(PyObject), 0, sizeof(pydx12_##t) - sizeof(PyObject));\
 	py_object->data_owner = data_owner;\
 	py_object->data_len = len;\
-	py_object->py_refs = PyList_New(0);\
 	if (!data_owner)\
 	{\
 		py_object->data = (t*)PyMem_Malloc(len);\
@@ -89,14 +86,153 @@ t* pydx12_##t##_check(PyObject* py_object)\
 	pydx12_##t##* pydx12_object = (pydx12_##t*)py_object; \
 	return pydx12_object->data; \
 }\
-void pydx12_##t##_add_refs(t* data);\
-void pydx12_##t##_release_refs(t* data);\
+static pydx12_memory_chunk* pydx12_##t##_chunk_map(pydx12_##t* self, void* addr, const size_t size, const size_t elements)\
+{\
+	if (!addr)\
+		return NULL;\
+	pydx12_##t* owner = (pydx12_##t*) (self->data_owner ? self->data_owner : (PyObject*)self);\
+	for(size_t i = 0; i < owner->number_of_chunks; i++)\
+	{\
+		pydx12_memory_chunk* chunk = &owner->chunks[i];\
+		if (!chunk->ptr)\
+		{\
+			printf("mapping " #t "%p (size %d elements %d) in reused slot %d\n", addr, size, elements, i);\
+			chunk->ptr = addr;\
+			chunk->size = size;\
+			chunk->elements = elements;\
+			return chunk;\
+		}\
+	}\
+	owner->number_of_chunks++;\
+	pydx12_memory_chunk* new_chunks = (pydx12_memory_chunk*)PyMem_Realloc(owner->chunks, sizeof(pydx12_memory_chunk) * owner->number_of_chunks);\
+	if (!new_chunks)\
+	{\
+		return NULL;\
+	}\
+	owner->chunks = new_chunks;\
+	pydx12_memory_chunk* chunk = &owner->chunks[owner->number_of_chunks-1];\
+	printf("mapping " #t "%p (size %d elements %d) in slot %d\n", addr, size, elements, owner->number_of_chunks-1);\
+	chunk->ptr = addr;\
+	chunk->size = size;\
+	chunk->elements = elements;\
+	return chunk;\
+}\
+static void pydx12_##t##_chunk_free(pydx12_##t* self, void* addr)\
+{\
+	if (!addr)\
+		return;\
+	pydx12_##t* owner = (pydx12_##t*) (self->data_owner ? self->data_owner : (PyObject*)self);\
+	for(size_t i = 0; i < owner->number_of_chunks; i++)\
+	{\
+		pydx12_memory_chunk* chunk = &owner->chunks[i];\
+		if (chunk->ptr == addr)\
+		{\
+			printf("freeing " #t " %p at slot %d\n", chunk->ptr, i);\
+			PyMem_Free(chunk->ptr);\
+			chunk->ptr = NULL;\
+			chunk->size = 0;\
+			chunk->elements = 0;\
+			break;\
+		}\
+	}\
+}\
+static pydx12_memory_chunk* pydx12_##t##_chunk_get(pydx12_##t* self, void* addr)\
+{\
+	if (!addr)\
+		return NULL;\
+	pydx12_##t* owner = (pydx12_##t*) (self->data_owner ? self->data_owner : (PyObject*)self);\
+	for(size_t i = 0; i < owner->number_of_chunks; i++)\
+	{\
+		pydx12_memory_chunk* chunk = &owner->chunks[i];\
+		if (chunk->ptr == addr)\
+		{\
+			return chunk;\
+		}\
+	}\
+	return NULL;\
+}\
+static pydx12_memory_chunk* pydx12_##t##_chunk_alloc(pydx12_##t* self, void* addr, const size_t size, const size_t elements)\
+{\
+	if (!addr)\
+		return NULL;\
+	pydx12_##t* owner = (pydx12_##t*) (self->data_owner ? self->data_owner : (PyObject*)self);\
+	for(size_t i = 0; i < owner->number_of_chunks; i++)\
+	{\
+		pydx12_memory_chunk* chunk = &owner->chunks[i];\
+		if (chunk->ptr == NULL)\
+		{\
+			void* ptr = PyMem_Malloc(size);\
+			if (!ptr)\
+				return NULL;\
+			printf("allocated " #t " %p (size: %d elements: %d) at reused slot %d\n", ptr, size, elements, i); \
+			memcpy(ptr, addr, size);\
+			chunk->ptr = ptr;\
+			chunk->size = size;\
+			chunk->elements = elements;\
+			return chunk;\
+		}\
+	}\
+	owner->number_of_chunks++;\
+	pydx12_memory_chunk* new_chunks = (pydx12_memory_chunk*)PyMem_Realloc(owner->chunks, sizeof(pydx12_memory_chunk) * owner->number_of_chunks);\
+	if (!new_chunks)\
+	{\
+		return NULL;\
+	}\
+	pydx12_memory_chunk* chunk = &new_chunks[owner->number_of_chunks-1];\
+	void* ptr = PyMem_Malloc(size);\
+	if (!ptr)\
+	{\
+		chunk->ptr = NULL;\
+		return NULL;\
+	}\
+	printf("allocated " #t " %p (size: %d elements: %d) at slot %d\n", ptr, size, elements, owner->number_of_chunks-1); \
+	owner->chunks = new_chunks;\
+	memcpy(ptr, addr, size);\
+	chunk->ptr = ptr;\
+	chunk->size = size;\
+	chunk->elements = elements;\
+	return chunk;\
+}\
+int pydx12_##t##_chunk_fix(pydx12_##t* self, pydx12_##t* value, t* data)\
+{\
+	PyGetSetDef* getset = pydx12_##t##Type.tp_getset;\
+	while (getset->name)\
+	{\
+		if (getset->closure != NULL)\
+		{\
+			void** ptr = (void**) (((char*)data) + ((size_t)getset->closure) - 1);\
+			pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(value, *ptr);\
+			if (chunk)\
+			{\
+				printf("found chunk for %p (size: %d elements %d\n", chunk->ptr, chunk->size, chunk->elements);\
+				chunk = pydx12_##t##_chunk_alloc(self, chunk->ptr, chunk->size, chunk->elements);\
+				if (!chunk)\
+					return -1;\
+				*ptr = chunk->ptr;\
+			}\
+		}\
+		getset++;\
+	}\
+	return 0;\
+}\
+void pydx12_##t##_chunk_clear(pydx12_##t* self, t* data)\
+{\
+	PyGetSetDef* getset = pydx12_##t##Type.tp_getset;\
+	while (getset->name)\
+	{\
+		if (getset->closure != NULL)\
+		{\
+			void** ptr = (void**) (((char*)data) + ((size_t)getset->closure)-1);\
+			pydx12_##t##_chunk_free(self, *ptr);\
+		}\
+		getset++;\
+	}\
+}\
 static void pydx12_##t##_dealloc(pydx12_##t* self)\
 {\
 	printf("dealloc " #t " %p\n", self);\
 	if (self->data)\
 	{\
-		pydx12_##t##_release_refs(self->data);\
 		if (!self->data_owner)\
 		{\
 			PyMem_Free(self->data);\
@@ -108,7 +244,16 @@ static void pydx12_##t##_dealloc(pydx12_##t* self)\
 	}\
 	if (self->com_owner)\
 		self->com_owner->Release();\
-	Py_DECREF(self->py_refs);\
+	for(size_t i = 0; i < self->number_of_chunks; i++)\
+	{\
+		if (self->chunks[i].ptr)\
+		{\
+			printf("finally deallocating %p at slot %d\n", self->chunks[i].ptr, i);\
+			PyMem_Free(self->chunks[i].ptr);\
+		}\
+	}\
+	if (self->chunks)\
+		PyMem_Free(self->chunks);\
 	if (self->weakreflist)\
 		PyObject_ClearWeakRefs((PyObject*)self);\
 	Py_TYPE(self)->tp_free((PyObject*)self);\
@@ -120,7 +265,6 @@ static int pydx12_##t##_init(pydx12_##t* self, PyObject *args, PyObject *kwds)\
 	{\
 		return -1;\
 	}\
-	self->py_refs = PyList_New(0);\
 	self->data_owner = NULL;\
 	if (pydx12_##t##Type.tp_getset && kwds != NULL && PyDict_Check(kwds) && PyDict_Size(kwds))\
 	{\
@@ -160,12 +304,7 @@ static int pydx12_##t##_init(pydx12_##t* self, PyObject *args, PyObject *kwds)\
 }\
 static PyObject* pydx12_##t##_sq_item(pydx12_##t* self, Py_ssize_t index)\
 {\
-	if (PyObject* py_struct = pydx12_##t##_instantiate(self->data + index, (PyObject*)self, self->com_owner))\
-	{\
-		pydx12_##t##_add_refs(self->data + index);\
-		return py_struct;\
-	}\
-	return NULL;\
+	return pydx12_##t##_instantiate(self->data + index, PYDX12_OWNER, self->com_owner);\
 }\
 static PySequenceMethods pydx12_##t##_sequence_methods = {\
 	NULL,\
@@ -219,79 +358,27 @@ static PyObject* pydx12_##t##_to_bytearray(pydx12_##t* self)\
 		Py_RETURN_NONE;\
 	return PyByteArray_FromStringAndSize((const char*)self->data, self->data_len);\
 }\
-static PyObject* pydx12_##t##_get_tracked_refs(PyObject* cls)\
+static PyObject* pydx12_##t##_get_chunks(pydx12_##t* self)\
 {\
-	PyObject* py_dict = PyDict_New();\
-	for(auto& ref : pydx12_##t##_refs_tracker)\
+	PyObject* py_list = PyList_New(0);\
+	for(size_t i = 0; i < self->number_of_chunks; i++)\
 	{\
-		printf("iter... %p %p\n", ref.first, ref.second.first);\
-		PyObject* py_key = PyLong_FromUnsignedLongLong((unsigned long long)ref.first);\
-		PyObject* py_value = Py_BuildValue("(OKK)", ref.second.first, ref.second.second, ((PyObject*)ref.second.first)->ob_refcnt);\
-		PyDict_SetItem(py_dict, py_key, py_value);\
-		Py_DECREF(py_key);\
-		Py_DECREF(py_value);\
-		printf("end of iter...\n");\
+		if (!self->chunks[i].ptr)\
+			continue;\
+		PyObject* py_chunk = Py_BuildValue("(KKK)", self->chunks[i].ptr, self->chunks[i].size, self->chunks[i].elements);\
+		PyList_Append(py_list, py_chunk);\
+		Py_DECREF(py_chunk);\
 	}\
-	return py_dict;\
+	return py_list;\
 }\
 static PyMethodDef pydx12_##t##_methods[] = {\
 	{"get_fields", (PyCFunction)pydx12_##t##_get_fields, METH_NOARGS, "returns a list of structure's fields"},\
 	{"to_dict", (PyCFunction)pydx12_##t##_to_dict, METH_NOARGS, "returns a dictionary representation of the structure"},\
 	{"to_bytes", (PyCFunction)pydx12_##t##_to_bytes, METH_NOARGS, "returns structure's content as a bytes object"},\
 	{"to_bytearray", (PyCFunction)pydx12_##t##_to_bytearray, METH_NOARGS, "returns structure's content as a bytearray object"},\
-	{"get_tracked_refs", (PyCFunction)pydx12_##t##_get_tracked_refs, METH_NOARGS | METH_CLASS, "returns structure's type tracked references"},\
+	{"get_chunks", (PyCFunction)pydx12_##t##_get_chunks, METH_NOARGS, "returns structure's memory chunks"},\
 	{NULL}\
-};\
-void pydx12_##t##_track(void* addr, PyObject* py_object)\
-{\
-	printf("!about to track " #t " %p\n", addr);\
-	if (pydx12_##t##_refs_tracker.find(addr) == pydx12_##t##_refs_tracker.end())\
-	{\
-		pydx12_##t##_refs_tracker[addr] = std::pair<void*, unsigned long long>((void*)py_object, 1);\
-	}\
-	else\
-	{\
-		printf("increasing " #t " %p\n", addr);\
-		if (pydx12_##t##_refs_tracker[addr].second == 0)\
-		{\
-			Py_INCREF(pydx12_##t##_refs_tracker[addr].first);\
-		}\
-		pydx12_##t##_refs_tracker[addr].second++;\
-	}\
-}\
-void pydx12_##t##_incref(void* addr)\
-{\
-	if (addr)\
-	{\
-		printf("increasing " #t " %p\n", addr);\
-		if (pydx12_##t##_refs_tracker[addr].second == 0)\
-		{\
-			Py_INCREF(pydx12_##t##_refs_tracker[addr].first);\
-		}\
-		pydx12_##t##_refs_tracker[addr].second++;\
-	}\
-}\
-void pydx12_##t##_decref(void* addr)\
-{\
-	if (addr)\
-	{\
-		printf("decreasing " #t " %p\n", addr);\
-		pydx12_##t##_refs_tracker[addr].second--;\
-		if (pydx12_##t##_refs_tracker[addr].second == 0)\
-		{\
-			printf("FULLY DESTROY " #t " %p\n", addr);\
-			Py_DECREF(pydx12_##t##_refs_tracker[addr].first);\
-		}\
-	}\
-}\
-static void pydx12_##t##_cleanup(void* data, const size_t number_of_elements)\
-{\
-	t* items = (t*)data;\
-	for(size_t i = 0; i < number_of_elements; i++)\
-	{\
-		pydx12_##t##_release_refs((t*)&items[i]);\
-	}\
-}
+};
 
 #define PYDX12_TYPE_INSTANTIATE_COM(t) PyObject* pydx12_##t##_instantiate(t* com_ptr, const bool add_ref)\
 {\
@@ -352,24 +439,20 @@ PyTypeObject* pydx12_##t##_get_type()\
 	return (PyTypeObject*)&pydx12_##t##Type;\
 }
 
-#define PYDX12_TYPE_WITH_REFS(t, ...) typedef struct\
+#define PYDX12_TYPE(t, ...) typedef struct\
 {\
 	PyObject_HEAD\
 	t* data;\
 	size_t data_len;\
 	PyObject* data_owner;\
 	IUnknown* com_owner;\
-	PyObject* py_refs;\
+	pydx12_memory_chunk* chunks;\
+	size_t number_of_chunks;\
 	PyObject* weakreflist;\
 	__VA_ARGS__;\
 } pydx12_##t;\
-static std::unordered_map<void*, std::pair<void*, unsigned long long>> pydx12_##t##_refs_tracker;\
 PYDX12_TYPE_MEMBERS(t);\
 PYDX12_TYPE_INSTANTIATE(t)
-
-#define PYDX12_TYPE(t, ...) PYDX12_TYPE_WITH_REFS(t, __VA_ARGS__);\
-void pydx12_##t##_add_refs(t* data) {}\
-void pydx12_##t##_release_refs(t* data) {}
 
 #define PYDX12_TYPE_COM(t, ...) typedef struct\
 {\
@@ -434,13 +517,6 @@ PYDX12_REGISTER(t)
 
 #define PYDX12_REGISTER_COM_BASE(t) pydx12_##t##Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
 PYDX12_REGISTER(t)
-
-#define PYDX12_TRACK(t, addr, py_object) pydx12_##t##_track((void*)addr, py_object)
-
-#define PYDX12_INCREF(t, addr) pydx12_##t##_incref((void*)addr)
-
-#define PYDX12_DECREF(t, addr) pydx12_##t##_decref((void*)addr)
-
 
 #define PYDX12_GETTER(t, field, py_type) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
@@ -521,12 +597,7 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 
 #define PYDX12_STRUCT_GETTER(t, field, type) static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
 {\
-	if (PyObject* py_struct = pydx12_##type##_instantiate(&self->data->##field, (PyObject*)self, self->com_owner))\
-	{\
-		pydx12_##type##_add_refs(&self->data->##field);\
-		return (PyObject*)py_struct;\
-	}\
-	return NULL;\
+	return pydx12_##type##_instantiate(&self->data->##field, PYDX12_OWNER, self->com_owner);\
 }
 
 #define PYDX12_STRUCT_SETTER(t, field, type) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
@@ -537,9 +608,9 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 		PyErr_SetString(PyExc_TypeError, "value must be a " #type);\
 		return -1;\
 	}\
-	pydx12_##type##_release_refs(&self->data->##field);\
+	pydx12_##type##_chunk_clear((pydx12_##type*)self, &self->data->##field);\
 	self->data->##field = *data;\
-	pydx12_##type##_add_refs(&self->data->##field);\
+	pydx12_##type##_chunk_fix((pydx12_##type*)self, (pydx12_##type*) value, &self->data->##field);\
 	return 0;\
 }
 
@@ -548,12 +619,7 @@ PYDX12_STRUCT_SETTER(t, field, type)
 
 #define PYDX12_STRUCT_CARRAY_GETTER(t, field, type) static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
 {\
-	if (PyObject* py_struct = pydx12_##type##_instantiate(&self->data->##field[0], (PyObject*)self, self->com_owner))\
-	{\
-		pydx12_##type##_add_refs((type*)&self->data->##field[0]);\
-		return py_struct;\
-	}\
-	return NULL;\
+	return pydx12_##type##_instantiate(&self->data->##field[0], PYDX12_OWNER, self->com_owner);\
 }
 
 #define PYDX12_STRUCT_CARRAY_SETTER(t, field, type) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
@@ -564,29 +630,31 @@ PYDX12_STRUCT_SETTER(t, field, type)
 		PyErr_SetString(PyExc_TypeError, "value must be a " #type);\
 		return -1;\
 	}\
-	pydx12_##type##_release_refs((type*)&self->data->##field##[0]);\
+	/* cleanup all */\
 	self->data->##field##[0] = *data;\
-	pydx12_##type##_add_refs((type*)&self->data->##field##[0]);\
+	/* reassign */\
 	return 0;\
 }
 
 #define PYDX12_STRUCT_CARRAY_GETTER_SETTER(t, field, type) PYDX12_STRUCT_CARRAY_GETTER(t, field, type)\
 PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 
-#define PYDX12_STRUCT_ARRAY_GETTER(t, field, type, field_size) static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
+#define PYDX12_STRUCT_ARRAY_GETTER(t, field, type) static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
 {\
-	if (!self->data->##field || !self->data->##field_size)\
+	if (!self->data->##field)\
+		Py_RETURN_NONE;\
+	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+	if (!chunk)\
 		Py_RETURN_NONE;\
 	PyObject* py_list = PyList_New(0);\
-	for(Py_ssize_t i = 0; i < self->data->##field_size; i++)\
+	for(Py_ssize_t i = 0; i < chunk->elements; i++)\
 	{\
-		PyObject* py_item = pydx12_##type##_instantiate((type*)&self->data->##field[i], (PyObject*)self, self->com_owner);\
+		PyObject* py_item = pydx12_##type##_instantiate((type*)&self->data->##field[i], PYDX12_OWNER, self->com_owner);\
 		if (!py_item)\
 		{\
 			Py_DECREF(py_list);\
 			return NULL;\
 		}\
-		pydx12_##type##_add_refs((type*)&self->data->##field[i]);\
 		PyList_Append(py_list, py_item);\
 		Py_DECREF(py_item);\
 	}\
@@ -602,7 +670,14 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 	}\
 	if (self->data->##field)\
 	{\
-		PYDX12_DECREF(t, self->data->##field);\
+		pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+		if (!chunk)\
+			return -1;\
+		for(size_t i = 0; i< chunk->elements; i++)\
+		{\
+			pydx12_##type##_chunk_clear((pydx12_##type*)self, (type*)&self->data->##field[i]);\
+		}\
+		pydx12_##t##_chunk_free(self,(void*)self->data->##field);\
 		self->data->##field = NULL;\
 	}\
 	Py_ssize_t counter = 0;\
@@ -611,6 +686,8 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 		type* data = pydx12_##type##_check(py_item);\
 		if (!data)\
 		{\
+			if (self->data->##field)\
+				PyMem_Free((void*)self->data->##field);\
 			Py_DECREF(py_item);\
 			Py_DECREF(py_iter);\
 			PyErr_SetString(PyExc_TypeError, "value must be an iterable of " #type);\
@@ -620,66 +697,63 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 		type* new_array = (type*)PyMem_Realloc((void*)self->data->##field, sizeof(type) * counter);\
 		if (!new_array)\
 		{\
+			if (self->data->##field)\
+				PyMem_Free((void*)self->data->##field);\
 			Py_DECREF(py_item);\
 			Py_DECREF(py_iter);\
 			PyErr_SetString(PyExc_MemoryError, "unable to allocate memory for array of " #type);\
 			return -1;\
 		}\
 		new_array[counter-1] = *data;\
-		pydx12_##type##_add_refs((type*)&new_array[counter-1]);\
 		self->data->##field = (const type*)new_array;\
+		printf("fixing " #t " %p\n", &new_array[counter-1]);\
+		pydx12_##type##_chunk_fix((pydx12_##type*)self, (pydx12_##type*) py_item, (type*)&self->data->##field[counter-1]);\
 		Py_DECREF(py_item);\
 	}\
 	Py_DECREF(py_iter);\
 	if (self->data->##field)\
 	{\
-		PYDX12_STRUCT_ARRAY_CHUNK chunk;\
-		chunk.ptr = (void*)self->data->##field;\
-		chunk.num_elements = counter;\
-		chunk.hook = pydx12_##type##_cleanup;\
-		PyObject* py_tracker = pydx12_PYDX12_STRUCT_ARRAY_CHUNK_instantiate(&chunk, NULL, NULL);\
-		if (!py_tracker)\
-		{\
-			for(Py_ssize_t i=0; i < counter; i++)\
-			{\
-				pydx12_##type##_release_refs((type*)&self->data->##field[i]);\
-			}\
-			PyMem_Free((void*)self->data->##field);\
-			self->data->##field = NULL;\
-			return -1;\
-		}\
-		printf("STRUCT tracking " #t " %p %p\n", py_tracker, chunk.ptr);\
-		PYDX12_TRACK(t, self->data->##field, py_tracker);\
-		pydx12_##t* data_owner = self;\
-		while(data_owner->data_owner)\
-		{\
-			data_owner = (pydx12_##t*)data_owner->data_owner;\
-		}\
-		PyList_Append(data_owner->py_refs, py_tracker);\
+		pydx12_##t##_chunk_map(self, (void*)self->data->##field, sizeof(type) * counter, counter);\
 	}\
 	return 0;\
 }
 
-#define PYDX12_STRUCT_ARRAY_GETTER_SETTER(t, field, type, field_size) PYDX12_STRUCT_ARRAY_GETTER(t, field, type, field_size)\
+#define PYDX12_STRUCT_ARRAY_GETTER_SETTER(t, field, type) PYDX12_STRUCT_ARRAY_GETTER(t, field, type)\
 PYDX12_STRUCT_ARRAY_SETTER(t, field, type)
 
 #define PYDX12_STRING_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
 	if (!self->data->##field)\
 		Py_RETURN_NONE;\
-	return PyUnicode_FromString(self->data->##field);\
+	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+	if (!chunk)\
+		return PyUnicode_FromString((const char*)self->data->##field);\
+	return PyUnicode_FromStringAndSize((const char*)chunk->ptr, chunk->size - 1);\
 }
 
 #define PYDX12_STRING_SETTER(t, field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
 {\
+	if (value == Py_None)\
+	{\
+		pydx12_##t##_chunk_free(self, (void*)self->data->##field);\
+		self->data->##field = NULL;\
+		return 0;\
+	}\
 	if (!PyUnicode_Check(value))\
 	{\
 		PyErr_SetString(PyExc_TypeError, "value must be a unicode object");\
 		return -1;\
 	}\
-	PYDX12_DECREF(t, self->data->##field);\
-	self->data->##field = PyUnicode_AsUTF8(value);\
-	PYDX12_TRACK(t, self->data->##field, value);\
+	pydx12_##t##_chunk_free(self, (void*)self->data->##field);\
+	Py_ssize_t size;\
+	const char* utf8 = PyUnicode_AsUTF8AndSize(value, &size);\
+	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_alloc(self, (void*) utf8, size + 1, 1);\
+	if (!chunk)\
+	{\
+		PyErr_SetString(PyExc_MemoryError, "unable to allocate memory chunk for " #t "::" #field);\
+		return -1;\
+	}\
+	self->data->##field = (const char*)chunk->ptr;\
 	return 0;\
 }
 
@@ -716,11 +790,14 @@ PYDX12_STRING_SETTER(t, field)
 #define PYDX12_BOOL_GETTER_SETTER(t, field) PYDX12_BOOL_GETTER(t, field)\
 PYDX12_BOOL_SETTER(t, field)
 
-#define PYDX12_BUFFER_GETTER(t, field, field_size) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
+#define PYDX12_BUFFER_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
-	if (!self->data->##field || !self->data->##field_size)\
+	if (!self->data->##field)\
 		Py_RETURN_NONE;\
-	return PyBytes_FromStringAndSize((const char*)self->data->##field, self->data->##field_size);\
+	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+	if (!chunk)\
+		Py_RETURN_NONE;\
+	return PyBytes_FromStringAndSize((const char*)chunk->ptr, chunk->size);\
 }
 
 #define PYDX12_BUFFER_SETTER(t, field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
@@ -731,26 +808,30 @@ PYDX12_BOOL_SETTER(t, field)
 		PyErr_SetString(PyExc_TypeError, "value must be a buffer object");\
 		return -1; \
 	}\
+	pydx12_##t##_chunk_free(self, (void*)self->data->##field);\
+	if (value == Py_None)\
+	{\
+		self->data->##field = NULL;\
+		return 0;\
+	}\
 	if (PyObject_GetBuffer(value, &view, PyBUF_SIMPLE))\
 	{\
 		PyErr_SetString(PyExc_TypeError, "unable to acquire buffer");\
 		return -1;\
 	}\
-	PYDX12_DECREF(t, self->data->##field);\
-	if (value == Py_None)\
+	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_alloc(self, view.buf, view.len, 1);\
+	if (!chunk)\
 	{\
-		self->data->##field = NULL;\
-	}\
-	else\
-	{\
-		self->data->##field = view.buf;\
-		PYDX12_TRACK(t, self->data->##field, value);\
+		PyErr_SetString(PyExc_MemoryError, "unable to acquire buffer");\
 		PyBuffer_Release(&view);\
+		return -1;\
 	}\
+	self->data->##field = chunk->ptr;\
+	PyBuffer_Release(&view);\
 	return 0;\
 }
 
-#define PYDX12_BUFFER_GETTER_SETTER(t, field, field_size) PYDX12_BUFFER_GETTER(t, field, field_size)\
+#define PYDX12_BUFFER_GETTER_SETTER(t, field, field_size) PYDX12_BUFFER_GETTER(t, field)\
 PYDX12_BUFFER_SETTER(t, field)
 
 
@@ -785,15 +866,22 @@ PYDX12_BUFFER_SETTER(t, field)
 #define PYDX12_COM_GETTER_SETTER(t, field_t, field) PYDX12_COM_GETTER(t, field_t, field)\
 PYDX12_COM_SETTER(t, field_t, field)
 
-#define PYDX12_DECLARE_GETTER_SETTER(t, field) {#field, (getter)pydx12_##t##_get##field, (setter)pydx12_##t##_set##field, #t " " #field " field", NULL}
-#define PYDX12_DECLARE_GETTER(t, field) {#field, (getter)pydx12_##t##_get##field, NULL, #t " " #field " field", NULL}
+#define PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, closure) {#field, (getter)pydx12_##t##_get##field, (setter)pydx12_##t##_set##field, #t " " #field " field", closure}
+#define PYDX12_DECLARE_GETTER_CLOSURE(t, field, closure) {#field, (getter)pydx12_##t##_get##field, NULL, #t " " #field " field", closure}
+
+#define PYDX12_DECLARE_GETTER_SETTER(t, field) PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, NULL)
+#define PYDX12_DECLARE_GETTER(t, field) PYDX12_DECLARE_GETTER_CLOSURE(t, field, NULL)
+
+#define PYDX12_DECLARE_GETTER_SETTER_CHUNK(t, field) PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, (void*)(offsetof(t, field) + 1))
+#define PYDX12_DECLARE_GETTER_CHUNK(t, field)  PYDX12_DECLARE_GETTER_CLOSURE(t, field, (void*)(offsetof(t, field) + 1))
 
 #define PYDX12_IMPORT(t) PyObject* pydx12_##t##_instantiate(t* data, PyObject* data_owner, IUnknown* com_owner);\
 PyObject* pydx12_##t##_instantiate_with_size(t* data, PyObject* data_owner, IUnknown* com_owner, const size_t len);\
 t* pydx12_##t##_get_data(PyObject* py_object);\
 t* pydx12_##t##_check(PyObject* py_object);\
-void pydx12_##t##_add_refs(t* data);\
-void pydx12_##t##_release_refs(t* data)
+struct pydx12_##t;\
+void pydx12_##t##_chunk_clear(pydx12_##t* self, t* data);\
+int pydx12_##t##_chunk_fix(pydx12_##t* self, pydx12_##t* value, t* data);
 
 #define PYDX12_IMPORT_COM(t) PyObject* pydx12_##t##_instantiate(t* com_ptr, const bool add_ref);\
 t* pydx12_##t##_check(PyObject* py_object);\
@@ -842,13 +930,9 @@ if (py_##name && py_##name != Py_None)\
 		return PyErr_Format(PyExc_TypeError, "argument must be a " #t);\
 }
 
-#define PYDX12_ADD_REFS(t) void pydx12_##t##_add_refs(t* data)
-#define PYDX12_RELEASE_REFS(t) void pydx12_##t##_release_refs(t* data)
-#define PYDX12_COM_ADD(field) if (data->##field) data->##field->AddRef()
-#define PYDX12_COM_RELEASE(field) if (data->##field) data->##field->Release();
+#define PYDX12_OWNER self->data_owner ? self->data_owner : (PyObject*)self
 
 #define PYDX12_COM_INSTANTIATE(t, object, add_ref) pydx12_##t##_instantiate(object, add_ref)
 
 /** Common imports */
 PYDX12_IMPORT_COM(IUnknown);
-PYDX12_IMPORT(PYDX12_STRUCT_ARRAY_CHUNK);

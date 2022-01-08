@@ -85,40 +85,50 @@ class RefCountTests(unittest.TestCase):
         ref = weakref.ref(d3d12_shader_bytecode)
         data = b'\xde\xad\xbe\xef'
         d3d12_shader_bytecode.pShaderBytecode = data
-        d3d12_shader_bytecode.BytecodeLength = 4
+        self.assertEqual(len(d3d12_shader_bytecode.pShaderBytecode), 4)
         data = None
         self.assertEqual(ref().pShaderBytecode[0], 0xDE)
         d3d12_shader_bytecode = None
         self.assertIsNone(ref())
 
     def test_string_tracking(self):
-        hello = 'HELLO'
-        initial_ref_count = sys.getrefcount(hello)
-        print('REFCNT[0]', sys.getrefcount(hello),
-              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
-        d3d12_input_element_desc = D3D12_INPUT_ELEMENT_DESC()
-        d3d12_input_element_desc.SemanticName = hello
-        print('REFCNT[1]', sys.getrefcount(hello),
-              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
-        d3d12_input_element_desc2 = D3D12_INPUT_ELEMENT_DESC(
-            SemanticName=hello)
-        print('REFCNT[1.5]', sys.getrefcount(hello),
-              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
-        d3d12_input_element_desc = None
-        print('REFCNT[1.7]', sys.getrefcount(hello),
-              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
-        d3d12_input_element_desc2 = None
-        print('REFCNT[2]', sys.getrefcount(hello),
-              D3D12_INPUT_ELEMENT_DESC.get_tracked_refs())
-        self.assertIsNotNone(hello)
-        self.assertEqual(sys.getrefcount(hello), initial_ref_count)
+        d3d12_input_element_desc = D3D12_INPUT_ELEMENT_DESC(
+            SemanticName='HELLO'.lower())
+        self.assertEqual(len(d3d12_input_element_desc.get_chunks()), 1)
+        print(d3d12_input_element_desc.SemanticName, d3d12_input_element_desc.get_chunks())
+        foo = d3d12_input_element_desc.SemanticName
+        print(d3d12_input_element_desc.SemanticName, d3d12_input_element_desc.get_chunks())
+        d3d12_input_element_desc.SemanticName = foo
+        print(d3d12_input_element_desc.SemanticName, d3d12_input_element_desc.get_chunks())
+        self.assertEqual(d3d12_input_element_desc.SemanticName, 'hello')
 
     def test_string_untracking(self):
         d3d12_input_element_desc = D3D12_INPUT_ELEMENT_DESC(
             SemanticName='HELLO'.lower())
+        self.assertEqual(len(d3d12_input_element_desc.get_chunks()), 1)
+        d3d12_input_element_desc.SemanticName = None
+        self.assertEqual(len(d3d12_input_element_desc.get_chunks()), 0)
+
+    def test_string_copy(self):
+        d3d12_input_element_desc = D3D12_INPUT_ELEMENT_DESC(
+            SemanticName='HELLO'.lower())
         foo = d3d12_input_element_desc.SemanticName
-        d3d12_input_element_desc.SemanticName = 'FOO'
-        self.assertEqual(foo, 'hello')
+        d3d12_input_element_desc.SemanticName = foo + '__'
+        d3d12_input_element_desc2 = d3d12_input_element_desc
+        print(d3d12_input_element_desc2.to_dict())
+        self.assertEqual(d3d12_input_element_desc2.SemanticName, 'hello__')
+
+    def test_struct_array_copy(self):
+        layout = D3D12_INPUT_LAYOUT_DESC()
+        self.assertEqual(len(layout.get_chunks()), 0)
+        layout.pInputElementDescs = [
+            D3D12_INPUT_ELEMENT_DESC(SemanticName='TEST')]
+        self.assertEqual(len(layout.get_chunks()), 2)
+        self.assertEqual(layout.pInputElementDescs[0].SemanticName, 'TEST')
+        layout2 = D3D12_INPUT_LAYOUT_DESC()
+        self.assertEqual(len(layout2.get_chunks()), 0)
+        layout2.pInputElementDescs = layout.pInputElementDescs
+        self.assertEqual(len(layout2.get_chunks()), 2)
 
     def test_struct_array_simple(self):
         pipeline_state_desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC()
