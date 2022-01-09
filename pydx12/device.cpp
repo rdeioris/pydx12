@@ -15,6 +15,7 @@ PYDX12_IMPORT(D3D12_COMPUTE_PIPELINE_STATE_DESC);
 PYDX12_IMPORT(D3D12_SHADER_RESOURCE_VIEW_DESC);
 PYDX12_IMPORT(D3D12_UNORDERED_ACCESS_VIEW_DESC);
 PYDX12_IMPORT(D3D12_DEPTH_STENCIL_VIEW_DESC);
+PYDX12_IMPORT(D3D12_CONSTANT_BUFFER_VIEW_DESC);
 
 
 PYDX12_IMPORT_COM(ID3D12Object);
@@ -197,6 +198,21 @@ static PyObject* pydx12_ID3D12Device_CreateUnorderedAccessView(pydx12_ID3D12Devi
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_ID3D12Device_CreateConstantBufferView(pydx12_ID3D12Device* self, PyObject* args)
+{
+	PyObject* py_constant_buffer_view_desc;
+	PyObject* py_dest_descriptor;
+	if (!PyArg_ParseTuple(args, "OO", &py_constant_buffer_view_desc, &py_dest_descriptor))
+		return NULL;
+
+	PYDX12_ARG_CHECK(D3D12_CONSTANT_BUFFER_VIEW_DESC, constant_buffer_view_desc);
+	PYDX12_ARG_CHECK(D3D12_CPU_DESCRIPTOR_HANDLE, dest_descriptor);
+
+	PYDX12_COM_CALL(CreateConstantBufferView, constant_buffer_view_desc, *dest_descriptor);
+
+	Py_RETURN_NONE;
+}
+
 static PyObject* pydx12_ID3D12Device_CreateDepthStencilView(pydx12_ID3D12Device* self, PyObject* args)
 {
 	PyObject* py_resource;
@@ -336,6 +352,7 @@ PYDX12_METHODS(ID3D12Device) = {
 	{"CreateDepthStencilView", (PyCFunction)pydx12_ID3D12Device_CreateDepthStencilView, METH_VARARGS, "Creates a depth-stencil view for accessing resource data"},
 	{"CreateUnorderedAccessView", (PyCFunction)pydx12_ID3D12Device_CreateUnorderedAccessView, METH_VARARGS, "Creates a view for unordered accessing"},
 	{"CreateShaderResourceView", (PyCFunction)pydx12_ID3D12Device_CreateShaderResourceView, METH_VARARGS, "Creates a shader-resource view for accessing data in a resource"},
+	{"CreateConstantBufferView", (PyCFunction)pydx12_ID3D12Device_CreateConstantBufferView, METH_VARARGS, "Creates a constant-buffer view for accessing resource data"},
 	{"CreateRootSignature", (PyCFunction)pydx12_ID3D12Device_CreateRootSignature, METH_VARARGS, "Creates a root signature layout"},
 	{"CreateGraphicsPipelineState", (PyCFunction)pydx12_ID3D12Device_CreateGraphicsPipelineState, METH_VARARGS, "Creates a graphics pipeline state object"},
 	{"GetNodeCount", (PyCFunction)pydx12_ID3D12Device_GetNodeCount, METH_NOARGS, "Reports the number of physical adapters (nodes) that are associated with this device"},

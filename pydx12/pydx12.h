@@ -86,6 +86,61 @@ t* pydx12_##t##_check(PyObject* py_object)\
 	pydx12_##t##* pydx12_object = (pydx12_##t*)py_object; \
 	return pydx12_object->data; \
 }\
+t* pydx12_##t##_iter(PyObject* py_object, UINT* list_counter, const bool append_null)\
+{\
+	PyObject* py_iter = PyObject_GetIter(py_object);\
+	if (!py_iter)\
+	{\
+		return NULL;\
+	}\
+	printf("ok list\n");\
+	t* list = NULL;\
+	*list_counter = 0;\
+	while (PyObject* py_item = PyIter_Next(py_iter))\
+	{\
+		t* item = pydx12_##t##_check(py_item);\
+		if (!item)\
+		{\
+			Py_DECREF(py_item);\
+			Py_DECREF(py_iter);\
+			if (list)\
+				PyMem_Free(list);\
+			return (t*)PyErr_Format(PyExc_TypeError, "argument must be an iterable of " #t);\
+		}\
+		(*list_counter)++;\
+		t* new_list = (t*)PyMem_Realloc(list, sizeof(t) * (*list_counter));\
+		if (!new_list)\
+		{\
+			Py_DECREF(py_item);\
+			Py_DECREF(py_iter);\
+			if (list)\
+				PyMem_Free(list);\
+			return (t*)PyErr_Format(PyExc_MemoryError, "unable to allocate memory for " #t " array");\
+		}\
+		list = new_list;\
+		list[(*list_counter) - 1] = *item;\
+		Py_DECREF(py_item);\
+	}\
+	Py_DECREF(py_iter);\
+	if (append_null)\
+	{\
+		printf("append to %u\n", *list_counter);\
+		(*list_counter)++;\
+		printf("append to %u\n", *list_counter);\
+		t* new_list = (t*)PyMem_Realloc(list, sizeof(t) * (*list_counter));\
+		if (!new_list)\
+		{\
+			if (list)\
+				PyMem_Free(list);\
+			return (t*)PyErr_Format(PyExc_MemoryError, "unable to allocate memory for " #t " array");\
+		}\
+		list = new_list;\
+		printf("ready to memset %u...\n", *list_counter);\
+		memset(&list[(*list_counter) - 1], 0, sizeof(t));\
+		printf("memset done\n");\
+	}\
+	return list;\
+}\
 static pydx12_memory_chunk* pydx12_##t##_chunk_map(pydx12_##t* self, void* addr, const size_t size, const size_t elements)\
 {\
 	if (!addr)\
@@ -879,6 +934,7 @@ PYDX12_COM_SETTER(t, field_t, field)
 PyObject* pydx12_##t##_instantiate_with_size(t* data, PyObject* data_owner, IUnknown* com_owner, const size_t len);\
 t* pydx12_##t##_get_data(PyObject* py_object);\
 t* pydx12_##t##_check(PyObject* py_object);\
+t* pydx12_##t##_iter(PyObject* py_object, UINT* list_counter, const bool append_null);\
 struct pydx12_##t;\
 void pydx12_##t##_chunk_clear(pydx12_##t* self, t* data);\
 int pydx12_##t##_chunk_fix(pydx12_##t* self, pydx12_##t* value, t* data);
@@ -928,6 +984,18 @@ if (py_##name && py_##name != Py_None)\
 	name = pydx12_##t##_check(py_##name);\
 	if (!name)\
 		return PyErr_Format(PyExc_TypeError, "argument must be a " #t);\
+}
+
+#define PYDX12_ARG_ITER_CHECK(t, name, append_null) UINT name##_counter = 0; t* name = pydx12_##t##_iter(py_##name, &##name##_counter, append_null);\
+if (!name)\
+	return NULL;
+
+#define PYDX12_ARG_ITER_CHECK_NONE(t, name, append_null) UINT name##_counter = 0; t* name = NULL;\
+if (py_##name && py_##name != Py_None)\
+{\
+	name = pydx12_##t##_iter(py_##name, &##name##_counter, append_null);\
+	if (!name)\
+		return NULL;\
 }
 
 #define PYDX12_OWNER self->data_owner ? self->data_owner : (PyObject*)self

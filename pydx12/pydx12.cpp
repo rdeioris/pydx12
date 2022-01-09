@@ -8,6 +8,7 @@ PYDX12_IMPORT_COM(ID3D12Device);
 PYDX12_IMPORT_COM(ID3DBlob);
 
 PYDX12_IMPORT(D3D12_VERSIONED_ROOT_SIGNATURE_DESC);
+PYDX12_IMPORT(D3D_SHADER_MACRO);
 
 int pydx12_init_dxgi(PyObject* m);
 int pydx12_init_adapter(PyObject* m);
@@ -110,16 +111,21 @@ static PyObject* pydx12_D3DCompile(PyObject* self, PyObject* args)
 
 	if (!PyUnicode_Check(py_src_data))
 	{
-		return PyErr_Format(PyExc_ValueError, "expcted a Unicode object");
+		return PyErr_Format(PyExc_ValueError, "expected a Unicode object");
 	}
+
+	PYDX12_ARG_ITER_CHECK_NONE(D3D_SHADER_MACRO, defines, true);
 
 	Py_ssize_t src_data_size = 0;
 	LPCVOID* src_data = (LPCVOID*)PyUnicode_AsUTF8AndSize(py_src_data, &src_data_size);
 
 	ID3DBlob* code = NULL;
 	ID3DBlob* error_msgs = NULL;
-	if (D3DCompile(src_data, src_data_size, source_name, NULL, NULL, entry_point, target, flags1, flags2, &code, &error_msgs) != S_OK)
+	if (D3DCompile(src_data, src_data_size, source_name, defines, NULL, entry_point, target, flags1, flags2, &code, &error_msgs) != S_OK)
 	{
+		if (defines)
+			PyMem_Free(defines);
+
 		if (error_msgs)
 		{
 			PyObject* py_error_msgs = PyUnicode_FromStringAndSize((const char*)error_msgs->GetBufferPointer(), error_msgs->GetBufferSize());
@@ -130,6 +136,9 @@ static PyObject* pydx12_D3DCompile(PyObject* self, PyObject* args)
 		}
 		return PyErr_Format(PyExc_ValueError, "unable to compile shader");
 	}
+
+	if (defines)
+		PyMem_Free(defines);
 
 	return PYDX12_COM_INSTANTIATE(ID3DBlob, code, false);
 }
@@ -302,7 +311,7 @@ static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 	Py_END_ALLOW_THREADS;
 
 	PyObject* py_list = PyList_New(0);
-	
+
 	while (!self->messages.empty())
 	{
 		auto& message = self->messages.front();
@@ -460,6 +469,8 @@ static int pydx12_init_base(PyObject* m)
 
 	PYDX12_ENUM(WM_CLOSE);
 	PYDX12_ENUM(WM_QUIT);
+	PYDX12_ENUM(WM_KEYUP);
+	PYDX12_ENUM(WM_KEYDOWN);
 
 	return 0;
 }

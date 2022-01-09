@@ -202,44 +202,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_ClearRenderTargetView(pydx12_I
 
 	PYDX12_ARG_CHECK(D3D12_CPU_DESCRIPTOR_HANDLE, render_target_view);
 
-	D3D12_RECT* rects = NULL;
-	UINT rects_counter = 0;
-
-	if (py_rects && py_rects != Py_None)
-	{
-		PyObject* py_iter = PyObject_GetIter(py_rects);
-		if (!py_iter)
-		{
-			return NULL;
-		}
-
-		while (PyObject* py_item = PyIter_Next(py_iter))
-		{
-			D3D12_RECT* rect = pydx12_D3D12_RECT_check(py_item);
-			if (!rect)
-			{
-				Py_DECREF(py_item);
-				Py_DECREF(py_iter);
-				if (rects)
-					PyMem_Free(rects);
-				return PyErr_Format(PyExc_TypeError, "argument must be an iterable of D3D12_RECT");
-			}
-			rects_counter++;
-			D3D12_RECT* new_rects = (D3D12_RECT*)PyMem_Realloc(rects, sizeof(D3D12_RECT) * rects_counter);
-			if (!new_rects)
-			{
-				Py_DECREF(py_item);
-				Py_DECREF(py_iter);
-				if (rects)
-					PyMem_Free(rects);
-				return PyErr_Format(PyExc_TypeError, "unable to allocate memory for D3D12_RECT's array");
-			}
-			rects = new_rects;
-			rects[rects_counter - 1] = *rect;
-			Py_DECREF(py_item);
-		}
-		Py_DECREF(py_iter);
-	}
+	PYDX12_ARG_ITER_CHECK_NONE(D3D12_RECT, rects, false);
 
 	PYDX12_COM_CALL(ClearRenderTargetView, *render_target_view, color_rgba, rects_counter, rects);
 
@@ -261,44 +224,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_ClearDepthStencilView(pydx12_I
 
 	PYDX12_ARG_CHECK(D3D12_CPU_DESCRIPTOR_HANDLE, depth_stencil_view);
 
-	D3D12_RECT* rects = NULL;
-	UINT rects_counter = 0;
-
-	if (py_rects && py_rects != Py_None)
-	{
-		PyObject* py_iter = PyObject_GetIter(py_rects);
-		if (!py_iter)
-		{
-			return NULL;
-		}
-
-		while (PyObject* py_item = PyIter_Next(py_iter))
-		{
-			D3D12_RECT* rect = pydx12_D3D12_RECT_check(py_item);
-			if (!rect)
-			{
-				Py_DECREF(py_item);
-				Py_DECREF(py_iter);
-				if (rects)
-					PyMem_Free(rects);
-				return PyErr_Format(PyExc_TypeError, "argument must be an iterable of D3D12_RECT");
-			}
-			rects_counter++;
-			D3D12_RECT* new_rects = (D3D12_RECT*)PyMem_Realloc(rects, sizeof(D3D12_RECT) * rects_counter);
-			if (!new_rects)
-			{
-				Py_DECREF(py_item);
-				Py_DECREF(py_iter);
-				if (rects)
-					PyMem_Free(rects);
-				return PyErr_Format(PyExc_TypeError, "unable to allocate memory for D3D12_RECT's array");
-			}
-			rects = new_rects;
-			rects[rects_counter - 1] = *rect;
-			Py_DECREF(py_item);
-		}
-		Py_DECREF(py_iter);
-	}
+	PYDX12_ARG_ITER_CHECK_NONE(D3D12_RECT, rects, false);
 
 	PYDX12_COM_CALL(ClearDepthStencilView, *depth_stencil_view, clear_flags, depth, stencil, rects_counter, rects);
 
@@ -379,41 +305,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_IASetVertexBuffers(pydx12_ID3D
 	if (!PyArg_ParseTuple(args, "IO", &start_slot, &py_views))
 		return NULL;
 
-	D3D12_VERTEX_BUFFER_VIEW* views = NULL;
-	UINT views_counter = 0;
-
-	PyObject* py_iter = PyObject_GetIter(py_views);
-	if (!py_iter)
-	{
-		return NULL;
-	}
-
-	while (PyObject* py_item = PyIter_Next(py_iter))
-	{
-		D3D12_VERTEX_BUFFER_VIEW* view = pydx12_D3D12_VERTEX_BUFFER_VIEW_check(py_item);
-		if (!view)
-		{
-			Py_DECREF(py_item);
-			Py_DECREF(py_iter);
-			if (views)
-				PyMem_Free(views);
-			return PyErr_Format(PyExc_TypeError, "argument must be an iterable of D3D12_VERTEX_BUFFER_VIEW");
-		}
-		views_counter++;
-		D3D12_VERTEX_BUFFER_VIEW* new_views = (D3D12_VERTEX_BUFFER_VIEW*)PyMem_Realloc(views, sizeof(D3D12_VERTEX_BUFFER_VIEW) * views_counter);
-		if (!new_views)
-		{
-			Py_DECREF(py_item);
-			Py_DECREF(py_iter);
-			if (views)
-				PyMem_Free(views);
-			return PyErr_Format(PyExc_TypeError, "unable to allocate memory for D3D12_VERTEX_BUFFER_VIEW's array");
-		}
-		views = new_views;
-		views[views_counter - 1] = *view;
-		Py_DECREF(py_item);
-	}
-	Py_DECREF(py_iter);
+	PYDX12_ARG_ITER_CHECK(D3D12_VERTEX_BUFFER_VIEW, views, false);
 
 	PYDX12_COM_CALL(IASetVertexBuffers, start_slot, views_counter, views);
 
@@ -444,93 +336,25 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_OMSetRenderTargets(pydx12_ID3D
 	if (!PyArg_ParseTuple(args, "O|O", &py_render_target_descriptors, &py_depth_stencil_descriptor))
 		return NULL;
 
+	PYDX12_ARG_ITER_CHECK(D3D12_CPU_DESCRIPTOR_HANDLE, render_target_descriptors, false);
+
 	PYDX12_ARG_CHECK_NONE(D3D12_CPU_DESCRIPTOR_HANDLE, depth_stencil_descriptor);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE* descriptors = NULL;
-	UINT descriptors_counter = 0;
+	PYDX12_COM_CALL(OMSetRenderTargets, render_target_descriptors_counter, render_target_descriptors, FALSE, depth_stencil_descriptor);
 
-	PyObject* py_iter = PyObject_GetIter(py_render_target_descriptors);
-	if (!py_iter)
-	{
-		return NULL;
-	}
-
-	while (PyObject* py_item = PyIter_Next(py_iter))
-	{
-		D3D12_CPU_DESCRIPTOR_HANDLE* descriptor = pydx12_D3D12_CPU_DESCRIPTOR_HANDLE_check(py_item);
-		if (!descriptor)
-		{
-			Py_DECREF(py_item);
-			Py_DECREF(py_iter);
-			if (descriptors)
-				PyMem_Free(descriptors);
-			return PyErr_Format(PyExc_TypeError, "argument must be an iterable of D3D12_CPU_DESCRIPTOR_HANDLE");
-		}
-		descriptors_counter++;
-		D3D12_CPU_DESCRIPTOR_HANDLE* new_descriptors = (D3D12_CPU_DESCRIPTOR_HANDLE*)PyMem_Realloc(descriptors, sizeof(D3D12_CPU_DESCRIPTOR_HANDLE) * descriptors_counter);
-		if (!new_descriptors)
-		{
-			Py_DECREF(py_item);
-			Py_DECREF(py_iter);
-			if (descriptors)
-				PyMem_Free(descriptors);
-			return PyErr_Format(PyExc_TypeError, "unable to allocate memory for D3D12_CPU_DESCRIPTOR_HANDLE's array");
-		}
-		descriptors = new_descriptors;
-		descriptors[descriptors_counter - 1] = *descriptor;
-		Py_DECREF(py_item);
-	}
-	Py_DECREF(py_iter);
-
-	PYDX12_COM_CALL(OMSetRenderTargets, descriptors_counter, descriptors, FALSE, depth_stencil_descriptor);
-
-	if (descriptors)
-		PyMem_Free(descriptors);
+	if (render_target_descriptors)
+		PyMem_Free(render_target_descriptors);
 
 	Py_RETURN_NONE;
 }
 
 static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetViewports(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
 {
-	PyObject* py_list_viewports;
-	if (!PyArg_ParseTuple(args, "O", &py_list_viewports))
+	PyObject* py_viewports;
+	if (!PyArg_ParseTuple(args, "O", &py_viewports))
 		return NULL;
 
-	PyObject* py_iter = PyObject_GetIter(py_list_viewports);
-	if (!py_iter)
-	{
-		return NULL;
-	}
-
-	D3D12_VIEWPORT* viewports = NULL;
-	UINT viewports_counter = 0;
-
-	while (PyObject* py_item = PyIter_Next(py_iter))
-	{
-		D3D12_VIEWPORT* viewport = pydx12_D3D12_VIEWPORT_check(py_item);
-		if (!viewport)
-		{
-			Py_DECREF(py_item);
-			Py_DECREF(py_iter);
-			if (viewports)
-				PyMem_Free(viewports);
-			return PyErr_Format(PyExc_TypeError, "argument must be an iterable of D3D12_VIEWPORT");
-		}
-		viewports_counter++;
-		D3D12_VIEWPORT* new_viewports = (D3D12_VIEWPORT*)PyMem_Realloc(viewports, sizeof(D3D12_VIEWPORT) * viewports_counter);
-		if (!new_viewports)
-		{
-			Py_DECREF(py_item);
-			Py_DECREF(py_iter);
-			if (viewports)
-				PyMem_Free(viewports);
-			return PyErr_Format(PyExc_TypeError, "unable to allocate memory for D3D12_VIEWPORT's array");
-		}
-		viewports = new_viewports;
-		viewports[viewports_counter - 1] = *viewport;
-		Py_DECREF(py_item);
-	}
-	Py_DECREF(py_iter);
+	PYDX12_ARG_ITER_CHECK(D3D12_VIEWPORT, viewports, false);
 
 	self->com_ptr->RSSetViewports(viewports_counter, viewports);
 
@@ -546,41 +370,8 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetScissorRects(pydx12_ID3D1
 	if (!PyArg_ParseTuple(args, "O", &py_rects))
 		return NULL;
 
-	PyObject* py_iter = PyObject_GetIter(py_rects);
-	if (!py_iter)
-	{
-		return NULL;
-	}
 
-	D3D12_RECT* rects = NULL;
-	UINT rects_counter = 0;
-
-	while (PyObject* py_item = PyIter_Next(py_iter))
-	{
-		D3D12_RECT* rect = pydx12_D3D12_RECT_check(py_item);
-		if (!rect)
-		{
-			Py_DECREF(py_item);
-			Py_DECREF(py_iter);
-			if (rects)
-				PyMem_Free(rects);
-			return PyErr_Format(PyExc_TypeError, "argument must be an iterable of D3D12_RECT");
-		}
-		rects_counter++;
-		D3D12_RECT* new_rects = (D3D12_RECT*)PyMem_Realloc(rects, sizeof(D3D12_RECT) * rects_counter);
-		if (!new_rects)
-		{
-			Py_DECREF(py_item);
-			Py_DECREF(py_iter);
-			if (rects)
-				PyMem_Free(rects);
-			return PyErr_Format(PyExc_TypeError, "unable to allocate memory for D3D12_RECT's array");
-		}
-		rects = new_rects;
-		rects[rects_counter - 1] = *rect;
-		Py_DECREF(py_item);
-	}
-	Py_DECREF(py_iter);
+	PYDX12_ARG_ITER_CHECK(D3D12_RECT, rects, false);
 
 	self->com_ptr->RSSetScissorRects(rects_counter, rects);
 
@@ -678,9 +469,31 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable(
 	PYDX12_COM_CALL(SetComputeRootDescriptorTable, root_parameter_index, *base_descriptor);
 
 	Py_RETURN_NONE;
-
 }
 
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	UINT root_parameter_index;
+	D3D12_GPU_VIRTUAL_ADDRESS py_buffer_location;
+	if (!PyArg_ParseTuple(args, "IK", &root_parameter_index, &py_buffer_location))
+		return NULL;
+
+	PYDX12_COM_CALL(SetGraphicsRootConstantBufferView, root_parameter_index, py_buffer_location);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootShaderResourceView(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+{
+	UINT root_parameter_index;
+	D3D12_GPU_VIRTUAL_ADDRESS py_buffer_location;
+	if (!PyArg_ParseTuple(args, "IK", &root_parameter_index, &py_buffer_location))
+		return NULL;
+
+	PYDX12_COM_CALL(SetGraphicsRootShaderResourceView, root_parameter_index, py_buffer_location);
+
+	Py_RETURN_NONE;
+}
 
 static PyObject* pydx12_ID3D12GraphicsCommandList_SetDescriptorHeaps(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
 {
@@ -754,6 +567,8 @@ PYDX12_METHODS(ID3D12GraphicsCommandList) = {
 	{"SetGraphicsRoot32BitConstant", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant, METH_VARARGS, "Sets a constant in the graphics root signature"},
 	{"SetGraphicsRoot32BitConstants", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants, METH_VARARGS, "Sets a group of constants in the graphics root signature"},
 	{"SetComputeRootDescriptorTable", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable, METH_VARARGS, "Sets a descriptor table into the compute root signature"},
+	{"SetGraphicsRootConstantBufferView", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView, METH_VARARGS, "Sets a CPU descriptor handle for the constant buffer in the graphics root signature"},
+	{"SetGraphicsRootShaderResourceView", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetGraphicsRootShaderResourceView, METH_VARARGS, "Sets a CPU descriptor handle for the shader resource in the graphics root signature"},
 	{"SetDescriptorHeaps", (PyCFunction)pydx12_ID3D12GraphicsCommandList_SetDescriptorHeaps, METH_VARARGS, "Changes the currently bound descriptor heaps that are associated with a command list"},
 	{NULL}  /* Sentinel */
 };
