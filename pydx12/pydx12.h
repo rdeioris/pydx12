@@ -37,14 +37,14 @@ typedef struct
 	size_t elements;
 } pydx12_memory_chunk;
 
-#define PYDX12_TRACK_CHUNK 0
-#define PYDX12_TRACK_COM 1
+#define PYDX12_TRACK_TYPE_CHUNK 0
+#define PYDX12_TRACK_TYPE_COM 1
 
-typedef struct
+struct pydx12_field_track_type
 {
 	size_t type;
 	size_t offset;
-} pydx12_field_track_type;
+};
 
 #define PYDX12_TYPE_INSTANTIATE(t) PyObject* pydx12_##t##_instantiate_with_size(t* data, PyObject* data_owner, IUnknown* com_owner, const size_t len)\
 {\
@@ -259,15 +259,26 @@ int pydx12_##t##_chunk_fix(pydx12_##t* self, pydx12_##t* value, t* data)\
 	{\
 		if (getset->closure != NULL)\
 		{\
-			void** ptr = (void**) (((char*)data) + ((size_t)getset->closure) - 1);\
-			pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(value, *ptr);\
-			if (chunk)\
+			pydx12_field_track_type* track_type = (pydx12_field_track_type*)getset->closure;\
+			printf("FIX " #t " field type %llu offset %llu\n", track_type->type, track_type->offset);\
+			if (track_type->type == PYDX12_TRACK_TYPE_CHUNK)\
 			{\
-				printf("found chunk for %p (size: %d elements %d\n", chunk->ptr, chunk->size, chunk->elements);\
-				chunk = pydx12_##t##_chunk_alloc(self, chunk->ptr, chunk->size, chunk->elements);\
-				if (!chunk)\
-					return -1;\
-				*ptr = chunk->ptr;\
+				void** ptr = (void**)(((char*)data) + track_type->offset);\
+				pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(value, *ptr); \
+				if (chunk)\
+				{\
+					printf("found chunk for %p (size: %d elements %d\n", chunk->ptr, chunk->size, chunk->elements); \
+					chunk = pydx12_##t##_chunk_alloc(self, chunk->ptr, chunk->size, chunk->elements);\
+					if (!chunk)\
+						return -1; \
+					*ptr = chunk->ptr;\
+				}\
+			}\
+			else if (track_type->type == PYDX12_TRACK_TYPE_COM)\
+			{\
+				IUnknown** ptr = (IUnknown**)(((char*)data) + track_type->offset);\
+				if (*ptr)\
+					(*ptr)->AddRef();\
 			}\
 		}\
 		getset++;\
@@ -281,8 +292,19 @@ void pydx12_##t##_chunk_clear(pydx12_##t* self, t* data)\
 	{\
 		if (getset->closure != NULL)\
 		{\
-			void** ptr = (void**) (((char*)data) + ((size_t)getset->closure)-1);\
-			pydx12_##t##_chunk_free(self, *ptr);\
+			pydx12_field_track_type* track_type = (pydx12_field_track_type*)getset->closure;\
+			printf("CLEAR " #t " field type %llu offset %llu\n", track_type->type, track_type->offset);\
+			if (track_type->type == PYDX12_TRACK_TYPE_CHUNK)\
+			{\
+				void** ptr = (void**) (((char*)data) + track_type->offset);\
+				pydx12_##t##_chunk_free(self, *ptr);\
+			}\
+			else if (track_type->type == PYDX12_TRACK_TYPE_COM)\
+			{\
+				IUnknown** ptr = (IUnknown**)(((char*)data) + track_type->offset);\
+				if (*ptr)\
+					(*ptr)->Release();\
+			}\
 		}\
 		getset++;\
 	}\
@@ -698,7 +720,7 @@ PYDX12_STRUCT_SETTER(t, field, type)
 #define PYDX12_STRUCT_CARRAY_GETTER_SETTER(t, field, type) PYDX12_STRUCT_CARRAY_GETTER(t, field, type)\
 PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 
-#define PYDX12_STRUCT_ARRAY_GETTER(t, field, type) static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
+#define PYDX12_STRUCT_ARRAY_GETTER(t, field, type) static pydx12_field_track_type pydx12_##t##_##field##_track_type = {PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
 {\
 	if (!self->data->##field)\
 		Py_RETURN_NONE;\
@@ -780,7 +802,7 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 #define PYDX12_STRUCT_ARRAY_GETTER_SETTER(t, field, type) PYDX12_STRUCT_ARRAY_GETTER(t, field, type)\
 PYDX12_STRUCT_ARRAY_SETTER(t, field, type)
 
-#define PYDX12_STRING_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
+#define PYDX12_STRING_GETTER(t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_type = {PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
 	if (!self->data->##field)\
 		Py_RETURN_NONE;\
@@ -849,7 +871,7 @@ PYDX12_STRING_SETTER(t, field)
 #define PYDX12_BOOL_GETTER_SETTER(t, field) PYDX12_BOOL_GETTER(t, field)\
 PYDX12_BOOL_SETTER(t, field)
 
-#define PYDX12_BUFFER_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
+#define PYDX12_BUFFER_GETTER(t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_type = {PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
 	if (!self->data->##field)\
 		Py_RETURN_NONE;\
@@ -931,8 +953,8 @@ PYDX12_COM_SETTER(t, field_t, field)
 #define PYDX12_DECLARE_GETTER_SETTER(t, field) PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, NULL)
 #define PYDX12_DECLARE_GETTER(t, field) PYDX12_DECLARE_GETTER_CLOSURE(t, field, NULL)
 
-#define PYDX12_DECLARE_GETTER_SETTER_CHUNK(t, field) PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, (void*)pydx12_field_track_type{ PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)}))
-#define PYDX12_DECLARE_GETTER_CHUNK(t, field)  PYDX12_DECLARE_GETTER_CLOSURE(t, field, (void*)pydx12_field_track_type{ PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)})
+#define PYDX12_DECLARE_GETTER_SETTER_CHUNK(t, field) PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, (void*)&pydx12_##t##_##field##_track_type)
+#define PYDX12_DECLARE_GETTER_CHUNK(t, field)  PYDX12_DECLARE_GETTER_CLOSURE(t, field, (void*)&pydx12_##t##_##field##_track_type)
 
 #define PYDX12_IMPORT(t) PyObject* pydx12_##t##_instantiate(t* data, PyObject* data_owner, IUnknown* com_owner);\
 PyObject* pydx12_##t##_instantiate_with_size(t* data, PyObject* data_owner, IUnknown* com_owner, const size_t len);\
