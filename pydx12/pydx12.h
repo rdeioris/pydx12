@@ -37,6 +37,15 @@ typedef struct
 	size_t elements;
 } pydx12_memory_chunk;
 
+#define PYDX12_TRACK_CHUNK 0
+#define PYDX12_TRACK_COM 1
+
+typedef struct
+{
+	size_t type;
+	size_t offset;
+} pydx12_field_track_type;
+
 #define PYDX12_TYPE_INSTANTIATE(t) PyObject* pydx12_##t##_instantiate_with_size(t* data, PyObject* data_owner, IUnknown* com_owner, const size_t len)\
 {\
 	pydx12_##t* py_object = PyObject_New(pydx12_##t, &pydx12_##t##Type);\
@@ -922,8 +931,8 @@ PYDX12_COM_SETTER(t, field_t, field)
 #define PYDX12_DECLARE_GETTER_SETTER(t, field) PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, NULL)
 #define PYDX12_DECLARE_GETTER(t, field) PYDX12_DECLARE_GETTER_CLOSURE(t, field, NULL)
 
-#define PYDX12_DECLARE_GETTER_SETTER_CHUNK(t, field) PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, (void*)(offsetof(t, field) + 1))
-#define PYDX12_DECLARE_GETTER_CHUNK(t, field)  PYDX12_DECLARE_GETTER_CLOSURE(t, field, (void*)(offsetof(t, field) + 1))
+#define PYDX12_DECLARE_GETTER_SETTER_CHUNK(t, field) PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, (void*)pydx12_field_track_type{ PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)}))
+#define PYDX12_DECLARE_GETTER_CHUNK(t, field)  PYDX12_DECLARE_GETTER_CLOSURE(t, field, (void*)pydx12_field_track_type{ PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)})
 
 #define PYDX12_IMPORT(t) PyObject* pydx12_##t##_instantiate(t* data, PyObject* data_owner, IUnknown* com_owner);\
 PyObject* pydx12_##t##_instantiate_with_size(t* data, PyObject* data_owner, IUnknown* com_owner, const size_t len);\
