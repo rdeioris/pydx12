@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Python.h>
-#include <dxgi1_4.h>
+#include <dxgi1_6.h>
 #include <d3d12.h>
 #include <d3dcompiler.h>
 
@@ -93,7 +93,6 @@ t* pydx12_##t##_iter(PyObject* py_object, UINT* list_counter, const bool append_
 	{\
 		return NULL;\
 	}\
-	printf("ok list\n");\
 	t* list = NULL;\
 	*list_counter = 0;\
 	while (PyObject* py_item = PyIter_Next(py_iter))\
@@ -124,9 +123,7 @@ t* pydx12_##t##_iter(PyObject* py_object, UINT* list_counter, const bool append_
 	Py_DECREF(py_iter);\
 	if (append_null)\
 	{\
-		printf("append to %u\n", *list_counter);\
 		(*list_counter)++;\
-		printf("append to %u\n", *list_counter);\
 		t* new_list = (t*)PyMem_Realloc(list, sizeof(t) * (*list_counter));\
 		if (!new_list)\
 		{\
@@ -135,9 +132,7 @@ t* pydx12_##t##_iter(PyObject* py_object, UINT* list_counter, const bool append_
 			return (t*)PyErr_Format(PyExc_MemoryError, "unable to allocate memory for " #t " array");\
 		}\
 		list = new_list;\
-		printf("ready to memset %u...\n", *list_counter);\
 		memset(&list[(*list_counter) - 1], 0, sizeof(t));\
-		printf("memset done\n");\
 	}\
 	return list;\
 }\
@@ -1001,6 +996,51 @@ if (py_##name && py_##name != Py_None)\
 #define PYDX12_OWNER self->data_owner ? self->data_owner : (PyObject*)self
 
 #define PYDX12_COM_INSTANTIATE(t, object, add_ref) pydx12_##t##_instantiate(object, add_ref)
+
+#define PYDX12_INTERFACE_CREATE(t, func, ...) { t* interface_ptr;\
+	HRESULT ret = func(__VA_ARGS__, __uuidof(t), (void**)&interface_ptr);\
+	if (ret == S_OK)\
+	{\
+		return pydx12_##t##_instantiate(interface_ptr, false);\
+	}\
+	else if (ret != E_NOINTERFACE)\
+	{\
+		return PyErr_Format(PyExc_ValueError, "unable to create " #t);\
+	}\
+}
+
+#define PYDX12_INTERFACE_CREATE_LAST(t, func, ...) PYDX12_INTERFACE_CREATE(t, func, __VA_ARGS__);\
+return PyErr_Format(PyExc_ValueError, "unable to create " #t)
+
+#define PYDX12_INTERFACE_CREATE_NO_ARGS(t, func) { t* interface_ptr;\
+	HRESULT ret = func(__uuidof(t), (void**)&interface_ptr);\
+	if (ret == S_OK)\
+	{\
+		return pydx12_##t##_instantiate(interface_ptr, false);\
+	}\
+	else if (ret != E_NOINTERFACE)\
+	{\
+		return PyErr_Format(PyExc_ValueError, "unable to create " #t);\
+	}\
+}
+
+#define PYDX12_INTERFACE_CREATE_CAST(t, cast, func, ...) { t* interface_ptr;\
+	HRESULT ret = func(__VA_ARGS__, (cast**)&interface_ptr);\
+	if (ret == S_OK)\
+	{\
+		return pydx12_##t##_instantiate(interface_ptr, false);\
+	}\
+	else if (ret != E_NOINTERFACE)\
+	{\
+		return PyErr_Format(PyExc_ValueError, "unable to create " #t);\
+	}\
+}
+
+#define PYDX12_INTERFACE_CREATE_CAST_LAST(t, cast, func, ...) PYDX12_INTERFACE_CREATE_CAST(t, cast, func, __VA_ARGS__);\
+return PyErr_Format(PyExc_ValueError, "unable to create " #t)
+
+#define PYDX12_INTERFACE_CREATE_NO_ARGS_LAST(t, func) PYDX12_INTERFACE_CREATE_NO_ARGS(t, func);\
+return PyErr_Format(PyExc_ValueError, "unable to create " #t)
 
 /** Common imports */
 PYDX12_IMPORT_COM(IUnknown);

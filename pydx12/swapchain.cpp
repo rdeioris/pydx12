@@ -35,6 +35,7 @@ PYDX12_TYPE_COM(IDXGISwapChain);
 PYDX12_TYPE_COM(IDXGISwapChain1);
 PYDX12_TYPE_COM(IDXGISwapChain2);
 PYDX12_TYPE_COM(IDXGISwapChain3);
+PYDX12_TYPE_COM(IDXGISwapChain4);
 
 static PyObject* pydx12_IDXGISwapChain_GetBuffer(pydx12_IDXGISwapChain* self, PyObject* args)
 {
@@ -94,6 +95,8 @@ int pydx12_init_swapchain(PyObject* m)
 
 	pydx12_IDXGISwapChain3Type.tp_methods = pydx12_IDXGISwapChain3_methods;
 	PYDX12_REGISTER_COM(IDXGISwapChain3, IDXGISwapChain2);
+
+	PYDX12_REGISTER_COM(IDXGISwapChain4, IDXGISwapChain3);
 
 	PYDX12_ENUM(DXGI_SCALING_STRETCH);
 	PYDX12_ENUM(DXGI_SCALING_NONE);

@@ -4,7 +4,20 @@ PYDX12_IMPORT_COM(IDXGIAdapter);
 PYDX12_IMPORT_COM(IDXGIFactory);
 PYDX12_IMPORT_COM(IDXGIFactory1);
 PYDX12_IMPORT_COM(IDXGIFactory2);
+PYDX12_IMPORT_COM(IDXGIFactory3);
+PYDX12_IMPORT_COM(IDXGIFactory4);
+PYDX12_IMPORT_COM(IDXGIFactory5);
+PYDX12_IMPORT_COM(IDXGIFactory6);
+PYDX12_IMPORT_COM(IDXGIFactory7);
 PYDX12_IMPORT_COM(ID3D12Device);
+PYDX12_IMPORT_COM(ID3D12Device1);
+PYDX12_IMPORT_COM(ID3D12Device2);
+PYDX12_IMPORT_COM(ID3D12Device3);
+PYDX12_IMPORT_COM(ID3D12Device4);
+PYDX12_IMPORT_COM(ID3D12Device5);
+PYDX12_IMPORT_COM(ID3D12Device6);
+PYDX12_IMPORT_COM(ID3D12Device7);
+PYDX12_IMPORT_COM(ID3D12Device8);
 PYDX12_IMPORT_COM(ID3DBlob);
 
 PYDX12_IMPORT(D3D12_VERSIONED_ROOT_SIGNATURE_DESC);
@@ -39,24 +52,26 @@ PYDX12_TYPE_COM(ID3D12Debug);
 
 static PyObject* pydx12_CreateDXGIFactory(PyObject* self, PyObject* args)
 {
-	IDXGIFactory* factory;
-	if (CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)&factory) != S_OK)
-	{
-		return PyErr_Format(PyExc_ValueError, "unable to create IDXGIFactory");
-	}
-
-	return pydx12_IDXGIFactory_instantiate(factory, false);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory7, CreateDXGIFactory);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory6, CreateDXGIFactory);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory5, CreateDXGIFactory);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory4, CreateDXGIFactory);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory3, CreateDXGIFactory);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory2, CreateDXGIFactory);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory1, CreateDXGIFactory);
+	PYDX12_INTERFACE_CREATE_NO_ARGS_LAST(IDXGIFactory, CreateDXGIFactory);
 }
 
 static PyObject* pydx12_CreateDXGIFactory1(PyObject* self, PyObject* args)
 {
-	IDXGIFactory1* factory;
-	if (CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&factory) != S_OK)
-	{
-		return PyErr_Format(PyExc_ValueError, "unable to create IDXGIFactory1");
-	}
-
-	return pydx12_IDXGIFactory1_instantiate(factory, false);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory7, CreateDXGIFactory1);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory6, CreateDXGIFactory1);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory5, CreateDXGIFactory1);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory4, CreateDXGIFactory1);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory3, CreateDXGIFactory1);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory2, CreateDXGIFactory1);
+	PYDX12_INTERFACE_CREATE_NO_ARGS(IDXGIFactory1, CreateDXGIFactory1);
+	PYDX12_INTERFACE_CREATE_NO_ARGS_LAST(IDXGIFactory, CreateDXGIFactory1);
 }
 
 static PyObject* pydx12_CreateDXGIFactory2(PyObject* self, PyObject* args)
@@ -65,33 +80,37 @@ static PyObject* pydx12_CreateDXGIFactory2(PyObject* self, PyObject* args)
 	if (!PyArg_ParseTuple(args, "|I", &flags))
 		return NULL;
 
-	IDXGIFactory2* factory;
-	if (CreateDXGIFactory2(flags, __uuidof(IDXGIFactory2), (void**)&factory) != S_OK)
-	{
-		return PyErr_Format(PyExc_ValueError, "unable to create IDXGIFactory2");
-	}
-
-	return pydx12_IDXGIFactory2_instantiate(factory, false);
+	PYDX12_INTERFACE_CREATE(IDXGIFactory7, CreateDXGIFactory2, flags);
+	PYDX12_INTERFACE_CREATE(IDXGIFactory6, CreateDXGIFactory2, flags);
+	PYDX12_INTERFACE_CREATE(IDXGIFactory5, CreateDXGIFactory2, flags);
+	PYDX12_INTERFACE_CREATE(IDXGIFactory4, CreateDXGIFactory2, flags);
+	PYDX12_INTERFACE_CREATE(IDXGIFactory3, CreateDXGIFactory2, flags);
+	PYDX12_INTERFACE_CREATE(IDXGIFactory2, CreateDXGIFactory2, flags);
+	PYDX12_INTERFACE_CREATE(IDXGIFactory1, CreateDXGIFactory2, flags);
+	PYDX12_INTERFACE_CREATE_LAST(IDXGIFactory, CreateDXGIFactory2, flags);
 }
 
 static PyObject* pydx12_D3D12CreateDevice(PyObject* self, PyObject* args)
 {
 	PyObject* py_adapter = NULL;
 	D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
+
 	if (!PyArg_ParseTuple(args, "O|L", &py_adapter, &feature_level))
-		return NULL;
+		return nullptr;
 
 	IDXGIAdapter* adapter = pydx12_IDXGIAdapter_check(py_adapter);
 	if (!adapter)
 		return PyErr_Format(PyExc_TypeError, "first argument must be an IDXGIAdapter");
 
-	ID3D12Device* device;
-	if (D3D12CreateDevice(adapter, feature_level, __uuidof(ID3D12Device), (void**)&device) != S_OK)
-	{
-		return PyErr_Format(PyExc_ValueError, "unable to create ID3D12Device");
-	}
-
-	return pydx12_ID3D12Device_instantiate(device, false);
+	PYDX12_INTERFACE_CREATE(ID3D12Device8, D3D12CreateDevice, adapter, feature_level);
+	PYDX12_INTERFACE_CREATE(ID3D12Device7, D3D12CreateDevice, adapter, feature_level);
+	PYDX12_INTERFACE_CREATE(ID3D12Device6, D3D12CreateDevice, adapter, feature_level);
+	PYDX12_INTERFACE_CREATE(ID3D12Device5, D3D12CreateDevice, adapter, feature_level);
+	PYDX12_INTERFACE_CREATE(ID3D12Device4, D3D12CreateDevice, adapter, feature_level);
+	PYDX12_INTERFACE_CREATE(ID3D12Device3, D3D12CreateDevice, adapter, feature_level);
+	PYDX12_INTERFACE_CREATE(ID3D12Device2, D3D12CreateDevice, adapter, feature_level);
+	PYDX12_INTERFACE_CREATE(ID3D12Device1, D3D12CreateDevice, adapter, feature_level);
+	PYDX12_INTERFACE_CREATE_LAST(ID3D12Device, D3D12CreateDevice, adapter, feature_level);
 }
 
 static PyObject* pydx12_D3DCompile(PyObject* self, PyObject* args)
@@ -219,8 +238,6 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 	if (!PyArg_ParseTuple(args, "Oii", &py_title, &width, &height))
 		return NULL;
 
-	printf("OK\n");
-
 	if (!PyUnicode_Check(py_title))
 	{
 		PyErr_SetString(PyExc_ValueError, "title must be a unicode object");
@@ -233,8 +250,6 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		return -1;
 	}
 
-	printf("WINDOW creating\n");
-
 	self->handle = CreateWindowExW(
 		WS_EX_APPWINDOW,
 		L"pydx12",
@@ -245,8 +260,6 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		NULL,
 		NULL, GetModuleHandle(NULL), NULL);
 
-	printf("WINDOW created\n");
-
 	PyMem_Free(title);
 
 	if (!self->handle)
@@ -254,8 +267,6 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		PyErr_SetString(PyExc_Exception, "unable to create Window");
 		return -1;
 	}
-
-
 
 	SetWindowLongPtr(self->handle, GWLP_USERDATA, (LONG_PTR)self);
 

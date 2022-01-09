@@ -2,7 +2,12 @@
 
 PYDX12_IMPORT_COM(IDXGIObject);
 PYDX12_IMPORT_COM(IDXGIAdapter);
+PYDX12_IMPORT_COM(IDXGIAdapter1);
+PYDX12_IMPORT_COM(IDXGISwapChain);
+PYDX12_IMPORT_COM(IDXGISwapChain1);
+PYDX12_IMPORT_COM(IDXGISwapChain2);
 PYDX12_IMPORT_COM(IDXGISwapChain3);
+PYDX12_IMPORT_COM(IDXGISwapChain4);
 PYDX12_IMPORT_COM(ID3D12CommandQueue);
 PYDX12_IMPORT(DXGI_SWAP_CHAIN_DESC1);
 
@@ -11,6 +16,11 @@ PYDX12_IMPORT_HANDLE(Window, HWND);
 PYDX12_TYPE_COM(IDXGIFactory);
 PYDX12_TYPE_COM(IDXGIFactory1);
 PYDX12_TYPE_COM(IDXGIFactory2);
+PYDX12_TYPE_COM(IDXGIFactory3);
+PYDX12_TYPE_COM(IDXGIFactory4);
+PYDX12_TYPE_COM(IDXGIFactory5);
+PYDX12_TYPE_COM(IDXGIFactory6);
+PYDX12_TYPE_COM(IDXGIFactory7);
 
 static PyObject* pydx12_IDXGIFactory_EnumAdapters(pydx12_IDXGIFactory* self)
 {
@@ -20,6 +30,20 @@ static PyObject* pydx12_IDXGIFactory_EnumAdapters(pydx12_IDXGIFactory* self)
 	while (self->com_ptr->EnumAdapters(i++, &adapter) != DXGI_ERROR_NOT_FOUND)
 	{
 		PyObject* py_adapter = pydx12_IDXGIAdapter_instantiate(adapter, false);
+		PyList_Append(py_adapters, py_adapter);
+		Py_DECREF(py_adapter);
+	}
+	return py_adapters;
+}
+
+static PyObject* pydx12_IDXGIFactory1_EnumAdapters1(pydx12_IDXGIFactory1* self)
+{
+	PyObject* py_adapters = PyList_New(0);
+	UINT i = 0;
+	IDXGIAdapter1* adapter;
+	while (self->com_ptr->EnumAdapters1(i++, &adapter) != DXGI_ERROR_NOT_FOUND)
+	{
+		PyObject* py_adapter = pydx12_IDXGIAdapter1_instantiate(adapter, false);
 		PyList_Append(py_adapters, py_adapter);
 		Py_DECREF(py_adapter);
 	}
@@ -37,30 +61,27 @@ static PyObject* pydx12_IDXGIFactory2_CreateSwapChainForHwnd(pydx12_IDXGIFactory
 	if (!PyArg_ParseTuple(args, "OOO|OO", &py_queue, &py_handle, &py_swap_chain_desc1, &py_full_screen_desc, &py_restrict_to_output))
 		return NULL;
 
-	ID3D12CommandQueue* queue = pydx12_ID3D12CommandQueue_check(py_queue);
-	if (!queue)
-		return PyErr_Format(PyExc_TypeError, "first argument must be a ID3D12CommandQueue");
-
+	PYDX12_ARG_CHECK(ID3D12CommandQueue, queue);
 	PYDX12_ARG_CHECK_HANDLE(Window, HWND, handle);
 
-	DXGI_SWAP_CHAIN_DESC1* swap_chain_desc1 = pydx12_DXGI_SWAP_CHAIN_DESC1_check(py_swap_chain_desc1);
-	if (!swap_chain_desc1)
-		return PyErr_Format(PyExc_TypeError, "third argument must be a DXGI_SWAP_CHAIN_DESC1");
+	PYDX12_ARG_CHECK(DXGI_SWAP_CHAIN_DESC1, swap_chain_desc1);
 
 	if (swap_chain_desc1->BufferCount < 1)
 		return PyErr_Format(PyExc_TypeError, "BufferCount in DXGI_SWAP_CHAIN_DESC1 cannot be 0");
 
-	IDXGISwapChain3* swap_chain3 = NULL;
-	if (self->com_ptr->CreateSwapChainForHwnd(queue, handle, swap_chain_desc1, NULL, NULL, (IDXGISwapChain1**)&swap_chain3) != S_OK)
-	{
-		return PyErr_Format(PyExc_ValueError, "unable to create IDXGISwapChain3");
-	}
-
-	return pydx12_IDXGISwapChain3_instantiate(swap_chain3, false);
+	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain4, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, handle, swap_chain_desc1, NULL, NULL);
+	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain3, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, handle, swap_chain_desc1, NULL, NULL);
+	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain2, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, handle, swap_chain_desc1, NULL, NULL);
+	PYDX12_INTERFACE_CREATE_CAST_LAST(IDXGISwapChain1, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, handle, swap_chain_desc1, NULL, NULL);
 }
 
 PYDX12_METHODS(IDXGIFactory) = {
-	{"EnumAdapters", (PyCFunction)pydx12_IDXGIFactory_EnumAdapters, METH_NOARGS, "Returns the list of Adapters in the system"},
+	{"EnumAdapters", (PyCFunction)pydx12_IDXGIFactory_EnumAdapters, METH_NOARGS, "Enumerates the adapters (video cards)"},
+	{NULL}  /* Sentinel */
+};
+
+PYDX12_METHODS(IDXGIFactory1) = {
+	{"EnumAdapters1", (PyCFunction)pydx12_IDXGIFactory1_EnumAdapters1, METH_NOARGS, "Enumerates both adapters (video cards) with or without outputs"},
 	{NULL}  /* Sentinel */
 };
 
@@ -88,6 +109,12 @@ int pydx12_init_dxgi(PyObject* m)
 
 	pydx12_IDXGIFactory2Type.tp_methods = pydx12_IDXGIFactory2_methods;
 	PYDX12_REGISTER_COM(IDXGIFactory2, IDXGIFactory1);
+
+	PYDX12_REGISTER_COM(IDXGIFactory3, IDXGIFactory2);
+	PYDX12_REGISTER_COM(IDXGIFactory4, IDXGIFactory3);
+	PYDX12_REGISTER_COM(IDXGIFactory5, IDXGIFactory4);
+	PYDX12_REGISTER_COM(IDXGIFactory6, IDXGIFactory5);
+	PYDX12_REGISTER_COM(IDXGIFactory7, IDXGIFactory6);
 
 	PYDX12_REGISTER_STRUCT(DXGI_SAMPLE_DESC);
 

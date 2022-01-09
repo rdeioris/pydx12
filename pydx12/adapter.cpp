@@ -26,7 +26,33 @@ PYDX12_GETSETTERS(DXGI_ADAPTER_DESC) = {
 	{ NULL }  /* Sentinel */
 };
 
+PYDX12_TYPE(DXGI_ADAPTER_DESC1);
+PYDX12_WSTRING_GETTER(DXGI_ADAPTER_DESC1, Description);
+PYDX12_GETTER(DXGI_ADAPTER_DESC1, VendorId, UnsignedLong);
+PYDX12_GETTER(DXGI_ADAPTER_DESC1, DeviceId, UnsignedLong);
+PYDX12_GETTER(DXGI_ADAPTER_DESC1, SubSysId, UnsignedLong);
+PYDX12_GETTER(DXGI_ADAPTER_DESC1, Revision, UnsignedLong);
+PYDX12_GETTER(DXGI_ADAPTER_DESC1, DedicatedVideoMemory, UnsignedLongLong);
+PYDX12_GETTER(DXGI_ADAPTER_DESC1, DedicatedSystemMemory, UnsignedLongLong);
+PYDX12_GETTER(DXGI_ADAPTER_DESC1, SharedSystemMemory, UnsignedLongLong);
+PYDX12_STRUCT_GETTER(DXGI_ADAPTER_DESC1, AdapterLuid, LUID);
+PYDX12_GETTER(DXGI_ADAPTER_DESC1, Flags, UnsignedLong);
+PYDX12_GETSETTERS(DXGI_ADAPTER_DESC1) = {
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, Description),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, VendorId),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, DeviceId),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, SubSysId),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, Revision),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, DedicatedVideoMemory),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, DedicatedSystemMemory),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, SharedSystemMemory),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, AdapterLuid),
+	PYDX12_DECLARE_GETTER(DXGI_ADAPTER_DESC1, Flags),
+	{ NULL }  /* Sentinel */
+};
+
 PYDX12_TYPE_COM(IDXGIAdapter);
+PYDX12_TYPE_COM(IDXGIAdapter1);
 
 static PyObject* pydx12_IDXGIAdapter_GetDesc(pydx12_IDXGIAdapter* self, void* closure)
 {
@@ -38,8 +64,23 @@ static PyObject* pydx12_IDXGIAdapter_GetDesc(pydx12_IDXGIAdapter* self, void* cl
 	return pydx12_DXGI_ADAPTER_DESC_instantiate(&desc, NULL, NULL);
 }
 
+static PyObject* pydx12_IDXGIAdapter_GetDesc1(pydx12_IDXGIAdapter1* self, void* closure)
+{
+	DXGI_ADAPTER_DESC1 desc;
+	if (self->com_ptr->GetDesc1(&desc) != S_OK)
+	{
+		Py_RETURN_NONE;
+	}
+	return pydx12_DXGI_ADAPTER_DESC1_instantiate(&desc, NULL, NULL);
+}
+
 PYDX12_METHODS(IDXGIAdapter) = {
-	{"GetDesc", (PyCFunction)pydx12_IDXGIAdapter_GetDesc, METH_NOARGS, "Get Adapter description"},
+	{"GetDesc", (PyCFunction)pydx12_IDXGIAdapter_GetDesc, METH_NOARGS, "Gets a DXGI 1.0 description of an adapter (or video card)"},
+	{NULL}  /* Sentinel */
+};
+
+PYDX12_METHODS(IDXGIAdapter1) = {
+	{"GetDesc1", (PyCFunction)pydx12_IDXGIAdapter_GetDesc1, METH_NOARGS, "Describes an adapter (or video card) using DXGI 1.1"},
 	{NULL}  /* Sentinel */
 };
 
@@ -48,7 +89,16 @@ int pydx12_init_adapter(PyObject* m)
 	pydx12_IDXGIAdapterType.tp_methods = pydx12_IDXGIAdapter_methods;
 	PYDX12_REGISTER_COM(IDXGIAdapter, IDXGIObject);
 
+	pydx12_IDXGIAdapterType.tp_methods = pydx12_IDXGIAdapter1_methods;
+	PYDX12_REGISTER_COM(IDXGIAdapter1, IDXGIAdapter);
+
 	PYDX12_REGISTER_STRUCT(DXGI_ADAPTER_DESC);
+	PYDX12_REGISTER_STRUCT(DXGI_ADAPTER_DESC1);
+
+	PYDX12_ENUM(DXGI_ADAPTER_FLAG_NONE);
+	PYDX12_ENUM(DXGI_ADAPTER_FLAG_REMOTE);
+	PYDX12_ENUM(DXGI_ADAPTER_FLAG_SOFTWARE);
+	PYDX12_ENUM(DXGI_ADAPTER_FLAG_FORCE_DWORD);
 
 	return 0;
 }
