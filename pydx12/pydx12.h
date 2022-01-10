@@ -574,6 +574,21 @@ static int pydx12_##t##_init(pydx12_##t* self, PyObject* args, PyObject* kwds)\
 	}\
 	return 0;\
 }\
+static PyObject* pydx12_##t##_richcompare(pydx12_##t* self,PyObject *other, int op)\
+{\
+	if (op == Py_EQ)\
+	{\
+		IUnknown* unknown = pydx12_IUnknown_check(other);\
+		if (unknown)\
+		{\
+			if (self->com_ptr == unknown)\
+			{\
+				Py_RETURN_TRUE;\
+			}\
+		}\
+	}\
+	Py_RETURN_FALSE;\
+}\
 PyTypeObject* pydx12_##t##_get_type()\
 {\
 	return (PyTypeObject*)&pydx12_##t##Type;\
@@ -650,6 +665,7 @@ PYDX12_REGISTER(t)
 #define PYDX12_REGISTER_COM(t, s) pydx12_##t##Type.tp_base = pydx12_##s##_get_type();\
 pydx12_##t##Type.tp_new = PyType_GenericNew;\
 pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
+pydx12_##t##Type.tp_richcompare = (richcmpfunc)pydx12_##t##_richcompare;\
 PYDX12_REGISTER_COM_BASE(t)
 
 #define PYDX12_REGISTER_HANDLE(t) pydx12_##t##Type.tp_new = PyType_GenericNew;\
