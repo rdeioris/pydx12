@@ -16,6 +16,7 @@ PYDX12_IMPORT(D3D12_SHADER_RESOURCE_VIEW_DESC);
 PYDX12_IMPORT(D3D12_UNORDERED_ACCESS_VIEW_DESC);
 PYDX12_IMPORT(D3D12_DEPTH_STENCIL_VIEW_DESC);
 PYDX12_IMPORT(D3D12_CONSTANT_BUFFER_VIEW_DESC);
+PYDX12_IMPORT(D3D12_HEAP_DESC);
 
 
 PYDX12_IMPORT_COM(ID3D12Object);
@@ -49,41 +50,68 @@ PYDX12_TYPE_COM(ID3D12Device8);
 PYDX12_TYPE_COM(ID3D12InfoQueue);
 PYDX12_TYPE_COM(ID3D12DeviceChild);
 PYDX12_TYPE_COM(ID3D12Pageable);
+PYDX12_TYPE_COM(ID3D12Heap);
 
 static PyObject* pydx12_ID3D12Device_CreateCommittedResource(pydx12_ID3D12Device* self, PyObject* args)
 {
 	PyObject* py_heap_properties;
 	D3D12_HEAP_FLAGS py_heap_flags;
 	PyObject* py_resource_desc;
-	D3D12_RESOURCE_STATES py_initial_resource_state;
-	PyObject* py_clear_value;
-	if (!PyArg_ParseTuple(args, "OLOLO", &py_heap_properties, &py_heap_flags, &py_resource_desc, &py_initial_resource_state, &py_clear_value))
+	D3D12_RESOURCE_STATES initial_resource_state;
+	PyObject* py_clear_value = NULL;
+	if (!PyArg_ParseTuple(args, "OLOL|O", &py_heap_properties, &py_heap_flags, &py_resource_desc, &initial_resource_state, &py_clear_value))
 		return NULL;
 
 	D3D12_HEAP_PROPERTIES* heap_properties = pydx12_D3D12_HEAP_PROPERTIES_check(py_heap_properties);
 	if (!heap_properties)
 		return PyErr_Format(PyExc_TypeError, "first argument must be a D3D12_HEAP_PROPERTIES");
 
-	D3D12_RESOURCE_DESC* resource_desc = pydx12_D3D12_RESOURCE_DESC_check(py_resource_desc);
-	if (!resource_desc)
-		return PyErr_Format(PyExc_TypeError, "third argument must be a D3D12_RESOURCE_DESC");
+	PYDX12_ARG_CHECK(D3D12_RESOURCE_DESC, resource_desc);
 
-	D3D12_CLEAR_VALUE* clear_value = NULL;
-
-	if (py_clear_value != Py_None)
-	{
-		clear_value = pydx12_D3D12_CLEAR_VALUE_check(py_clear_value);
-		if (!clear_value)
-			return PyErr_Format(PyExc_TypeError, "fifth argument must be a D3D12_CLEAR_VALUE");
-	}
+	PYDX12_ARG_CHECK_NONE(D3D12_CLEAR_VALUE, clear_value);
 
 	ID3D12Resource* resource;
-	if (self->com_ptr->CreateCommittedResource(heap_properties, py_heap_flags, resource_desc, py_initial_resource_state, clear_value, __uuidof(ID3D12Resource), (void**)&resource) != S_OK)
+	if (self->com_ptr->CreateCommittedResource(heap_properties, py_heap_flags, resource_desc, initial_resource_state, clear_value, __uuidof(ID3D12Resource), (void**)&resource) != S_OK)
 	{
 		return PyErr_Format(PyExc_ValueError, "unable to create ID3D12Resource");
 	}
 
 	return pydx12_ID3D12Resource_instantiate(resource, false);
+}
+
+static PyObject* pydx12_ID3D12Device_CreatePlacedResource(pydx12_ID3D12Device* self, PyObject* args)
+{
+	PyObject* py_heap;
+	UINT64 heap_offset;
+	PyObject* py_resource_desc;
+	D3D12_RESOURCE_STATES initial_resource_state;
+	PyObject* py_clear_value = NULL;
+	if (!PyArg_ParseTuple(args, "OKOL|O", &py_heap, &heap_offset, &py_resource_desc, &initial_resource_state, &py_clear_value))
+		return NULL;
+
+	PYDX12_ARG_CHECK(ID3D12Heap, heap);
+	PYDX12_ARG_CHECK(D3D12_RESOURCE_DESC, resource_desc);
+
+	PYDX12_ARG_CHECK_NONE(D3D12_CLEAR_VALUE, clear_value);
+
+	ID3D12Resource* resource;
+	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreatePlacedResource, heap, heap_offset, resource_desc, initial_resource_state, clear_value, __uuidof(ID3D12Resource), (void**)&resource);
+
+	return PYDX12_COM_INSTANTIATE(ID3D12Resource, resource, false);
+}
+
+static PyObject* pydx12_ID3D12Device_CreateHeap(pydx12_ID3D12Device* self, PyObject* args)
+{
+	PyObject* py_desc;
+	if (!PyArg_ParseTuple(args, "O", &py_desc))
+		return NULL;
+
+	PYDX12_ARG_CHECK(D3D12_HEAP_DESC, desc);
+
+	ID3D12Heap* heap;
+	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateHeap, desc, __uuidof(ID3D12Heap), (void**)&heap);
+
+	return PYDX12_COM_INSTANTIATE(ID3D12Heap, heap, false);
 }
 
 static PyObject* pydx12_ID3D12Device_GetAdapterLuid(pydx12_ID3D12Device* self)
@@ -349,8 +377,9 @@ static PyObject* pydx12_ID3D12Device_CreateComputePipelineState(pydx12_ID3D12Dev
 }
 
 PYDX12_METHODS(ID3D12Device) = {
-	{"CreateCommittedResource", (PyCFunction)pydx12_ID3D12Device_CreateCommittedResource, METH_VARARGS, "Creates a new D3D12 Resource over an implicitely created Heap"},
-	{"GetAdapterLuid", (PyCFunction)pydx12_ID3D12Device_GetAdapterLuid, METH_NOARGS, "Get the Adapter LUID"},
+	{"CreateCommittedResource", (PyCFunction)pydx12_ID3D12Device_CreateCommittedResource, METH_VARARGS, "Creates both a resource and an implicit heap, such that the heap is big enough to contain the entire resource, and the resource is mapped to the heap"},
+	{"CreatePlacedResource", (PyCFunction)pydx12_ID3D12Device_CreatePlacedResource, METH_VARARGS, "Creates a resource that is placed in a specific heap"},
+	{"GetAdapterLuid", (PyCFunction)pydx12_ID3D12Device_GetAdapterLuid, METH_NOARGS, "Gets a locally unique identifier for the current device (adapter)"},
 	{"CreateCommandQueue", (PyCFunction)pydx12_ID3D12Device_CreateCommandQueue, METH_VARARGS, "Creates a command queue"},
 	{"CreateCommandAllocator", (PyCFunction)pydx12_ID3D12Device_CreateCommandAllocator, METH_VARARGS, "Creates a command allocator object"},
 	{"CreateCommandList", (PyCFunction)pydx12_ID3D12Device_CreateCommandList, METH_VARARGS, "Creates a command list"},
@@ -366,6 +395,7 @@ PYDX12_METHODS(ID3D12Device) = {
 	{"GetNodeCount", (PyCFunction)pydx12_ID3D12Device_GetNodeCount, METH_NOARGS, "Reports the number of physical adapters (nodes) that are associated with this device"},
 	{"GetCopyableFootprints", (PyCFunction)pydx12_ID3D12Device_GetCopyableFootprints, METH_VARARGS, "Gets a resource layout that can be copied"},
 	{"CreateComputePipelineState", (PyCFunction)pydx12_ID3D12Device_CreateComputePipelineState, METH_VARARGS, "Creates a compute pipeline state object"},
+	{"CreateHeap", (PyCFunction)pydx12_ID3D12Device_CreateHeap, METH_VARARGS, "Creates a heap that can be used with placed resources and reserved resources"},
 	{NULL}  /* Sentinel */
 };
 
@@ -436,6 +466,8 @@ int pydx12_init_device(PyObject* m)
 
 	pydx12_ID3D12InfoQueueType.tp_methods = pydx12_ID3D12InfoQueue_methods;
 	PYDX12_REGISTER_COM(ID3D12InfoQueue, IUnknown);
+
+	PYDX12_REGISTER_COM(ID3D12Heap, ID3D12Pageable);
 
 	PYDX12_REGISTER_STRUCT(D3D12_DEPTH_STENCIL_VALUE);
 
