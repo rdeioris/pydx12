@@ -22,7 +22,9 @@ for adapter in factory.EnumAdapters():
           adapter_desc.DedicatedVideoMemory / 1024 / 1024))
 ```
 
-It basically creates a 'DXGI Factory' and call the EnumAdapters() method on it, returning a list of the adapters in the system. The GetDesc() method returns adapter's information in a DXGI_ADAPTER_DESC object (that wraps the DXGI_ADAPTER_DESC C struct: https://docs.microsoft.com/en-us/windows/win32/api/dxgi/ns-dxgi-dxgi_adapter_desc)
+It basically creates a 'DXGI Factory' and call the EnumAdapters() method on it, returning a list of the adapters in the system.
+
+The GetDesc() method returns adapter's informations in a DXGI_ADAPTER_DESC object (that wraps the DXGI_ADAPTER_DESC C struct: https://docs.microsoft.com/en-us/windows/win32/api/dxgi/ns-dxgi-dxgi_adapter_desc)
 
 
 ## DXGI
