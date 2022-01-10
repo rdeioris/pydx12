@@ -27,6 +27,7 @@ static PyObject* pydx12_ID3DBlob_GetBufferPointer(pydx12_ID3DBlob* self)
 
 static PyObject* pydx12_ID3DBlob_GetBufferSize(pydx12_ID3DBlob* self)
 {
+	printf("getting buffer size...\n");
 	return PyLong_FromUnsignedLongLong(self->com_ptr->GetBufferSize());
 }
 
@@ -49,19 +50,7 @@ static int pydx12_ID3DBlob_get_buffer(pydx12_ID3DBlob* exporter, Py_buffer* view
 		return -1;
 	}
 
-	view->obj = (PyObject*)exporter;
-	view->buf = buffer_ptr;
-	view->len = exporter->com_ptr->GetBufferSize();
-	view->readonly = 1;
-	view->itemsize = 1;
-	view->format = nullptr;
-	view->ndim = 1;
-	view->shape = NULL;
-	view->strides = NULL;
-	view->suboffsets = nullptr;
-	view->internal = nullptr;
-
-	Py_INCREF(exporter);
+	PyBuffer_FillInfo(view, (PyObject*)exporter, buffer_ptr, exporter->com_ptr->GetBufferSize(), 0, flags);
 	return 0;
 }
 
