@@ -789,9 +789,9 @@ PYDX12_STRUCT_SETTER(t, field, type)
 		PyErr_SetString(PyExc_TypeError, "value must be a " #type);\
 		return -1;\
 	}\
-	/* cleanup all */\
+	pydx12_##type##_chunk_clear((pydx12_##type*)self, &self->data->##field[0]);\
 	self->data->##field##[0] = *data;\
-	/* reassign */\
+	pydx12_##type##_chunk_fix((pydx12_##type*)self, (pydx12_##type*) value, &self->data->##field[0]);\
 	return 0;\
 }
 
