@@ -4,6 +4,7 @@
 #include <dxgi1_6.h>
 #include <d3d12.h>
 #include <d3dcompiler.h>
+#include <comdef.h>
 
 #define PYDX12_TYPE_MEMBERS(t) static PyTypeObject pydx12_##t##Type = \
 {\
@@ -1055,15 +1056,19 @@ PyTypeObject* pydx12_##t##_get_type()
 
 #define PYDX12_COM_CALL(func, ...) self->com_ptr->##func(__VA_ARGS__)
 
-#define PYDX12_COM_CALL_HRESULT(t, func, ...) if (PYDX12_COM_CALL(func, __VA_ARGS__) != S_OK)\
-{\
-	return PyErr_Format(PyExc_Exception, #t "::" #func);\
+#define PYDX12_COM_CALL_HRESULT(t, func, ...) { HRESULT ret = PYDX12_COM_CALL(func, __VA_ARGS__); if (ret != S_OK)\
+	{\
+		_com_error err(ret);\
+		return PyErr_Format(PyExc_Exception, #t "::" #func "(): %s", err.ErrorMessage());\
+	}\
 }
 
-#define PYDX12_COM_CALL_HRESULT_AND_FREE(object_to_free, t, func, ...) if (PYDX12_COM_CALL(func, __VA_ARGS__) != S_OK)\
-{\
-	PyMem_Free(object_to_free);\
-	return PyErr_Format(PyExc_Exception, #t "::" #func);\
+#define PYDX12_COM_CALL_HRESULT_AND_FREE(object_to_free, t, func, ...) { HRESULT ret = PYDX12_COM_CALL(func, __VA_ARGS__); if (ret != S_OK)\
+	{\
+		PyMem_Free(object_to_free);\
+		_com_error err(ret);\
+		return PyErr_Format(PyExc_Exception, #t "::" #func "(): %s", err.ErrorMessage());\
+	}\
 }\
 PyMem_Free(object_to_free)
 
@@ -1115,7 +1120,8 @@ if (py_##name && py_##name != Py_None)\
 	}\
 	else if (ret != E_NOINTERFACE)\
 	{\
-		return PyErr_Format(PyExc_ValueError, "unable to create " #t);\
+		_com_error err(ret);\
+		return PyErr_Format(PyExc_ValueError, "unable to create " #t ": %s", err.ErrorMessage());\
 	}\
 }
 
@@ -1130,7 +1136,8 @@ return PyErr_Format(PyExc_ValueError, "unable to create " #t)
 	}\
 	else if (ret != E_NOINTERFACE)\
 	{\
-		return PyErr_Format(PyExc_ValueError, "unable to create " #t);\
+		_com_error err(ret);\
+		return PyErr_Format(PyExc_ValueError, "unable to create " #t ": %s", err.ErrorMessage());\
 	}\
 }
 
@@ -1142,7 +1149,8 @@ return PyErr_Format(PyExc_ValueError, "unable to create " #t)
 	}\
 	else if (ret != E_NOINTERFACE)\
 	{\
-		return PyErr_Format(PyExc_ValueError, "unable to create " #t);\
+		_com_error err(ret);\
+		return PyErr_Format(PyExc_ValueError, "unable to create " #t ": %s", err.ErrorMessage());\
 	}\
 }
 
