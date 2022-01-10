@@ -27,7 +27,6 @@ static PyObject* pydx12_ID3DBlob_GetBufferPointer(pydx12_ID3DBlob* self)
 
 static PyObject* pydx12_ID3DBlob_GetBufferSize(pydx12_ID3DBlob* self)
 {
-	printf("getting buffer size...\n");
 	return PyLong_FromUnsignedLongLong(self->com_ptr->GetBufferSize());
 }
 

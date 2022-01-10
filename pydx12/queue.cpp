@@ -442,7 +442,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(
 			return PyErr_Format(PyExc_ValueError, "expected a buffer size multiple of 4 bytes");
 		}
 
-		PYDX12_COM_CALL(SetGraphicsRoot32BitConstants, root_parameter_index, view.len / 4, view.buf, dest_offset);
+		PYDX12_COM_CALL(SetGraphicsRoot32BitConstants, root_parameter_index, (UINT)(view.len / 4), view.buf, dest_offset);
 		PyBuffer_Release(&view);
 		Py_RETURN_NONE;
 	}

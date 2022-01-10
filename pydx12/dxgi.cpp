@@ -27,12 +27,14 @@ static PyObject* pydx12_IDXGIFactory_EnumAdapters(pydx12_IDXGIFactory* self)
 	PyObject* py_adapters = PyList_New(0);
 	UINT i = 0;
 	IDXGIAdapter* adapter;
+
 	while (self->com_ptr->EnumAdapters(i++, &adapter) != DXGI_ERROR_NOT_FOUND)
 	{
 		PyObject* py_adapter = pydx12_IDXGIAdapter_instantiate(adapter, false);
 		PyList_Append(py_adapters, py_adapter);
 		Py_DECREF(py_adapter);
 	}
+
 	return py_adapters;
 }
 
@@ -41,12 +43,14 @@ static PyObject* pydx12_IDXGIFactory1_EnumAdapters1(pydx12_IDXGIFactory1* self)
 	PyObject* py_adapters = PyList_New(0);
 	UINT i = 0;
 	IDXGIAdapter1* adapter;
+
 	while (self->com_ptr->EnumAdapters1(i++, &adapter) != DXGI_ERROR_NOT_FOUND)
 	{
 		PyObject* py_adapter = pydx12_IDXGIAdapter1_instantiate(adapter, false);
 		PyList_Append(py_adapters, py_adapter);
 		Py_DECREF(py_adapter);
 	}
+
 	return py_adapters;
 }
 
