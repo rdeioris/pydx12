@@ -25,6 +25,8 @@ for adapter in factory.EnumAdapters():
 
 ## DXGI
 
+This is the library for accessing the adapters available in your system as well as the displays. It exposes the features for mapping SwapChains to windows (If you do not know what a SwapChain is, consider it as a double buffered framebuffer that will be shown on a desktop window)
+
 ## D3D12
 
 ## XAudio2
