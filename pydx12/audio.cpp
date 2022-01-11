@@ -116,6 +116,11 @@ static PyObject* pydx12_IXAudio2SourceVoice_SubmitSourceBuffer(pydx12_IXAudio2So
 
 	PYDX12_ARG_CHECK(XAUDIO2_BUFFER, buffer);
 
+	if (buffer->AudioBytes > XAUDIO2_MAX_BUFFER_BYTES)
+	{
+		return PyErr_Format(PyExc_ValueError, "XAUDIO2_BUFFER AudioBytes must not be higher than %llu", XAUDIO2_MAX_BUFFER_BYTES);
+	}
+
 	PYDX12_CALL_HRESULT(self->handle->SubmitSourceBuffer, buffer, NULL);
 
 	Py_RETURN_NONE;
@@ -209,6 +214,8 @@ int pydx12_init_audio(PyObject* m)
 	PYDX12_ENUM(XAUDIO2_COMMIT_ALL);
 
 	PYDX12_ENUM(WAVE_FORMAT_PCM);
+
+	PYDX12_ENUM(XAUDIO2_MAX_BUFFER_BYTES);
 
 	return 0;
 }
