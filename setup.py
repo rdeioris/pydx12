@@ -16,7 +16,8 @@ module = Extension('pydx12.api',
                                                               'fence.cpp',
                                                               'descriptor.cpp',
                                                               'shader.cpp',
-                                                              'pipeline.cpp')
+                                                              'pipeline.cpp',
+                                                              'audio.cpp')
                             ])
 
 setup(name='pydx12',

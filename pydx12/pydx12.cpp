@@ -19,6 +19,7 @@ PYDX12_IMPORT_COM(ID3D12Device6);
 PYDX12_IMPORT_COM(ID3D12Device7);
 PYDX12_IMPORT_COM(ID3D12Device8);
 PYDX12_IMPORT_COM(ID3DBlob);
+PYDX12_IMPORT_COM(IXAudio2);
 
 PYDX12_IMPORT(D3D12_VERSIONED_ROOT_SIGNATURE_DESC);
 PYDX12_IMPORT(D3D_SHADER_MACRO);
@@ -36,6 +37,7 @@ int pydx12_init_fence(PyObject* m);
 int pydx12_init_descriptor(PyObject* m);
 int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
+int pydx12_init_audio(PyObject* m);
 
 #include <queue>
 #include <tuple>
@@ -88,6 +90,19 @@ static PyObject* pydx12_CreateDXGIFactory2(PyObject* self, PyObject* args)
 	PYDX12_INTERFACE_CREATE(IDXGIFactory2, CreateDXGIFactory2, flags);
 	PYDX12_INTERFACE_CREATE(IDXGIFactory1, CreateDXGIFactory2, flags);
 	PYDX12_INTERFACE_CREATE_LAST(IDXGIFactory, CreateDXGIFactory2, flags);
+}
+
+static PyObject* pydx12_XAudio2Create(PyObject* self, PyObject* args)
+{
+	UINT32 flags = 0;
+	XAUDIO2_PROCESSOR processor = XAUDIO2_DEFAULT_PROCESSOR;
+	if (!PyArg_ParseTuple(args, "|IL", &flags, &processor))
+		return NULL;
+
+	IXAudio2* xaudio2;
+	PYDX12_CALL_HRESULT(XAudio2Create, &xaudio2, flags, processor);
+
+	return PYDX12_COM_INSTANTIATE(IXAudio2, xaudio2, false);
 }
 
 static PyObject* pydx12_D3D12CreateDevice(PyObject* self, PyObject* args)
@@ -396,6 +411,7 @@ static PyMethodDef pydx12_methods[] =
 	{"D3D12GetDebugInterface", (PyCFunction)pydx12_D3D12GetDebugInterface, METH_NOARGS, "Gets a debug interface"},
 	{"QueryPerformanceCounter", (PyCFunction)pydx12_QueryPerformanceCounter, METH_NOARGS, "Retrieves the current value of the performance counter"},
 	{"QueryPerformanceFrequency", (PyCFunction)pydx12_QueryPerformanceFrequency, METH_NOARGS, "Retrieves the frequency of the performance counter"},
+	{"XAudio2Create", (PyCFunction)pydx12_XAudio2Create, METH_VARARGS, "Creates a new XAudio2 object and returns a pointer to its IXAudio2 interface"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -452,6 +468,8 @@ static LRESULT pydx12_DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM 
 
 static int pydx12_init_base(PyObject* m)
 {
+	CoInitializeEx(NULL, COINIT_MULTITHREADED);
+
 	WNDCLASSW window_class = {};
 	window_class.lpfnWndProc = pydx12_DefWindowProcW;
 	window_class.hInstance = GetModuleHandle(NULL);
@@ -572,6 +590,12 @@ PyInit_api(void)
 	}
 
 	if (pydx12_init_pipeline(m))
+	{
+		Py_DECREF(m);
+		return NULL;
+	}
+
+	if (pydx12_init_audio(m))
 	{
 		Py_DECREF(m);
 		return NULL;

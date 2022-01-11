@@ -4,6 +4,7 @@
 #include <dxgi1_6.h>
 #include <d3d12.h>
 #include <d3dcompiler.h>
+#include <xaudio2.h>
 #include <comdef.h>
 
 #define PYDX12_TYPE_MEMBERS(t) static PyTypeObject pydx12_##t##Type = \
@@ -526,6 +527,8 @@ static PyMethodDef pydx12_##t##_methods[] = {\
 	pydx12_##t* py_object = PyObject_New(pydx12_##t, &pydx12_##t##Type);\
 	if (!py_object)\
 	{\
+		if (com_ptr && !add_ref)\
+			com_ptr->Release();\
 		return NULL;\
 	}\
 	char* offset = (char*)py_object;\
@@ -640,6 +643,10 @@ ht pydx12_##t##_check(PyObject* py_object)\
 	}\
 	pydx12_##t##* pydx12_object = (pydx12_##t*)py_object; \
 	return pydx12_object->handle; \
+}\
+PyTypeObject* pydx12_##t##_get_type()\
+{\
+	return (PyTypeObject*)&pydx12_##t##Type; \
 }
 
 #define PYDX12_ENUM(t) PyModule_AddObject(m, #t, PyLong_FromLongLong(t))
@@ -672,6 +679,9 @@ PYDX12_REGISTER_COM_BASE(t)
 #define PYDX12_REGISTER_HANDLE(t) pydx12_##t##Type.tp_new = PyType_GenericNew;\
 pydx12_##t##Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
 pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
+PYDX12_REGISTER(t)
+
+#define PYDX12_REGISTER_SUBHANDLE(t, s) pydx12_##t##Type.tp_base = pydx12_##s##_get_type();\
 PYDX12_REGISTER(t)
 
 #define PYDX12_REGISTER_COM_BASE(t) pydx12_##t##Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
@@ -958,7 +968,7 @@ PYDX12_BOOL_SETTER(t, field)
 	return PyBytes_FromStringAndSize((const char*)chunk->ptr, chunk->size);\
 }
 
-#define PYDX12_BUFFER_SETTER(t, field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
+#define PYDX12_BUFFER_SETTER(t, field, cast) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
 {\
 	Py_buffer view;\
 	if (value != Py_None && !PyObject_CheckBuffer(value))\
@@ -984,13 +994,13 @@ PYDX12_BOOL_SETTER(t, field)
 		PyBuffer_Release(&view);\
 		return -1;\
 	}\
-	self->data->##field = chunk->ptr;\
+	self->data->##field = (cast*)chunk->ptr;\
 	PyBuffer_Release(&view);\
 	return 0;\
 }
 
-#define PYDX12_BUFFER_GETTER_SETTER(t, field, field_size) PYDX12_BUFFER_GETTER(t, field)\
-PYDX12_BUFFER_SETTER(t, field)
+#define PYDX12_BUFFER_GETTER_SETTER(t, field, cast) PYDX12_BUFFER_GETTER(t, field)\
+PYDX12_BUFFER_SETTER(t, field, cast)
 
 
 #define PYDX12_COM_GETTER(t, field_t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_com_type = {PYDX12_TRACK_TYPE_COM, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
@@ -1055,6 +1065,13 @@ PyTypeObject* pydx12_##t##_get_type()
 #define PYDX12_GETSETTERS(t) static PyGetSetDef pydx12_##t##_getsetters[]
 
 #define PYDX12_COM_CALL(func, ...) self->com_ptr->##func(__VA_ARGS__)
+
+#define PYDX12_CALL_HRESULT(func, ...) { HRESULT ret = func(__VA_ARGS__); if (ret != S_OK)\
+	{\
+		_com_error err(ret);\
+		return PyErr_Format(PyExc_Exception, #func "(): %s", err.ErrorMessage());\
+	}\
+}
 
 #define PYDX12_COM_CALL_HRESULT(t, func, ...) { HRESULT ret = PYDX12_COM_CALL(func, __VA_ARGS__); if (ret != S_OK)\
 	{\
@@ -1159,6 +1176,26 @@ return PyErr_Format(PyExc_ValueError, "unable to create " #t)
 
 #define PYDX12_INTERFACE_CREATE_NO_ARGS_LAST(t, func) PYDX12_INTERFACE_CREATE_NO_ARGS(t, func);\
 return PyErr_Format(PyExc_ValueError, "unable to create " #t)
+
+#define PYDX12_HANDLE_NEW(t, value, destroy) pydx12_##t* py_##value = PyObject_New(pydx12_##t, pydx12_##t##_get_type());\
+if (!py_##value)\
+{\
+	value->##destroy();\
+	return NULL;\
+}\
+py_##value->handle = value;\
+return (PyObject*)py_##value
+
+#define PYDX12_HANDLE_NEW_WITH_COM(t, value, destroy, com_field) pydx12_##t* py_##value = PyObject_New(pydx12_##t, pydx12_##t##_get_type());\
+if (!py_##value)\
+{\
+	value->##destroy();\
+	return NULL;\
+}\
+py_##value->handle = value;\
+py_##value->##com_field = self->com_ptr;\
+self->com_ptr->AddRef();\
+return (PyObject*)py_##value
 
 /** Common imports */
 PYDX12_IMPORT_COM(IUnknown);
