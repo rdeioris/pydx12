@@ -12,7 +12,8 @@ from queue import Queue
 from pyrr import matrix44
 
 camera = matrix44.create_from_translation((0, 0, -3), dtype='float32')
-perspective = matrix44.create_perspective_projection(60., 1., 0.1, 1000., dtype='float32')
+perspective = matrix44.create_perspective_projection(
+    60., 1., 0.1, 1000., dtype='float32')
 print(perspective * camera)
 
 enable_debug()
@@ -76,8 +77,12 @@ fps = 0
 
 message_queue = Queue()
 
+swap_chain_resized = (False, 1024, 1024)
+
 
 def render_loop():
+    global swap_chain_resized
+
     theta = 0
     forward = 0
     fence = device.CreateFence()
@@ -91,12 +96,26 @@ def render_loop():
 
     now = QueryPerformanceCounter()
     while running:
+        resize, width, height = swap_chain_resized
+        if resize:
+            queue.Signal(fence, fence_value)
+            if fence.GetCompletedValue() < fence_value:
+                fence.SetEventOnCompletion(fence_value, fence_event)
+                fence_event.wait()
+            fence_value += 1
+            back_buffer = None
+            swap_chain.ResizeBuffers(0, width, height)
+            device.CreateRenderTargetView(swap_chain.GetBuffer(0), None, rtvs[0])
+            device.CreateRenderTargetView(swap_chain.GetBuffer(1), None, rtvs[1])
+            swap_chain_resized = (False, width, height)
         theta += 0.05
         forward += 0.01
         scale = matrix44.create_from_scale((0.5, 0.5, 0.5), dtype='float32')
         rotation = matrix44.create_from_z_rotation(theta, dtype='float32')
-        translation = matrix44.create_from_translation((0, 0, forward), dtype='float32')
-        perspective = matrix44.create_perspective_projection(60., 1., 0.1, 1000., dtype='float32')
+        translation = matrix44.create_from_translation(
+            (0, 0, forward), dtype='float32')
+        perspective = matrix44.create_perspective_projection(
+            60., 1., 0.1, 1000., dtype='float32')
         #mesh.matrix = scale @ rotation @ translation @ perspective
         mesh.matrix = translation @ rotation @ scale @ perspective
 
@@ -104,7 +123,7 @@ def render_loop():
         back_buffer = swap_chain.GetBuffer(back_buffer_index)
 
         rasterizer.execute(queue, back_buffer,
-                           rtvs[back_buffer_index], [mesh])
+                           rtvs[back_buffer_index], width, height, [mesh])
 
         queue.Signal(fence, fence_value)
         if fence.GetCompletedValue() < fence_value:
@@ -128,11 +147,20 @@ def render_loop():
 t = threading.Thread(target=render_loop)
 t.start()
 
+
+def window_proc(win, message, wparam, lparam):
+    global running, swap_chain_resized
+    if message in (WM_QUIT, WM_CLOSE):
+        running = False
+    if message == WM_SIZE:
+        width, height = (lparam >> 16), lparam & 0xFFFF
+        swap_chain_resized = (True, width, height)
+
+
+window.set_proc(window_proc)
+
 while running:
-    for message, wparam, lparam in window.dequeue():
-        print(message)
-        if message in (WM_QUIT, WM_CLOSE):
-            running = False
+    window.dequeue()
     if not message_queue.empty():
         new_title = message_queue.get_nowait()
         window.set_title(new_title)

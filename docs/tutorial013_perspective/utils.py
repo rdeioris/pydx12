@@ -275,7 +275,7 @@ float4 main(psin IN) : SV_Target
             0, D3D12_COMMAND_LIST_TYPE_DIRECT, self.allocator)
         self.command_list.Close()
 
-    def execute(self, queue, back_buffer, rtv, meshes):
+    def execute(self, queue, back_buffer, rtv, width, height, meshes):
         self.command_list.Reset(self.allocator, self.pipeline_state)
 
         self.command_list.SetGraphicsRootSignature(self.root_signature)
@@ -283,9 +283,9 @@ float4 main(psin IN) : SV_Target
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
         self.command_list.OMSetRenderTargets([rtv])
         self.command_list.RSSetViewports(
-            [D3D12_VIEWPORT(Width=1024, Height=1024, MinDepth=0.1, MaxDepth=1000)])
+            [D3D12_VIEWPORT(Width=width, Height=height, MinDepth=0, MaxDepth=1)])
         self.command_list.RSSetScissorRects(
-            [D3D12_RECT(left=0, top=0, right=1024, bottom=1024)])
+            [D3D12_RECT(left=0, top=0, right=width, bottom=height)])
 
         self.command_list.ResourceBarrier([Barrier(
             back_buffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET).barrier_desc])
@@ -296,7 +296,6 @@ float4 main(psin IN) : SV_Target
         for mesh in meshes:
             self.command_list.IASetVertexBuffers(0, [mesh.vertex_buffer_view])
             if mesh.has_color_buffer:
-                print('COLOR')
                 self.command_list.IASetVertexBuffers(
                     1, [mesh.color_buffer_view])
             if mesh.matrix is not None:

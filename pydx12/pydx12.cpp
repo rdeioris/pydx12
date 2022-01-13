@@ -39,11 +39,8 @@ int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
 int pydx12_init_audio(PyObject* m);
 
-#include <queue>
-#include <tuple>
-
 PYDX12_TYPE_HANDLE(Event, HANDLE);
-PYDX12_TYPE_HANDLE(Window, HWND, std::queue<std::tuple<UINT, WPARAM, LPARAM>> messages);
+PYDX12_TYPE_HANDLE(Window, HWND, PyObject* py_window_proc);
 
 PYDX12_TYPE_COM(IUnknown);
 PYDX12_TYPE_COM(IDXGIObject);
@@ -265,13 +262,20 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		return -1;
 	}
 
+	DWORD style = WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME | WS_BORDER;
+
+	RECT size = {};
+	size.right = width;
+	size.bottom = height;
+	AdjustWindowRect(&size, style, FALSE);
+
 	self->handle = CreateWindowExW(
 		WS_EX_APPWINDOW,
 		L"pydx12",
 		title,
-		WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME | WS_BORDER,
+		style,
 		CW_USEDEFAULT, CW_USEDEFAULT,
-		width, height,
+		size.right, size.bottom,
 		NULL,
 		NULL, GetModuleHandle(NULL), NULL);
 
@@ -292,6 +296,7 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 
 static void pydx12_Window_dealloc(pydx12_Window* self)\
 {
+	Py_XDECREF(self->py_window_proc);
 	if (self->handle)
 		DestroyWindow(self->handle);
 	Py_TYPE(self)->tp_free((PyObject*)self);
@@ -301,12 +306,22 @@ static PyObject* pydx12_Window_show(pydx12_Window* self, PyObject* args)
 {
 	ShowWindow(self->handle, SW_SHOW);
 
+	if (PyErr_Occurred())
+	{
+		return NULL;
+	}
+
 	Py_RETURN_NONE;
 }
 
 static PyObject* pydx12_Window_hide(pydx12_Window* self, PyObject* args)
 {
 	ShowWindow(self->handle, SW_HIDE);
+
+	if (PyErr_Occurred())
+	{
+		return NULL;
+	}
 
 	Py_RETURN_NONE;
 }
@@ -315,6 +330,11 @@ static PyObject* pydx12_Window_minimize(pydx12_Window* self, PyObject* args)
 {
 	ShowWindow(self->handle, SW_MINIMIZE);
 
+	if (PyErr_Occurred())
+	{
+		return NULL;
+	}
+
 	Py_RETURN_NONE;
 }
 
@@ -322,32 +342,31 @@ static PyObject* pydx12_Window_maximize(pydx12_Window* self, PyObject* args)
 {
 	ShowWindow(self->handle, SW_MAXIMIZE);
 
+	if (PyErr_Occurred())
+	{
+		return NULL;
+	}
+
 	Py_RETURN_NONE;
 }
 
 static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 {
 	MSG message;
+
 	Py_BEGIN_ALLOW_THREADS;
 	while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
 	{
 		TranslateMessage(&message);
 		DispatchMessage(&message);
+		if (PyErr_Occurred())
+		{
+			return NULL;
+		}
 	}
 	Py_END_ALLOW_THREADS;
 
-	PyObject* py_list = PyList_New(0);
-
-	while (!self->messages.empty())
-	{
-		auto& message = self->messages.front();
-		PyObject* py_message = Py_BuildValue("(IKL)", std::get<0>(message), (unsigned long long)std::get<1>(message), (long long)std::get<2>(message));
-		PyList_Append(py_list, py_message);
-		Py_DECREF(py_message);
-		self->messages.pop();
-	}
-
-	return py_list;
+	Py_RETURN_NONE;
 }
 
 static PyObject* pydx12_Window_set_title(pydx12_Window* self, PyObject* args)
@@ -371,8 +390,39 @@ static PyObject* pydx12_Window_set_title(pydx12_Window* self, PyObject* args)
 
 	PyMem_Free(title);
 
+	if (PyErr_Occurred())
+	{
+		return NULL;
+	}
+
 	Py_RETURN_NONE;
 }
+
+static PyObject* pydx12_Window_set_proc(pydx12_Window* self, PyObject* args)
+{
+	PyObject* py_proc;
+	if (!PyArg_ParseTuple(args, "O", &py_proc))
+		return NULL;
+
+	if (py_proc == Py_None)
+	{
+		Py_XDECREF(self->py_window_proc);
+		self->py_window_proc = NULL;
+		Py_RETURN_NONE;
+	}
+
+	if (!PyCallable_Check(py_proc))
+	{
+		return PyErr_Format(PyExc_ValueError, "Window message processor must be a callable");
+	}
+
+	Py_XDECREF(self->py_window_proc);
+	self->py_window_proc = py_proc;
+	Py_INCREF(self->py_window_proc);
+
+	Py_RETURN_NONE;
+}
+
 
 PYDX12_METHODS(Window) = {
 	{"show", (PyCFunction)pydx12_Window_show, METH_VARARGS, "Show the Window"},
@@ -381,6 +431,7 @@ PYDX12_METHODS(Window) = {
 	{"maximize", (PyCFunction)pydx12_Window_maximize, METH_VARARGS, "Maximize the Window"},
 	{"dequeue", (PyCFunction)pydx12_Window_dequeue, METH_VARARGS, "Dequeue events from the Window"},
 	{"set_title", (PyCFunction)pydx12_Window_set_title, METH_VARARGS, "Set the Window title"},
+	{"set_proc", (PyCFunction)pydx12_Window_set_proc, METH_VARARGS, "Set the Window message processor"},
 	{NULL}  /* Sentinel */
 };
 
@@ -459,9 +510,21 @@ PYDX12_METHODS(ID3D12Debug) = {
 static LRESULT pydx12_DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
 	pydx12_Window* self = (pydx12_Window*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-	if (self)
+	if (self && self->py_window_proc)
 	{
-		self->messages.push({ Msg, wParam, lParam });
+		PyGILState_STATE _state = PyGILState_Ensure();
+		PyObject* py_ret = PyObject_CallFunction(self->py_window_proc, "OIKL", self, Msg, wParam, lParam);
+		if (py_ret)
+		{
+			if (PyObject_IsTrue(py_ret))
+			{
+				Py_DECREF(py_ret);
+				PyGILState_Release(_state);
+				return 0;
+			}
+			Py_DECREF(py_ret);
+		}
+		PyGILState_Release(_state);
 	}
 	return DefWindowProcW(hWnd, Msg, wParam, lParam);
 }
@@ -500,6 +563,8 @@ static int pydx12_init_base(PyObject* m)
 	PYDX12_ENUM(WM_QUIT);
 	PYDX12_ENUM(WM_KEYUP);
 	PYDX12_ENUM(WM_KEYDOWN);
+	PYDX12_ENUM(WM_SIZING);
+	PYDX12_ENUM(WM_SIZE);
 
 	return 0;
 }

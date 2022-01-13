@@ -67,6 +67,21 @@ static PyObject* pydx12_IDXGISwapChain_Present(pydx12_IDXGISwapChain* self, PyOb
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_IDXGISwapChain_ResizeBuffers(pydx12_IDXGISwapChain* self, PyObject* args)
+{
+	UINT buffer_count;
+	UINT width;
+	UINT height;
+	DXGI_FORMAT new_format = DXGI_FORMAT_UNKNOWN;
+	UINT flags = 0;
+	if (!PyArg_ParseTuple(args, "III|LI", &buffer_count, &width, &height, &new_format, &flags))
+		return NULL;
+
+	PYDX12_COM_CALL_HRESULT(IDXGISwapChain, ResizeBuffers, buffer_count, width, height, new_format, flags);
+
+	Py_RETURN_NONE;
+}
+
 static PyObject* pydx12_IDXGISwapChain3_GetCurrentBackBufferIndex(pydx12_IDXGISwapChain3* self)
 {
 	return PyLong_FromUnsignedLong(self->com_ptr->GetCurrentBackBufferIndex());
@@ -75,6 +90,7 @@ static PyObject* pydx12_IDXGISwapChain3_GetCurrentBackBufferIndex(pydx12_IDXGISw
 PYDX12_METHODS(IDXGISwapChain) = {
 	{"GetBuffer", (PyCFunction)pydx12_IDXGISwapChain_GetBuffer, METH_VARARGS, "Accesses one of the swap-chain's back buffers."},
 	{"Present", (PyCFunction)pydx12_IDXGISwapChain_Present, METH_VARARGS, "Presents a rendered image to the user"},
+	{"ResizeBuffers", (PyCFunction)pydx12_IDXGISwapChain_ResizeBuffers, METH_VARARGS, "Changes the swap chain's back buffer size, format, and number of buffers"},
 	{NULL}  /* Sentinel */
 };
 
