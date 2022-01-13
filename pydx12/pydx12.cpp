@@ -290,6 +290,7 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 	SetWindowLongPtr(self->handle, GWLP_USERDATA, (LONG_PTR)self);
 
 	ShowWindow(self->handle, SW_SHOW);
+	UpdateWindow(self->handle);
 
 	return 0;
 }
