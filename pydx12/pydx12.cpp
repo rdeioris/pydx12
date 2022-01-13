@@ -355,17 +355,24 @@ static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 {
 	MSG message;
 
+	// manage any enqueued exception
+	if (PyErr_Occurred())
+	{
+		return NULL;
+	}
+
 	Py_BEGIN_ALLOW_THREADS;
 	while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
 	{
 		TranslateMessage(&message);
 		DispatchMessage(&message);
-		if (PyErr_Occurred())
-		{
-			return NULL;
-		}
 	}
 	Py_END_ALLOW_THREADS;
+
+	if (PyErr_Occurred())
+	{
+		return NULL;
+	}
 
 	Py_RETURN_NONE;
 }
@@ -514,16 +521,19 @@ static LRESULT pydx12_DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM 
 	if (self && self->py_window_proc)
 	{
 		PyGILState_STATE _state = PyGILState_Ensure();
-		PyObject* py_ret = PyObject_CallFunction(self->py_window_proc, "OIKL", self, Msg, wParam, lParam);
-		if (py_ret)
+		if (!PyErr_Occurred())
 		{
-			if (PyObject_IsTrue(py_ret))
+			PyObject* py_ret = PyObject_CallFunction(self->py_window_proc, "OIKL", self, Msg, wParam, lParam);
+			if (py_ret)
 			{
+				if (PyObject_IsTrue(py_ret))
+				{
+					Py_DECREF(py_ret);
+					PyGILState_Release(_state);
+					return 0;
+				}
 				Py_DECREF(py_ret);
-				PyGILState_Release(_state);
-				return 0;
 			}
-			Py_DECREF(py_ret);
 		}
 		PyGILState_Release(_state);
 	}

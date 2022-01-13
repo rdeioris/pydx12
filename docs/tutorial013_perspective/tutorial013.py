@@ -1,6 +1,6 @@
 import time
 from pydx12 import *
-from utils import get_best_adapter, enable_debug, print_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer, Barrier, Rasterizer, Mesh
+from utils import App, get_best_adapter, enable_debug, print_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer, Barrier, Rasterizer, Mesh
 from PIL import Image
 import gc
 import sys
@@ -22,7 +22,7 @@ device = D3D12CreateDevice(get_best_adapter())
 
 setup_debug(device)
 
-window = Window('pydx12: Tutorial 011 (SwapChain)', 1024, 1024)
+window = Window('pydx12: Tutorial 011 (SwapChain)', 1920, 1080)
 
 command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
     Type=D3D12_COMMAND_LIST_TYPE_DIRECT)
@@ -72,12 +72,11 @@ mesh.set_nvertices(6)
 scale = matrix44.create_from_scale((0.5, 0.5, 0.5), dtype='float32')
 rasterizer = Rasterizer(device)
 
-running = True
 fps = 0
 
 message_queue = Queue()
 
-swap_chain_resized = (False, 1024, 1024)
+swap_chain_resized = (False, 1920, 1080)
 
 
 def render_loop():
@@ -95,7 +94,7 @@ def render_loop():
     frequency = QueryPerformanceFrequency()
 
     now = QueryPerformanceCounter()
-    while running:
+    while App.running:
         resize, width, height = swap_chain_resized
         if resize:
             queue.Signal(fence, fence_value)
@@ -105,8 +104,10 @@ def render_loop():
             fence_value += 1
             back_buffer = None
             swap_chain.ResizeBuffers(0, width, height)
-            device.CreateRenderTargetView(swap_chain.GetBuffer(0), None, rtvs[0])
-            device.CreateRenderTargetView(swap_chain.GetBuffer(1), None, rtvs[1])
+            device.CreateRenderTargetView(
+                swap_chain.GetBuffer(0), None, rtvs[0])
+            device.CreateRenderTargetView(
+                swap_chain.GetBuffer(1), None, rtvs[1])
             swap_chain_resized = (False, width, height)
         theta += 0.05
         forward += 0.01
@@ -131,7 +132,7 @@ def render_loop():
             fence_event.wait()
         fence_value += 1
 
-        swap_chain.Present(1)
+        swap_chain.Present(0)
         new_now = QueryPerformanceCounter()
         counter += new_now - now
         now = new_now
@@ -149,23 +150,26 @@ t.start()
 
 
 def window_proc(win, message, wparam, lparam):
-    global running, swap_chain_resized
+    global swap_chain_resized, swap_chain
     if message in (WM_QUIT, WM_CLOSE):
-        running = False
+        App.running = False
     if message == WM_SIZE:
+        print('ok')
+        swap_chain.SetFullscreenState(True)
+        print('Fullscreen')
         width, height = (lparam >> 16), lparam & 0xFFFF
         swap_chain_resized = (True, width, height)
 
 
 window.set_proc(window_proc)
 
-while running:
+while App.running:
     window.dequeue()
     if not message_queue.empty():
         new_title = message_queue.get_nowait()
         window.set_title(new_title)
 
-running = False
+App.running = False
 t.join()
 
 print('END')

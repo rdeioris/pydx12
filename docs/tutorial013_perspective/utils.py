@@ -4,6 +4,8 @@ import sys
 import atexit
 import random
 
+class App:
+    running = True
 
 def enable_debug():
     D3D12GetDebugInterface().EnableDebugLayer()
@@ -25,6 +27,7 @@ def setup_debug(device):
     def d3d12_debug_hook(*exc):
         print_debug(info)
         print(exc)
+        App.running = False
 
     def d3d12_debug_exit_hook():
         print_debug(info)

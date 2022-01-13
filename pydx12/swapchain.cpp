@@ -82,6 +82,18 @@ static PyObject* pydx12_IDXGISwapChain_ResizeBuffers(pydx12_IDXGISwapChain* self
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_IDXGISwapChain_SetFullscreenState(pydx12_IDXGISwapChain* self, PyObject* args)
+{
+	PyObject* py_fullscreen;
+	PyObject* py_target = NULL;
+	if (!PyArg_ParseTuple(args, "O|O", &py_fullscreen, &py_target))
+		return NULL;
+
+	PYDX12_COM_CALL_HRESULT(IDXGISwapChain, SetFullscreenState, PyObject_IsTrue(py_fullscreen) ? TRUE : FALSE, NULL);
+
+	Py_RETURN_NONE;
+}
+
 static PyObject* pydx12_IDXGISwapChain3_GetCurrentBackBufferIndex(pydx12_IDXGISwapChain3* self)
 {
 	return PyLong_FromUnsignedLong(self->com_ptr->GetCurrentBackBufferIndex());
@@ -91,6 +103,7 @@ PYDX12_METHODS(IDXGISwapChain) = {
 	{"GetBuffer", (PyCFunction)pydx12_IDXGISwapChain_GetBuffer, METH_VARARGS, "Accesses one of the swap-chain's back buffers."},
 	{"Present", (PyCFunction)pydx12_IDXGISwapChain_Present, METH_VARARGS, "Presents a rendered image to the user"},
 	{"ResizeBuffers", (PyCFunction)pydx12_IDXGISwapChain_ResizeBuffers, METH_VARARGS, "Changes the swap chain's back buffer size, format, and number of buffers"},
+	{"SetFullscreenState", (PyCFunction)pydx12_IDXGISwapChain_SetFullscreenState, METH_VARARGS, "Sets the display state to windowed or full screen"},
 	{NULL}  /* Sentinel */
 };
 
