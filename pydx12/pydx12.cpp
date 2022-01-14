@@ -40,7 +40,7 @@ int pydx12_init_pipeline(PyObject* m);
 int pydx12_init_audio(PyObject* m);
 
 PYDX12_TYPE_HANDLE(Event, HANDLE);
-PYDX12_TYPE_HANDLE(Window, HWND, PyObject* py_window_proc);
+PYDX12_TYPE_HANDLE(Window, HWND, PyObject* py_window_proc; bool py_window_proc_exception; WINDOWPLACEMENT pre_fullscreen_placement);
 
 PYDX12_TYPE_COM(IUnknown);
 PYDX12_TYPE_COM(IDXGIObject);
@@ -242,6 +242,9 @@ PYDX12_METHODS(Event) = {
 	{NULL}  /* Sentinel */
 };
 
+static const DWORD windowed_style = WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME | WS_BORDER;
+static const DWORD fullscreen_style = WS_POPUP;
+
 static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwds)
 {
 	PyObject* py_title;
@@ -262,18 +265,18 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 		return -1;
 	}
 
-	DWORD style = WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME | WS_BORDER;
-
 	RECT size = {};
 	size.right = width;
 	size.bottom = height;
-	AdjustWindowRect(&size, style, FALSE);
+	AdjustWindowRect(&size, windowed_style, FALSE);
+
+	self->py_window_proc_exception = false;
 
 	self->handle = CreateWindowExW(
 		WS_EX_APPWINDOW,
 		L"pydx12",
 		title,
-		style,
+		windowed_style,
 		CW_USEDEFAULT, CW_USEDEFAULT,
 		size.right, size.bottom,
 		NULL,
@@ -361,18 +364,20 @@ static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 		return NULL;
 	}
 
-	Py_BEGIN_ALLOW_THREADS;
+	PyThreadState* _save = PyEval_SaveThread();
 	while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
 	{
 		TranslateMessage(&message);
 		DispatchMessage(&message);
-	}
-	Py_END_ALLOW_THREADS;
+		if (self->py_window_proc_exception)
+		{
+			PyEval_RestoreThread(_save);
+			self->py_window_proc_exception = false;
+			return NULL;
 
-	if (PyErr_Occurred())
-	{
-		return NULL;
+		}
 	}
+	PyEval_RestoreThread(_save);
 
 	Py_RETURN_NONE;
 }
@@ -431,6 +436,57 @@ static PyObject* pydx12_Window_set_proc(pydx12_Window* self, PyObject* args)
 	Py_RETURN_NONE;
 }
 
+static PyObject* pydx12_Window_set_fullscreen(pydx12_Window* self, PyObject* args)
+{
+	PyObject* py_enable;
+	if (!PyArg_ParseTuple(args, "O", &py_enable))
+		return NULL;
+
+	if (PyObject_IsTrue(py_enable))
+	{
+		self->pre_fullscreen_placement.length = sizeof(WINDOWPLACEMENT);
+		GetWindowPlacement(self->handle, &self->pre_fullscreen_placement);
+
+		SetWindowLong(self->handle, GWL_STYLE, fullscreen_style);
+		SetWindowPos(self->handle, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+		ShowWindow(self->handle, SW_RESTORE);
+		HMONITOR monitor = MonitorFromWindow(self->handle, MONITOR_DEFAULTTONEAREST);
+		MONITORINFO monitor_info;
+		monitor_info.cbSize = sizeof(MONITORINFO);
+		GetMonitorInfo(monitor, &monitor_info);
+		LONG monitor_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+		LONG monitor_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+
+		SetWindowPos(self->handle, NULL,
+			monitor_info.rcMonitor.left,
+			monitor_info.rcMonitor.top,
+			monitor_width, monitor_height,
+			SWP_NOZORDER | SWP_NOACTIVATE);
+	}
+	else
+	{
+		SetWindowLong(self->handle, GWL_STYLE, windowed_style);
+		SetWindowPos(self->handle, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+		SetWindowPlacement(self->handle, &self->pre_fullscreen_placement);
+	}
+	Py_RETURN_NONE;
+}
+
+static PyObject* pydx12_Window_get_fullscreen(pydx12_Window* self)
+{
+	if (GetWindowLong(self->handle, GWL_STYLE) & fullscreen_style)
+	{
+		Py_RETURN_TRUE;
+	}
+	Py_RETURN_FALSE;
+}
+
+static PyObject* pydx12_Window_get_client_rect(pydx12_Window* self)
+{
+	RECT rect;
+	GetClientRect(self->handle, &rect);
+	return Py_BuildValue("(llll)", rect.left, rect.top, rect.right, rect.bottom);
+}
 
 PYDX12_METHODS(Window) = {
 	{"show", (PyCFunction)pydx12_Window_show, METH_VARARGS, "Show the Window"},
@@ -440,6 +496,9 @@ PYDX12_METHODS(Window) = {
 	{"dequeue", (PyCFunction)pydx12_Window_dequeue, METH_VARARGS, "Dequeue events from the Window"},
 	{"set_title", (PyCFunction)pydx12_Window_set_title, METH_VARARGS, "Set the Window title"},
 	{"set_proc", (PyCFunction)pydx12_Window_set_proc, METH_VARARGS, "Set the Window message processor"},
+	{"set_fullscreen", (PyCFunction)pydx12_Window_set_fullscreen, METH_VARARGS, "Enable/Disable Fullscreen mode"},
+	{"get_fullscreen", (PyCFunction)pydx12_Window_get_fullscreen, METH_NOARGS, "Get Fullscreen state"},
+	{"get_client_rect", (PyCFunction)pydx12_Window_get_client_rect, METH_NOARGS, "Get Client Rect"},
 	{NULL}  /* Sentinel */
 };
 
@@ -518,22 +577,23 @@ PYDX12_METHODS(ID3D12Debug) = {
 static LRESULT pydx12_DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
 	pydx12_Window* self = (pydx12_Window*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-	if (self && self->py_window_proc)
+	if (self && self->py_window_proc && !self->py_window_proc_exception)
 	{
 		PyGILState_STATE _state = PyGILState_Ensure();
-		if (!PyErr_Occurred())
+		PyObject* py_ret = PyObject_CallFunction(self->py_window_proc, "OIKL", self, Msg, wParam, lParam);
+		if (py_ret)
 		{
-			PyObject* py_ret = PyObject_CallFunction(self->py_window_proc, "OIKL", self, Msg, wParam, lParam);
-			if (py_ret)
+			if (PyObject_IsTrue(py_ret))
 			{
-				if (PyObject_IsTrue(py_ret))
-				{
-					Py_DECREF(py_ret);
-					PyGILState_Release(_state);
-					return 0;
-				}
 				Py_DECREF(py_ret);
+				PyGILState_Release(_state);
+				return 0;
 			}
+			Py_DECREF(py_ret);
+		}
+		else
+		{
+			self->py_window_proc_exception = true;
 		}
 		PyGILState_Release(_state);
 	}
@@ -576,6 +636,8 @@ static int pydx12_init_base(PyObject* m)
 	PYDX12_ENUM(WM_KEYDOWN);
 	PYDX12_ENUM(WM_SIZING);
 	PYDX12_ENUM(WM_SIZE);
+
+	PYDX12_ENUM(VK_ESCAPE);
 
 	return 0;
 }

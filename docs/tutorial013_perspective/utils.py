@@ -234,17 +234,14 @@ float4 main(psin IN) : SV_Target
         param0 = D3D12_ROOT_PARAMETER1(
             ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS)
         param0.Constants.Num32BitValues = 16
-        print('SERIAL0')
         versioned_root_signature.Desc_1_1 = D3D12_ROOT_SIGNATURE_DESC1(
             NumParameters=1,
             pParameters=[param0],
             Flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)
-        print('SERIAL1')
         # versioned_root_signature.Desc_1_1.pParameters=[param0]
 
         serialized_root_signature = D3D12SerializeVersionedRootSignature(
             versioned_root_signature)
-        print('SERIAL2')
         self.root_signature = device.CreateRootSignature(
             0, serialized_root_signature)
 

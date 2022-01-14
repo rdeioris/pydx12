@@ -22,7 +22,8 @@ device = D3D12CreateDevice(get_best_adapter())
 
 setup_debug(device)
 
-window = Window('pydx12: Tutorial 011 (SwapChain)', 1920, 1080)
+window = Window('pydx12: Tutorial 013 (SwapChain)', 1920, 1080)
+window.set_fullscreen(True)
 
 command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
     Type=D3D12_COMMAND_LIST_TYPE_DIRECT)
@@ -153,12 +154,17 @@ def window_proc(win, message, wparam, lparam):
     global swap_chain_resized, swap_chain
     if message in (WM_QUIT, WM_CLOSE):
         App.running = False
-    if message == WM_SIZE:
-        print('ok')
-        swap_chain.SetFullscreenState(True)
-        print('Fullscreen')
+    elif message == WM_SIZE:
         width, height = (lparam >> 16), lparam & 0xFFFF
         swap_chain_resized = (True, width, height)
+    elif message == WM_KEYUP:
+        if wparam == ord('F'):
+            print('fullscreen')
+            win.set_fullscreen(not win.get_fullscreen())
+            left, top, right, bottom = win.get_client_rect()
+            swap_chain_resized = (False, right-left, bottom - top)
+        if wparam == VK_ESCAPE:
+            App.running = False
 
 
 window.set_proc(window_proc)

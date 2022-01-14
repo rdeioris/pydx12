@@ -99,11 +99,25 @@ static PyObject* pydx12_IDXGISwapChain3_GetCurrentBackBufferIndex(pydx12_IDXGISw
 	return PyLong_FromUnsignedLong(self->com_ptr->GetCurrentBackBufferIndex());
 }
 
+static PyObject* pydx12_IDXGISwapChain1_GetDesc1(pydx12_IDXGISwapChain1* self)
+{
+	DXGI_SWAP_CHAIN_DESC1 desc1;
+
+	PYDX12_COM_CALL_HRESULT(IDXGISwapChain1, GetDesc1, &desc1);
+
+	return pydx12_DXGI_SWAP_CHAIN_DESC1_instantiate(&desc1, NULL, NULL);
+}
+
 PYDX12_METHODS(IDXGISwapChain) = {
 	{"GetBuffer", (PyCFunction)pydx12_IDXGISwapChain_GetBuffer, METH_VARARGS, "Accesses one of the swap-chain's back buffers."},
 	{"Present", (PyCFunction)pydx12_IDXGISwapChain_Present, METH_VARARGS, "Presents a rendered image to the user"},
 	{"ResizeBuffers", (PyCFunction)pydx12_IDXGISwapChain_ResizeBuffers, METH_VARARGS, "Changes the swap chain's back buffer size, format, and number of buffers"},
 	{"SetFullscreenState", (PyCFunction)pydx12_IDXGISwapChain_SetFullscreenState, METH_VARARGS, "Sets the display state to windowed or full screen"},
+	{NULL}  /* Sentinel */
+};
+
+PYDX12_METHODS(IDXGISwapChain1) = {
+	{"GetDesc1", (PyCFunction)pydx12_IDXGISwapChain1_GetDesc1, METH_NOARGS, "Gets a description of the swap chain"},
 	{NULL}  /* Sentinel */
 };
 
@@ -119,7 +133,9 @@ int pydx12_init_swapchain(PyObject* m)
 	pydx12_IDXGISwapChainType.tp_methods = pydx12_IDXGISwapChain_methods;
 	PYDX12_REGISTER_COM(IDXGISwapChain, IDXGIDeviceSubObject);
 
+	pydx12_IDXGISwapChain1Type.tp_methods = pydx12_IDXGISwapChain1_methods;
 	PYDX12_REGISTER_COM(IDXGISwapChain1, IDXGISwapChain);
+
 	PYDX12_REGISTER_COM(IDXGISwapChain2, IDXGISwapChain1);
 
 	pydx12_IDXGISwapChain3Type.tp_methods = pydx12_IDXGISwapChain3_methods;
