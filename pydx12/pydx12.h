@@ -5,6 +5,7 @@
 #include <d3d12.h>
 #include <d3dcompiler.h>
 #include <xaudio2.h>
+#include <dxcapi.h>
 #include <comdef.h>
 
 #define PYDX12_TYPE_MEMBERS(t) static PyTypeObject pydx12_##t##Type = \
@@ -928,12 +929,41 @@ PYDX12_STRUCT_ARRAY_SETTER(t, field, type)
 #define PYDX12_STRING_GETTER_SETTER(t, field) PYDX12_STRING_GETTER(t, field)\
 PYDX12_STRING_SETTER(t, field)
 
-#define PYDX12_WSTRING_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
+#define PYDX12_WSTRING_GETTER(t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_chunk_type = {PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
 	if (!self->data->##field)\
 		Py_RETURN_NONE;\
 	return PyUnicode_FromWideChar(self->data->##field, -1);\
 }
+
+#define PYDX12_WSTRING_SETTER(t, field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
+{\
+	if (value == Py_None)\
+	{\
+		pydx12_##t##_chunk_free(self, (void*)self->data->##field);\
+		self->data->##field = NULL;\
+		return 0;\
+	}\
+	if (!PyUnicode_Check(value))\
+	{\
+		PyErr_SetString(PyExc_TypeError, "value must be a unicode object");\
+		return -1;\
+	}\
+	pydx12_##t##_chunk_free(self, (void*)self->data->##field);\
+	Py_ssize_t size;\
+	wchar_t* unicode = PyUnicode_AsWideCharString(value, &size);\
+	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_alloc(self, (void*) unicode, size + 1, 1);\
+	if (!chunk)\
+	{\
+		PyErr_SetString(PyExc_MemoryError, "unable to allocate memory chunk for " #t "::" #field);\
+		return -1;\
+	}\
+	self->data->##field = (const wchar_t*)chunk->ptr;\
+	return 0;\
+}
+
+#define PYDX12_WSTRING_GETTER_SETTER(t, field) PYDX12_WSTRING_GETTER(t, field)\
+PYDX12_WSTRING_SETTER(t, field)
 
 #define PYDX12_BOOL_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
@@ -1089,13 +1119,33 @@ PyTypeObject* pydx12_##t##_get_type()
 }\
 PyMem_Free(object_to_free)
 
-#define PYDX12_UNICODE_CHECK(name, py_object) if (!PyUnicode_Check(py_object))\
+#define PYDX12_COM_CALL_HRESULT_AND_BUFFER_RELEASE(buffer_to_release, t, func, ...) { HRESULT ret = PYDX12_COM_CALL(func, __VA_ARGS__); if (ret != S_OK)\
+	{\
+		PyBuffer_Release(&buffer_to_release);\
+		_com_error err(ret);\
+		return PyErr_Format(PyExc_Exception, #t "::" #func "(): %s", err.ErrorMessage());\
+	}\
+}\
+PyBuffer_Release(&buffer_to_release)
+
+#define PYDX12_UNICODE_CHECK(name) if (!PyUnicode_Check(py_##name))\
 {\
 	return PyErr_Format(PyExc_TypeError, "expected a unicode object");\
 }\
-wchar_t* name = PyUnicode_AsWideCharString(py_object, NULL);\
+wchar_t* name = PyUnicode_AsWideCharString(py_##name, NULL);\
 if (!name)\
 	return NULL;
+
+#define PYDX12_UNICODE_CHECK_NONE(name) wchar_t* name = NULL; if (PyUnicode_Check(py_##name))\
+{\
+	name = PyUnicode_AsWideCharString(py_##name, NULL);\
+	if (!name)\
+		return NULL;\
+}\
+else if (py_##name != Py_None)\
+{\
+	return PyErr_Format(PyExc_TypeError, "expected a unicode object");\
+}
 
 #define PYDX12_ARG_CHECK(t, name) t* name = pydx12_##t##_check(py_##name);\
 if (!name)\
@@ -1138,7 +1188,7 @@ if (py_##name && py_##name != Py_None)\
 	else if (ret != E_NOINTERFACE)\
 	{\
 		_com_error err(ret);\
-		return PyErr_Format(PyExc_ValueError, "unable to create " #t ": %s", err.ErrorMessage());\
+		return PyErr_Format(PyExc_Exception, "unable to create " #t ": %s", err.ErrorMessage());\
 	}\
 }
 
@@ -1154,7 +1204,7 @@ return PyErr_Format(PyExc_ValueError, "unable to create " #t)
 	else if (ret != E_NOINTERFACE)\
 	{\
 		_com_error err(ret);\
-		return PyErr_Format(PyExc_ValueError, "unable to create " #t ": %s", err.ErrorMessage());\
+		return PyErr_Format(PyExc_Exception, "unable to create " #t ": %s", err.ErrorMessage());\
 	}\
 }
 
@@ -1167,15 +1217,19 @@ return PyErr_Format(PyExc_ValueError, "unable to create " #t)
 	else if (ret != E_NOINTERFACE)\
 	{\
 		_com_error err(ret);\
-		return PyErr_Format(PyExc_ValueError, "unable to create " #t ": %s", err.ErrorMessage());\
+		return PyErr_Format(PyExc_Exception, "unable to create " #t ": %s", err.ErrorMessage());\
 	}\
 }
 
+#define PYDX12_EXCEPTION(t, func) { _com_error err(ret);\
+	return PyErr_Format(PyExc_Exception, #t "::" #func "(): %s", err.ErrorMessage());\
+}
+
 #define PYDX12_INTERFACE_CREATE_CAST_LAST(t, cast, func, ...) PYDX12_INTERFACE_CREATE_CAST(t, cast, func, __VA_ARGS__);\
-return PyErr_Format(PyExc_ValueError, "unable to create " #t)
+return PyErr_Format(PyExc_Exception, "unable to create " #t)
 
 #define PYDX12_INTERFACE_CREATE_NO_ARGS_LAST(t, func) PYDX12_INTERFACE_CREATE_NO_ARGS(t, func);\
-return PyErr_Format(PyExc_ValueError, "unable to create " #t)
+return PyErr_Format(PyExc_Exception, "unable to create " #t)
 
 #define PYDX12_HANDLE_NEW(t, value, destroy) pydx12_##t* py_##value = PyObject_New(pydx12_##t, pydx12_##t##_get_type());\
 if (!py_##value)\

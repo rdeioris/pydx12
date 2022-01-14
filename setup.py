@@ -1,7 +1,7 @@
 from setuptools import setup, Extension
 
 module = Extension('pydx12.api',
-                   libraries=['dxgi', 'd3d12', 'd3dcompiler', 'user32'],
+                   libraries=['dxgi', 'd3d12', 'd3dcompiler', 'user32', 'dxcompiler'],
                    depends=['pydx12/pydx12.h'],
                    sources=['pydx12/' + source for source in ('pydx12.cpp',
                                                               'dxgi.cpp',
@@ -31,6 +31,6 @@ Exposes DirectX12 features to python.
 ''',
       setup_requires=['wheel'],
       packages=['pydx12'],
-      package_data={'pydx12': ['api.pyi']},
+      package_data={'pydx12': ['api.pyi', 'dxil.dll', 'dxcompiler.dll']},
       ext_modules=[module],
       test_suite='tests')

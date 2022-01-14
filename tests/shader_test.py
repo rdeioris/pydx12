@@ -25,7 +25,6 @@ class ShaderTests(unittest.TestCase):
         blob = D3DCompile(code, None, (macro_ONE, macro_TWO,
                           macro_THREE, macro_FOUR), None, 'main', 'vs_5_0', 0, 0)
         self.assertIsInstance(blob, ID3DBlob)
-        print(blob)
 
     def test_vertex_shader_buffer_protocol(self):
         code = 'float4 main() : SV_Position { return float4(1, 1, 1, 1);}'
@@ -39,3 +38,21 @@ class ShaderTests(unittest.TestCase):
         desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC(VS=D3D12_SHADER_BYTECODE(
             pShaderBytecode=blob, BytecodeLength=blob.GetBufferSize()))
         self.assertEqual(desc.VS.BytecodeLength, blob.GetBufferSize())
+
+    def test_dxcompiler_library(self):
+        self.assertIsInstance(DxcCreateInstance(IDxcLibrary), IDxcLibrary)
+
+    def test_dxcompiler_compiler(self):
+        self.assertIsInstance(DxcCreateInstance(IDxcCompiler), IDxcCompiler)
+
+    def test_dxcompiler_blob(self):
+        blob = DxcCreateInstance(IDxcLibrary).CreateBlobWithEncodingOnHeapCopy(
+            'Hello World'.encode('utf8'))
+        self.assertIsInstance(blob, IDxcBlobEncoding)
+        self.assertIsInstance(blob, IDxcBlob)
+
+    def test_dxcompiler_shader(self):
+        blob = DxcCreateInstance(IDxcLibrary).CreateBlobWithEncodingOnHeapCopy(
+            'vosid main() {}'.encode('utf8'))
+        compiled_blob = DxcCreateInstance(IDxcCompiler).Compile(blob, None, 'main', 'lib_6_3')
+        print(compiled_blob)

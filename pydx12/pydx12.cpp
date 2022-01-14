@@ -20,6 +20,8 @@ PYDX12_IMPORT_COM(ID3D12Device7);
 PYDX12_IMPORT_COM(ID3D12Device8);
 PYDX12_IMPORT_COM(ID3DBlob);
 PYDX12_IMPORT_COM(IXAudio2);
+PYDX12_IMPORT_COM(IDxcLibrary);
+PYDX12_IMPORT_COM(IDxcCompiler);
 
 PYDX12_IMPORT(D3D12_VERSIONED_ROOT_SIGNATURE_DESC);
 PYDX12_IMPORT(D3D_SHADER_MACRO);
@@ -161,6 +163,8 @@ static PyObject* pydx12_D3DCompile(PyObject* self, PyObject* args)
 		{
 			PyObject* py_error_msgs = PyUnicode_FromStringAndSize((const char*)error_msgs->GetBufferPointer(), error_msgs->GetBufferSize());
 			error_msgs->Release();
+			if (!py_error_msgs)
+				return NULL;
 			PyErr_Format(PyExc_ValueError, "%U", py_error_msgs);
 			Py_DECREF(py_error_msgs);
 			return NULL;
@@ -518,6 +522,31 @@ static PyObject* pydx12_QueryPerformanceFrequency(PyObject* self, PyObject* args
 	return PyLong_FromUnsignedLongLong(frequency.QuadPart);
 }
 
+static PyObject* pydx12_DxcCreateInstance(PyObject* self, PyObject* args)
+{
+	PyObject* py_type;
+	if (!PyArg_ParseTuple(args, "O", &py_type))
+		return NULL;
+
+	if (!PyType_Check(py_type))
+	{
+		return PyErr_Format(PyExc_ValueError, "expected a type object");
+	}
+	
+	if ((PyTypeObject*)py_type == pydx12_IDxcLibrary_get_type())
+	{
+		PYDX12_INTERFACE_CREATE_LAST(IDxcLibrary, DxcCreateInstance, CLSID_DxcLibrary);
+	}
+
+
+	if ((PyTypeObject*)py_type == pydx12_IDxcCompiler_get_type())
+	{
+		PYDX12_INTERFACE_CREATE_LAST(IDxcCompiler, DxcCreateInstance, CLSID_DxcCompiler);
+	}
+
+	return PyErr_Format(PyExc_ValueError, "unsupported type object");
+}
+
 static PyMethodDef pydx12_methods[] =
 {
 	{"CreateDXGIFactory", pydx12_CreateDXGIFactory, METH_VARARGS, "Creates a DXGI 1.0 factory that you can use to generate other DXGI objects"},
@@ -530,6 +559,7 @@ static PyMethodDef pydx12_methods[] =
 	{"QueryPerformanceCounter", (PyCFunction)pydx12_QueryPerformanceCounter, METH_NOARGS, "Retrieves the current value of the performance counter"},
 	{"QueryPerformanceFrequency", (PyCFunction)pydx12_QueryPerformanceFrequency, METH_NOARGS, "Retrieves the frequency of the performance counter"},
 	{"XAudio2Create", (PyCFunction)pydx12_XAudio2Create, METH_VARARGS, "Creates a new XAudio2 object and returns a pointer to its IXAudio2 interface"},
+	{"DxcCreateInstance", (PyCFunction)pydx12_DxcCreateInstance, METH_VARARGS, "Creates a new XAudio2 object and returns a pointer to its IXAudio2 interface"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
