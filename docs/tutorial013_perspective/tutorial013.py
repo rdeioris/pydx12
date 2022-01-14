@@ -77,7 +77,8 @@ fps = 0
 
 message_queue = Queue()
 
-swap_chain_resized = (False, 1920, 1080)
+left, top, right, bottom = window.get_client_rect()
+swap_chain_resized = (False, right - left, bottom - top)
 
 
 def render_loop():
@@ -105,6 +106,7 @@ def render_loop():
             fence_value += 1
             back_buffer = None
             swap_chain.ResizeBuffers(0, width, height)
+            print(width, height)
             device.CreateRenderTargetView(
                 swap_chain.GetBuffer(0), None, rtvs[0])
             device.CreateRenderTargetView(
@@ -162,7 +164,7 @@ def window_proc(win, message, wparam, lparam):
             print('fullscreen')
             win.set_fullscreen(not win.get_fullscreen())
             left, top, right, bottom = win.get_client_rect()
-            swap_chain_resized = (False, right-left, bottom - top)
+            swap_chain_resized = (True, right-left, bottom - top)
         if wparam == VK_ESCAPE:
             App.running = False
 
