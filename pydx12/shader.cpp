@@ -73,9 +73,6 @@ static void pydx12_ID3DBlob_release_buffer(pydx12_ID3DBlob* exporter, Py_buffer*
 }
 
 static PyBufferProcs pydx12_ID3DBlob_as_buffer = {
-#if PY_MAJOR_VERSION < 3
-	nullptr, nullptr, nullptr, nullptr,
-#endif
 	(getbufferproc)pydx12_ID3DBlob_get_buffer,
 	(releasebufferproc)pydx12_ID3DBlob_release_buffer
 };
@@ -132,28 +129,63 @@ static PyObject* pydx12_IDxcCompiler_Compile(pydx12_IDxcCompiler* self, PyObject
 	{
 		IDxcBlobEncoding* errors_blob;
 		ret = result->GetErrorBuffer(&errors_blob);
-		//result->Release();
+		result->Release();
 		if (FAILED(ret) || !errors_blob)
 		{
 			PYDX12_EXCEPTION(IDxcOperationResult, GetErrorBuffer);
 		}
-		//PyObject* py_error_msgs = PyUnicode_FromWideChar((const wchar_t*)errors_blob->GetBufferPointer(), -1);
-		PyObject* py_error_msgs = PyUnicode_FromString((const char*)errors_blob->GetBufferPointer());
-		//errors_blob->Release();
-		if (!py_error_msgs)
+		BOOL known = FALSE;
+		UINT32 codepage;
+		errors_blob->GetEncoding(&known, &codepage);
+		PyObject* py_error_msg = PyUnicode_FromString("unable to compile shader");
+		if (known)
+		{
+			if (codepage == CP_UTF8)
+			{
+				py_error_msg = PyUnicode_FromString((const char*)errors_blob->GetBufferPointer());
+			}
+			else if (codepage == CP_WINUNICODE)
+			{
+				py_error_msg = PyUnicode_FromWideChar((const wchar_t*)errors_blob->GetBufferPointer(), -1);
+			}
+		}
+		errors_blob->Release();
+		if (!py_error_msg)
 		{
 			return NULL;
 		}
-		PyErr_Format(PyExc_Exception, "%U", py_error_msgs);
-		Py_DECREF(py_error_msgs);
+		PyErr_Format(PyExc_Exception, "%U", py_error_msg);
+		Py_DECREF(py_error_msg);
 		return NULL;
 	}
 
 	IDxcBlob* compiled_blob;
 	PYDX12_CALL_HRESULT(result->GetResult, &compiled_blob);
 
-	return PYDX12_COM_INSTANTIATE(IDxcBlob, blob, false);
+	return PYDX12_COM_INSTANTIATE(IDxcBlob, compiled_blob, false);
 }
+
+static int pydx12_IDxcBlob_get_buffer(pydx12_IDxcBlob* exporter, Py_buffer* view, int flags)
+{
+	LPVOID buffer_ptr = exporter->com_ptr->GetBufferPointer();
+	if (!buffer_ptr)
+	{
+		PyErr_SetString(PyExc_ValueError, "invalid buffer");
+		return -1;
+	}
+
+	PyBuffer_FillInfo(view, (PyObject*)exporter, buffer_ptr, exporter->com_ptr->GetBufferSize(), 0, flags);
+	return 0;
+}
+
+static void pydx12_IDxcBlob_release_buffer(pydx12_IDxcBlob* exporter, Py_buffer* view)
+{
+}
+
+static PyBufferProcs pydx12_IDxcBlob_as_buffer = {
+	(getbufferproc)pydx12_IDxcBlob_get_buffer,
+	(releasebufferproc)pydx12_IDxcBlob_release_buffer
+};
 
 PYDX12_METHODS(IDxcCompiler) = {
 	{"Compile", (PyCFunction)pydx12_IDxcCompiler_Compile, METH_VARARGS, "IDxcCompiler::Compile()"},
@@ -176,6 +208,7 @@ int pydx12_init_shader(PyObject* m)
 	pydx12_IDxcCompilerType.tp_methods = pydx12_IDxcCompiler_methods;
 	PYDX12_REGISTER_COM(IDxcCompiler, IUnknown);
 
+	pydx12_IDxcBlobType.tp_as_buffer = &pydx12_IDxcBlob_as_buffer;
 	PYDX12_REGISTER_COM(IDxcBlob, IUnknown);
 
 	PYDX12_REGISTER_COM(IDxcBlobEncoding, IDxcBlob);
@@ -209,6 +242,9 @@ int pydx12_init_shader(PyObject* m)
 
 	PYDX12_ENUM(D3DCOMPILE_EFFECT_CHILD_EFFECT);
 	PYDX12_ENUM(D3DCOMPILE_EFFECT_ALLOW_SLOW_OPS);
+
+	PYDX12_ENUM(CP_UTF8);
+	PYDX12_ENUM(CP_WINUNICODE);
 
 	return 0;
 }

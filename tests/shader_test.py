@@ -53,6 +53,12 @@ class ShaderTests(unittest.TestCase):
 
     def test_dxcompiler_shader(self):
         blob = DxcCreateInstance(IDxcLibrary).CreateBlobWithEncodingOnHeapCopy(
-            'vosid main() {}'.encode('utf8'))
+            'void main() {}'.encode('utf8'))
         compiled_blob = DxcCreateInstance(IDxcCompiler).Compile(blob, None, 'main', 'lib_6_3')
-        print(compiled_blob)
+        self.assertIsInstance(compiled_blob, IDxcBlob)
+
+    def test_dxcompiler_blob_buffer(self):
+        blob = DxcCreateInstance(IDxcLibrary).CreateBlobWithEncodingOnHeapCopy(
+            'void main() {}'.encode('utf8'))
+        compiled_blob = DxcCreateInstance(IDxcCompiler).Compile(blob, None, 'main', 'lib_6_3')
+        self.assertEqual(bytearray(compiled_blob)[0:4], b'DXBC')

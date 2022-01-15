@@ -875,7 +875,7 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 			return -1;\
 		}\
 		new_array[counter-1] = *data;\
-		self->data->##field = (const type*)new_array;\
+		self->data->##field = (type*)new_array;\
 		pydx12_##type##_chunk_fix((pydx12_##type*)self, (pydx12_##type*) py_item, (type*)&self->data->##field[counter-1]);\
 		Py_DECREF(py_item);\
 	}\
