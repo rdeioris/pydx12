@@ -1032,7 +1032,6 @@ PYDX12_BOOL_SETTER(t, field)
 #define PYDX12_BUFFER_GETTER_SETTER(t, field, cast) PYDX12_BUFFER_GETTER(t, field)\
 PYDX12_BUFFER_SETTER(t, field, cast)
 
-
 #define PYDX12_COM_GETTER(t, field_t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_com_type = {PYDX12_TRACK_TYPE_COM, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
 	if (self->data->##field)\
