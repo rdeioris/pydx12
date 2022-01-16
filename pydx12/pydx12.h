@@ -42,6 +42,7 @@ typedef struct
 
 #define PYDX12_TRACK_TYPE_CHUNK 0
 #define PYDX12_TRACK_TYPE_COM 1
+#define PYDX12_TRACK_TYPE_CHUNK_ARRAY 2
 
 struct pydx12_field_track_type
 {
@@ -328,6 +329,38 @@ int pydx12_##t##_chunk_fix(pydx12_##t* self, pydx12_##t* value, t* data)\
 					*ptr = chunk->ptr;\
 				}\
 			}\
+			else if (track_type->type == PYDX12_TRACK_TYPE_CHUNK_ARRAY)\
+			{\
+				void** ptr = (void**)(((char*)data) + track_type->offset);\
+				pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(value, *ptr);\
+				if (chunk)\
+				{\
+					pydx12_memory_chunk* new_chunk = pydx12_##t##_chunk_alloc(self, chunk->ptr, chunk->size, chunk->elements);\
+					if (!new_chunk)\
+						return -1; \
+					bool failed = false;\
+					void** array_ptr = (void**)chunk->ptr;\
+					void** new_array_ptr = (void**)new_chunk->ptr;\
+					for(size_t i = 0; i < new_chunk->elements; i++)\
+					{\
+						new_array_ptr[i] = NULL;\
+						if (failed)\
+							continue;\
+						pydx12_memory_chunk* item_chunk = pydx12_##t##_chunk_get(value, array_ptr[i]);\
+						if (item_chunk)\
+						{\
+							new_array_ptr[i] = pydx12_##t##_chunk_alloc(self, item_chunk->ptr, item_chunk->size, item_chunk->elements);\
+							if (!new_array_ptr[i])\
+								failed = true;\
+						}\
+						else\
+							failed = true;\
+					}\
+					if (failed)\
+						return -1;\
+					*ptr = new_chunk->ptr;\
+				}\
+			}\
 			else if (track_type->type == PYDX12_TRACK_TYPE_COM)\
 			{\
 				IUnknown** ptr = (IUnknown**)(((char*)data) + track_type->offset);\
@@ -352,6 +385,20 @@ void pydx12_##t##_chunk_clear(pydx12_##t* self, t* data)\
 			if (track_type->type == PYDX12_TRACK_TYPE_CHUNK)\
 			{\
 				void** ptr = (void**) (((char*)data) + track_type->offset);\
+				pydx12_##t##_chunk_free(self, *ptr);\
+			}\
+			if (track_type->type == PYDX12_TRACK_TYPE_CHUNK_ARRAY)\
+			{\
+				void** ptr = (void**) (((char*)data) + track_type->offset);\
+				pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, *ptr);\
+				if (chunk)\
+				{\
+					void** array_ptr = (void**)chunk->ptr;\
+					for(size_t i =0; i < chunk->elements; i++)\
+					{\
+						pydx12_##t##_chunk_free(self, array_ptr[i]);\
+					}\
+				}\
 				pydx12_##t##_chunk_free(self, *ptr);\
 			}\
 			else if (track_type->type == PYDX12_TRACK_TYPE_COM)\
@@ -521,6 +568,18 @@ static PyMethodDef pydx12_##t##_methods[] = {\
 	{"to_bytearray", (PyCFunction)pydx12_##t##_to_bytearray, METH_NOARGS, "returns structure's content as a bytearray object"},\
 	{"get_chunks", (PyCFunction)pydx12_##t##_get_chunks, METH_NOARGS, "returns structure's memory chunks"},\
 	{NULL}\
+};\
+static int pydx12_##t##_get_buffer(pydx12_##t* exporter, Py_buffer* view, int flags)\
+{\
+	PyBuffer_FillInfo(view, (PyObject*)exporter, exporter->data, exporter->data_len, 0, flags);\
+	return 0;\
+}\
+static void pydx12_##t##_release_buffer(pydx12_##t* exporter, Py_buffer* view)\
+{\
+}\
+static PyBufferProcs pydx12_##t##_as_buffer = {\
+	(getbufferproc)pydx12_##t##_get_buffer,\
+	(releasebufferproc)pydx12_##t##_release_buffer\
 };
 
 #define PYDX12_TYPE_INSTANTIATE_COM(t) PyObject* pydx12_##t##_instantiate(t* com_ptr, const bool add_ref)\
@@ -669,6 +728,7 @@ pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
 pydx12_##t##Type.tp_as_sequence = &pydx12_##t##_sequence_methods;\
 pydx12_##t##Type.tp_methods = pydx12_##t##_methods;\
 pydx12_##t##Type.tp_weaklistoffset  = offsetof(pydx12_##t, weakreflist);\
+pydx12_##t##Type.tp_as_buffer = &pydx12_##t##_as_buffer;\
 PYDX12_REGISTER(t)
 
 #define PYDX12_REGISTER_COM(t, s) pydx12_##t##Type.tp_base = pydx12_##s##_get_type();\
@@ -964,6 +1024,96 @@ PYDX12_STRING_SETTER(t, field)
 
 #define PYDX12_WSTRING_GETTER_SETTER(t, field) PYDX12_WSTRING_GETTER(t, field)\
 PYDX12_WSTRING_SETTER(t, field)
+
+#define PYDX12_WSTRING_ARRAY_GETTER(t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_chunk_type = {PYDX12_TRACK_TYPE_CHUNK_ARRAY, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
+{\
+	if (!self->data->##field)\
+		Py_RETURN_NONE;\
+	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+	if (!chunk)\
+		Py_RETURN_NONE;\
+	PyObject* py_list = PyList_New(0);\
+	for(Py_ssize_t i = 0; i < (Py_ssize_t)chunk->elements; i++)\
+	{\
+		PyObject* py_item = PyUnicode_FromWideChar((wchar_t*)self->data->##field[i], -1);\
+		if (!py_item)\
+		{\
+			Py_DECREF(py_list);\
+			return NULL;\
+		}\
+		PyList_Append(py_list, py_item);\
+		Py_DECREF(py_item);\
+	}\
+	return py_list;\
+}
+
+#define PYDX12_WSTRING_ARRAY_SETTER(t, field) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
+{\
+	PyObject* py_iter = PyObject_GetIter(value);\
+	if (!py_iter)\
+	{\
+		return -1;\
+	}\
+	if (self->data->##field)\
+	{\
+		pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+		if (!chunk)\
+			return -1;\
+		for(size_t i = 0; i< chunk->elements; i++)\
+		{\
+			pydx12_##t##_chunk_free(self,(void*)self->data->##field[i]);\
+		}\
+		pydx12_##t##_chunk_free(self,(void*)self->data->##field);\
+		self->data->##field = NULL;\
+	}\
+	Py_ssize_t counter = 0;\
+	while(PyObject* py_item = PyIter_Next(py_iter))\
+	{\
+		if (!PyUnicode_Check(py_item))\
+		{\
+			Py_DECREF(py_item);\
+			Py_DECREF(py_iter);\
+			PyErr_SetString(PyExc_MemoryError, "expected an iterable of unicode objects");\
+			return -1;\
+		}\
+		Py_ssize_t unicode_len;\
+		wchar_t* unicode = PyUnicode_AsWideCharString(py_item, &unicode_len);\
+		if (!unicode)\
+		{\
+			if (self->data->##field)\
+				PyMem_Free((void*)self->data->##field);\
+			Py_DECREF(py_item);\
+			Py_DECREF(py_iter);\
+			PyErr_SetString(PyExc_MemoryError, "unable to allocate memory for unicode string");\
+			return -1;\
+		}\
+		counter++;\
+		wchar_t** new_array = (wchar_t**)PyMem_Realloc((void*)self->data->##field, sizeof(wchar_t*) * counter);\
+		if (!new_array)\
+		{\
+			PyMem_Free(unicode);\
+			if (self->data->##field)\
+				PyMem_Free((void*)self->data->##field);\
+			Py_DECREF(py_item);\
+			Py_DECREF(py_iter);\
+			PyErr_SetString(PyExc_MemoryError, "unable to allocate memory for unicode string");\
+			return -1;\
+		}\
+		new_array[counter-1] = unicode;\
+		self->data->##field = (LPCWSTR*)new_array;\
+		pydx12_##t##_chunk_map(self, (void*)unicode, unicode_len+1, 1);\
+		Py_DECREF(py_item);\
+	}\
+	Py_DECREF(py_iter);\
+	if (self->data->##field)\
+	{\
+		pydx12_##t##_chunk_map(self, (void*)self->data->##field, sizeof(wchar_t*) * counter, counter);\
+	}\
+	return 0;\
+}
+
+#define PYDX12_WSTRING_ARRAY_GETTER_SETTER(t, field) PYDX12_WSTRING_ARRAY_GETTER(t, field)\
+PYDX12_WSTRING_ARRAY_SETTER(t, field)
 
 #define PYDX12_BOOL_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\

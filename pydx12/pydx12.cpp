@@ -578,7 +578,7 @@ static PyObject* pydx12_ID3D12Object_SetName(pydx12_ID3D12Object* self, PyObject
 	if (!PyArg_ParseTuple(args, "O", &py_name))
 		return NULL;
 
-	PYDX12_UNICODE_CHECK(name, py_name);
+	PYDX12_UNICODE_CHECK(name);
 
 	PYDX12_COM_CALL_HRESULT_AND_FREE(name, ID3D12Object, SetName, name);
 
