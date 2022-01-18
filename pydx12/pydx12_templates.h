@@ -44,6 +44,7 @@ struct pydx12_Structure
 	pydx12_com_track* coms;
 	size_t number_of_coms;
 	PyObject* weakreflist;
+	void* user_data;
 };
 
 template<typename T>
@@ -51,6 +52,7 @@ struct pydx12_COM
 {
 	PyObject_HEAD;
 	T* com_ptr;
+	void* user_data;
 };
 
 template<typename T>
@@ -58,6 +60,7 @@ struct pydx12_HANDLE
 {
 	PyObject_HEAD;
 	T handle;
+	void* user_data;
 };
 
 
@@ -723,4 +726,36 @@ pydx12_memory_chunk* pydx12_chunk_get(pydx12_Structure<T>* self, void* addr)
 		}
 	}
 	return NULL;
+}
+
+template<typename T>
+static pydx12_memory_chunk* pydx12_chunk_map(pydx12_Structure<T>* self, void* addr, const size_t size, const size_t elements)
+{
+	if (!addr)
+		return NULL;
+	pydx12_Structure<T>* owner = (pydx12_Structure<T>*) (self->data_owner ? self->data_owner : (PyObject*)self);
+	for (size_t i = 0; i < owner->number_of_chunks; i++)
+	{
+		pydx12_memory_chunk* chunk = &owner->chunks[i];
+		if (!chunk->ptr)
+		{
+			chunk->ptr = addr;
+			chunk->size = size;
+			chunk->elements = elements;
+			return chunk;
+		}
+	}
+	owner->number_of_chunks++;
+	pydx12_memory_chunk* new_chunks = (pydx12_memory_chunk*)PyMem_Realloc(owner->chunks, sizeof(pydx12_memory_chunk) * owner->number_of_chunks);
+
+	if (!new_chunks)
+	{
+		return NULL;
+	}
+	owner->chunks = new_chunks;
+	pydx12_memory_chunk* chunk = &owner->chunks[owner->number_of_chunks - 1];
+	chunk->ptr = addr;
+	chunk->size = size;
+	chunk->elements = elements;
+	return chunk;
 }

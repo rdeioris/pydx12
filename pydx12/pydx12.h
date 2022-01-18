@@ -49,92 +49,6 @@ static PyMethodDef pydx12_##t##_methods[] = {\
 	{NULL}\
 }
 
-#define PYDX12_TYPE_INSTANTIATE(t) \
-static pydx12_memory_chunk* pydx12_##t##_chunk_map(pydx12_##t* self, void* addr, const size_t size, const size_t elements)\
-{\
-	if (!addr)\
-		return NULL;\
-	pydx12_##t* owner = (pydx12_##t*) (self->data_owner ? self->data_owner : (PyObject*)self);\
-	for(size_t i = 0; i < owner->number_of_chunks; i++)\
-	{\
-		pydx12_memory_chunk* chunk = &owner->chunks[i];\
-		if (!chunk->ptr)\
-		{\
-			chunk->ptr = addr;\
-			chunk->size = size;\
-			chunk->elements = elements;\
-			return chunk;\
-		}\
-	}\
-	owner->number_of_chunks++;\
-	pydx12_memory_chunk* new_chunks = (pydx12_memory_chunk*)PyMem_Realloc(owner->chunks, sizeof(pydx12_memory_chunk) * owner->number_of_chunks);\
-	if (!new_chunks)\
-	{\
-		return NULL;\
-	}\
-	owner->chunks = new_chunks;\
-	pydx12_memory_chunk* chunk = &owner->chunks[owner->number_of_chunks-1];\
-	chunk->ptr = addr;\
-	chunk->size = size;\
-	chunk->elements = elements;\
-	return chunk;\
-}\
-static void pydx12_##t##_chunk_free(pydx12_##t* self, void* addr)\
-{\
-	if (!addr)\
-		return;\
-	pydx12_##t* owner = (pydx12_##t*) (self->data_owner ? self->data_owner : (PyObject*)self);\
-	for(size_t i = 0; i < owner->number_of_chunks; i++)\
-	{\
-		pydx12_memory_chunk* chunk = &owner->chunks[i];\
-		if (chunk->ptr == addr)\
-		{\
-			PyMem_Free(chunk->ptr);\
-			chunk->ptr = NULL;\
-			chunk->size = 0;\
-			chunk->elements = 0;\
-			break;\
-		}\
-	}\
-}\
-void pydx12_##t##_chunk_clear(pydx12_##t* self, t* data)\
-{\
-	PyGetSetDef* getset = pydx12_##t##Type.tp_getset;\
-	while (getset->name)\
-	{\
-		if (getset->closure != NULL)\
-		{\
-			pydx12_field_track_type* track_type = (pydx12_field_track_type*)getset->closure;\
-			if (track_type->type == PYDX12_TRACK_TYPE_CHUNK)\
-			{\
-				void** ptr = (void**) (((char*)data) + track_type->offset);\
-				pydx12_##t##_chunk_free(self, *ptr);\
-			}\
-			if (track_type->type == PYDX12_TRACK_TYPE_CHUNK_ARRAY)\
-			{\
-				void** ptr = (void**) (((char*)data) + track_type->offset);\
-				pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, *ptr);\
-				if (chunk)\
-				{\
-					void** array_ptr = (void**)chunk->ptr;\
-					for(size_t i =0; i < chunk->elements; i++)\
-					{\
-						pydx12_##t##_chunk_free(self, array_ptr[i]);\
-					}\
-				}\
-				pydx12_##t##_chunk_free(self, *ptr);\
-			}\
-			else if (track_type->type == PYDX12_TRACK_TYPE_COM)\
-			{\
-				IUnknown** ptr = (IUnknown**)(((char*)data) + track_type->offset);\
-				if (*ptr)\
-					pydx12_##t##_com_release(self, *ptr);\
-			}\
-		}\
-		getset++;\
-	}\
-}
-
 #define PYDX12_TYPE(t) PYDX12_TYPE_DEFINE(pydx12_Structure, t);\
 PYDX12_TYPE_STRUCT_MEMBERS(t);\
 template<>\
@@ -324,33 +238,33 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 #define PYDX12_STRUCT_GETTER_SETTER(t, field, type) PYDX12_STRUCT_GETTER(t, field, type)\
 PYDX12_STRUCT_SETTER(t, field, type)
 
-#define PYDX12_STRUCT_CARRAY_GETTER(t, field, type) static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
+#define PYDX12_STRUCT_CARRAY_GETTER(t, field, type) static PyObject* pydx12_##t##_get_##field(pydx12_Structure<t>* self, void* closure)\
 {\
 	return pydx12_instantiate<type>(&self->data->##field[0], PYDX12_OWNER, self->com_owner);\
 }
 
-#define PYDX12_STRUCT_CARRAY_SETTER(t, field, type) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
+#define PYDX12_STRUCT_CARRAY_SETTER(t, field, type) static int pydx12_##t##_set_##field(pydx12_Structure<t>* self, PyObject* value, void* closure)\
 {\
-	type* data = pydx12_##type##_check(value);\
+	type* data = pydx12_structure_check<type>(value);\
 	if (!data)\
 	{\
 		PyErr_SetString(PyExc_TypeError, "value must be a " #type);\
 		return -1;\
 	}\
-	pydx12_##type##_chunk_clear((pydx12_##type*)self, &self->data->##field[0]);\
+	pydx12_chunk_clear<type>((pydx12_Structure<type>*)self, &self->data->##field[0]);\
 	self->data->##field##[0] = *data;\
-	pydx12_##type##_chunk_fix((pydx12_##type*)self, (pydx12_##type*) value, &self->data->##field[0]);\
+	pydx12_chunk_fix<type>((pydx12_Structure<type>*)self, (pydx12_Structure<type>*) value, &self->data->##field[0]);\
 	return 0;\
 }
 
 #define PYDX12_STRUCT_CARRAY_GETTER_SETTER(t, field, type) PYDX12_STRUCT_CARRAY_GETTER(t, field, type)\
 PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 
-#define PYDX12_STRUCT_ARRAY_GETTER(t, field, type) static pydx12_field_track_type pydx12_##t##_##field##_track_chunk_type = {PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
+#define PYDX12_STRUCT_ARRAY_GETTER(t, field, type) static pydx12_field_track_type pydx12_##t##_##field##_track_chunk_type = {PYDX12_TRACK_TYPE_CHUNK, offsetof(t, field)}; static PyObject* pydx12_##t##_get_##field(pydx12_Structure<t>* self, void* closure)\
 {\
 	if (!self->data->##field)\
 		Py_RETURN_NONE;\
-	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+	pydx12_memory_chunk* chunk = pydx12_chunk_get<t>(self, (void*)self->data->##field);\
 	if (!chunk)\
 		Py_RETURN_NONE;\
 	PyObject* py_list = PyList_New(0);\
@@ -368,7 +282,7 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 	return py_list;\
 }
 
-#define PYDX12_STRUCT_ARRAY_SETTER(t, field, type) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
+#define PYDX12_STRUCT_ARRAY_SETTER(t, field, type) static int pydx12_##t##_set_##field(pydx12_Structure<t>* self, PyObject* value, void* closure)\
 {\
 	PyObject* py_iter = PyObject_GetIter(value);\
 	if (!py_iter)\
@@ -377,20 +291,20 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 	}\
 	if (self->data->##field)\
 	{\
-		pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+		pydx12_memory_chunk* chunk = pydx12_chunk_get<t>(self, (void*)self->data->##field);\
 		if (!chunk)\
 			return -1;\
 		for(size_t i = 0; i< chunk->elements; i++)\
 		{\
-			pydx12_##type##_chunk_clear((pydx12_##type*)self, (type*)&self->data->##field[i]);\
+			pydx12_chunk_clear<type>((pydx12_Structure<type>*)self, (type*)&self->data->##field[i]);\
 		}\
-		pydx12_##t##_chunk_free(self,(void*)self->data->##field);\
+		pydx12_chunk_free<t>(self,(void*)self->data->##field);\
 		self->data->##field = NULL;\
 	}\
 	Py_ssize_t counter = 0;\
 	while(PyObject* py_item = PyIter_Next(py_iter))\
 	{\
-		type* data = pydx12_##type##_check(py_item);\
+		type* data = pydx12_structure_check<type>(py_item);\
 		if (!data)\
 		{\
 			if (self->data->##field)\
@@ -413,13 +327,13 @@ PYDX12_STRUCT_CARRAY_SETTER(t, field, type)
 		}\
 		new_array[counter-1] = *data;\
 		self->data->##field = (type*)new_array;\
-		pydx12_##type##_chunk_fix((pydx12_##type*)self, (pydx12_##type*) py_item, (type*)&self->data->##field[counter-1]);\
+		pydx12_chunk_fix<type>((pydx12_Structure<type>*)self, (pydx12_Structure<type>*) py_item, (type*)&self->data->##field[counter-1]);\
 		Py_DECREF(py_item);\
 	}\
 	Py_DECREF(py_iter);\
 	if (self->data->##field)\
 	{\
-		pydx12_##t##_chunk_map(self, (void*)self->data->##field, sizeof(type) * counter, counter);\
+		pydx12_chunk_map<t>(self, (void*)self->data->##field, sizeof(type) * counter, counter);\
 	}\
 	return 0;\
 }
@@ -502,7 +416,7 @@ PYDX12_STRING_SETTER(t, field)
 #define PYDX12_WSTRING_GETTER_SETTER(t, field) PYDX12_WSTRING_GETTER(t, field)\
 PYDX12_WSTRING_SETTER(t, field)
 
-#define PYDX12_WSTRING_ARRAY_GETTER(t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_chunk_type = {PYDX12_TRACK_TYPE_CHUNK_ARRAY, offsetof(t, field)}; static PyObject* pydx12_##t##_get_##field(pydx12_##t* self, void* closure)\
+#define PYDX12_WSTRING_ARRAY_GETTER(t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_chunk_type = {PYDX12_TRACK_TYPE_CHUNK_ARRAY, offsetof(t, field)}; static PyObject* pydx12_##t##_get_##field(pydx12_Structure<t>* self, void* closure)\
 {\
 	if (!self->data->##field)\
 		Py_RETURN_NONE;\
@@ -524,7 +438,7 @@ PYDX12_WSTRING_SETTER(t, field)
 	return py_list;\
 }
 
-#define PYDX12_WSTRING_ARRAY_SETTER(t, field) static int pydx12_##t##_set_##field(pydx12_##t* self, PyObject* value, void* closure)\
+#define PYDX12_WSTRING_ARRAY_SETTER(t, field) static int pydx12_##t##_set_##field(pydx12_Structure<t>* self, PyObject* value, void* closure)\
 {\
 	PyObject* py_iter = PyObject_GetIter(value);\
 	if (!py_iter)\
@@ -533,14 +447,14 @@ PYDX12_WSTRING_SETTER(t, field)
 	}\
 	if (self->data->##field)\
 	{\
-		pydx12_memory_chunk* chunk = pydx12_##t##_chunk_get(self, (void*)self->data->##field);\
+		pydx12_memory_chunk* chunk = pydx12_chunk_get<t>(self, (void*)self->data->##field);\
 		if (!chunk)\
 			return -1;\
 		for(size_t i = 0; i< chunk->elements; i++)\
 		{\
-			pydx12_##t##_chunk_free(self,(void*)self->data->##field[i]);\
+			pydx12_chunk_free<t>(self,(void*)self->data->##field[i]);\
 		}\
-		pydx12_##t##_chunk_free(self,(void*)self->data->##field);\
+		pydx12_chunk_free<t>(self,(void*)self->data->##field);\
 		self->data->##field = NULL;\
 	}\
 	Py_ssize_t counter = 0;\
@@ -578,13 +492,13 @@ PYDX12_WSTRING_SETTER(t, field)
 		}\
 		new_array[counter-1] = unicode;\
 		self->data->##field = (LPCWSTR*)new_array;\
-		pydx12_##t##_chunk_map(self, (void*)unicode, unicode_len+1, 1);\
+		pydx12_chunk_map<t>(self, (void*)unicode, unicode_len+1, 1);\
 		Py_DECREF(py_item);\
 	}\
 	Py_DECREF(py_iter);\
 	if (self->data->##field)\
 	{\
-		pydx12_##t##_chunk_map(self, (void*)self->data->##field, sizeof(wchar_t*) * counter, counter);\
+		pydx12_chunk_map<t>(self, (void*)self->data->##field, sizeof(wchar_t*) * counter, counter);\
 	}\
 	return 0;\
 }

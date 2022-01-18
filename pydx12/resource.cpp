@@ -224,9 +224,9 @@ static PyObject* pydx12_ID3D12Resource_Map(pydx12_COM<ID3D12Resource>* self, PyO
 		}
 	}
 
-	if (!self->memory_view_list)
+	if (!self->user_data)
 	{
-		self->memory_view_list = PyList_New(0);
+		self->user_data = PyList_New(0);
 	}
 
 	char* mem = NULL;
@@ -239,7 +239,7 @@ static PyObject* pydx12_ID3D12Resource_Map(pydx12_COM<ID3D12Resource>* self, PyO
 		return PyErr_Format(PyExc_Exception, "unable to create the Python memoryview");
 	}
 
-	PyList_Append(self->memory_view_list, py_memory_view);
+	PyList_Append((PyObject*)self->user_data, py_memory_view);
 	Py_DECREF(py_memory_view);
 
 	return PyWeakref_NewProxy(py_memory_view, NULL);
@@ -254,19 +254,19 @@ static PyObject* pydx12_ID3D12Resource_Unmap(pydx12_COM<ID3D12Resource>* self, P
 
 	PYDX12_ARG_CHECK_NONE(D3D12_RANGE, written_range);
 
-	if (!self->memory_view_list || PyList_Size(self->memory_view_list) == 0)
+	if (!self->user_data || PyList_Size((PyObject*)self->user_data) == 0)
 	{
 		return PyErr_Format(PyExc_Exception, "nothing to Unmap");
 	}
 
-	PySequence_DelItem(self->memory_view_list, PyList_Size(self->memory_view_list) - 1);
+	PySequence_DelItem((PyObject*)self->user_data, PyList_Size((PyObject*)self->user_data) - 1);
 
 	Py_RETURN_NONE;
 }
 
 static void pydx12_ID3D12Resource_dealloc_wrapper(pydx12_COM<ID3D12Resource>* self)
 {
-	Py_XDECREF(self->memory_view_list);
+	Py_XDECREF((PyObject*)self->user_data);
 	pydx12_com_dealloc<ID3D12Resource>(self);
 }
 

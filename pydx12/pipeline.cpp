@@ -242,32 +242,34 @@ PYDX12_GETSETTERS(D3D12_DXIL_LIBRARY_DESC) = {
 };
 
 PYDX12_TYPE(D3D12_STATE_SUBOBJECT, D3D12_STATE_SUBOBJECT_TYPE _InternalType);
-static PyObject* pydx12_D3D12_STATE_SUBOBJECT_getpDesc(pydx12_Structure<D3D12_STATE_SUBOBJECT>* self, void* closure)
+static PyObject* pydx12_D3D12_STATE_SUBOBJECT_get_pDesc(pydx12_Structure<D3D12_STATE_SUBOBJECT>* self, void* closure)
 {
 	if (!self->data->pDesc)
 	{
 		Py_RETURN_NONE;
 	}
 
-	if (self->_InternalType = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE)
+	long long internal_type = (long long)self->user_data;
+
+	if (internal_type == D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE)
 	{
 		ID3D12RootSignature** com_ptr_ptr = (ID3D12RootSignature**)self->data->pDesc;
 		return pydx12_com_instantiate<ID3D12RootSignature>(*com_ptr_ptr, true);
 	}
 	Py_RETURN_NONE;
 }
-static int pydx12_D3D12_STATE_SUBOBJECT_setpDesc(pydx12_D3D12_STATE_SUBOBJECT* self, PyObject* value, void* closure)
+static int pydx12_D3D12_STATE_SUBOBJECT_set_pDesc(pydx12_Structure<D3D12_STATE_SUBOBJECT>* self, PyObject* value, void* closure)
 {
-	ID3D12RootSignature* com_ptr = pydx12_ID3D12RootSignature_check(value);
+	ID3D12RootSignature* com_ptr = pydx12_com_check<ID3D12RootSignature>(value);
 	if (com_ptr)
 	{
 		com_ptr->AddRef();
-		void *ptr = malloc(sizeof(ID3D12RootSignature*));
+		void* ptr = malloc(sizeof(ID3D12RootSignature*));
 		memcpy(ptr, &com_ptr, sizeof(ID3D12RootSignature*));
 		self->data->pDesc = ptr;
 		printf("WRITTEN COM_PTR %p !\n", self->data->pDesc);
 
-		self->_InternalType = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
+		self->user_data = (void*)D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
 		return 0;
 	}
 
