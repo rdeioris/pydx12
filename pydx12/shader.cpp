@@ -34,6 +34,10 @@ PYDX12_TYPE_COM(IDxcBlob);
 PYDX12_TYPE_COM(IDxcBlobEncoding);
 PYDX12_TYPE_COM(IDxcOperationResult);
 
+extern DxcCreateInstanceProc DxcCreateInstanceLazy;
+extern DxcCreateInstanceProc DxcCreateInstanceDXIL;
+
+
 
 static PyObject* pydx12_ID3DBlob_GetBufferPointer(pydx12_ID3DBlob* self)
 {
@@ -82,6 +86,23 @@ PYDX12_METHODS(ID3DBlob) = {
 	{"GetBufferSize", (PyCFunction)pydx12_ID3DBlob_GetBufferSize, METH_NOARGS, "Retrieves the size, in bytes, of the blob's data"},
 	{"to_bytes", (PyCFunction)pydx12_ID3DBlob_to_bytes, METH_NOARGS, "returns blob's data as bytes object"},
 	{"to_bytearray", (PyCFunction)pydx12_ID3DBlob_to_bytearray, METH_NOARGS, "returns blob's data as bytearray object"},
+	{NULL} /* Sentinel */
+};
+
+static PyObject* pydx12_IDxcBlob_GetBufferPointer(pydx12_IDxcBlob* self)
+{
+	return PyLong_FromUnsignedLongLong((unsigned long long)self->com_ptr->GetBufferPointer());
+}
+
+static PyObject* pydx12_IDxcBlob_GetBufferSize(pydx12_IDxcBlob* self)
+{
+	printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^IDxcBlob buffer size: %llu\n", self->com_ptr->GetBufferSize());
+	return PyLong_FromUnsignedLongLong(self->com_ptr->GetBufferSize());
+}
+
+PYDX12_METHODS(IDxcBlob) = {
+	{"GetBufferPointer", (PyCFunction)pydx12_IDxcBlob_GetBufferPointer, METH_NOARGS, "Retrieves a pointer to the blob's data"},
+	{"GetBufferSize", (PyCFunction)pydx12_IDxcBlob_GetBufferSize, METH_NOARGS, "Retrieves the size, in bytes, of the blob's data"},
 	{NULL} /* Sentinel */
 };
 
@@ -162,6 +183,10 @@ static PyObject* pydx12_IDxcCompiler_Compile(pydx12_IDxcCompiler* self, PyObject
 	IDxcBlob* compiled_blob;
 	PYDX12_CALL_HRESULT(result->GetResult, &compiled_blob);
 
+	IDxcValidator* validator;
+	DxcCreateInstanceDXIL(CLSID_DxcValidator, __uuidof(IDxcValidator), (void**)&validator);
+	validator->Validate(compiled_blob, DxcValidatorFlags_InPlaceEdit, &result);
+
 	return PYDX12_COM_INSTANTIATE(IDxcBlob, compiled_blob, false);
 }
 
@@ -173,6 +198,14 @@ static int pydx12_IDxcBlob_get_buffer(pydx12_IDxcBlob* exporter, Py_buffer* view
 		PyErr_SetString(PyExc_ValueError, "invalid buffer");
 		return -1;
 	}
+
+	uint8_t* data = (uint8_t*)exporter->com_ptr->GetBufferPointer();
+	uint64_t total = 0;
+	for (size_t i = 0; i < exporter->com_ptr->GetBufferSize(); i++)
+	{
+		total += data[i];
+	}
+	printf("################################################################################################# TOTAL: %llu\n", total);
 
 	PyBuffer_FillInfo(view, (PyObject*)exporter, buffer_ptr, exporter->com_ptr->GetBufferSize(), 0, flags);
 	return 0;
@@ -208,6 +241,7 @@ int pydx12_init_shader(PyObject* m)
 	pydx12_IDxcCompilerType.tp_methods = pydx12_IDxcCompiler_methods;
 	PYDX12_REGISTER_COM(IDxcCompiler, IUnknown);
 
+	pydx12_IDxcBlobType.tp_methods = pydx12_IDxcBlob_methods;
 	pydx12_IDxcBlobType.tp_as_buffer = &pydx12_IDxcBlob_as_buffer;
 	PYDX12_REGISTER_COM(IDxcBlob, IUnknown);
 

@@ -17,6 +17,7 @@ PYDX12_IMPORT(D3D12_UNORDERED_ACCESS_VIEW_DESC);
 PYDX12_IMPORT(D3D12_DEPTH_STENCIL_VIEW_DESC);
 PYDX12_IMPORT(D3D12_CONSTANT_BUFFER_VIEW_DESC);
 PYDX12_IMPORT(D3D12_HEAP_DESC);
+PYDX12_IMPORT(D3D12_STATE_OBJECT_DESC);
 
 
 PYDX12_IMPORT_COM(ID3D12Object);
@@ -28,6 +29,7 @@ PYDX12_IMPORT_COM(ID3D12Fence);
 PYDX12_IMPORT_COM(ID3D12DescriptorHeap);
 PYDX12_IMPORT_COM(ID3D12RootSignature);
 PYDX12_IMPORT_COM(ID3D12PipelineState);
+PYDX12_IMPORT_COM(ID3D12StateObject);
 
 PYDX12_TYPE(D3D12_DEPTH_STENCIL_VALUE);
 PYDX12_FLOAT_GETTER_SETTER(D3D12_DEPTH_STENCIL_VALUE, Depth, FLOAT);
@@ -399,6 +401,34 @@ PYDX12_METHODS(ID3D12Device) = {
 	{NULL}  /* Sentinel */
 };
 
+static PyObject* pydx12_ID3D12Device5_CreateStateObject(pydx12_ID3D12Device5* self, PyObject* args)
+{
+	PyObject* py_desc;
+	if (!PyArg_ParseTuple(args, "O", &py_desc))
+		return NULL;
+
+	PYDX12_ARG_CHECK(D3D12_STATE_OBJECT_DESC, desc);
+
+	printf("DESC = %p %d %d\n", desc->pSubobjects[0].pDesc, desc->Type, desc->pSubobjects[0].Type);
+
+	ID3D12StateObject* state_object;
+
+	self->com_ptr->CreateStateObject(desc, __uuidof(ID3D12StateObject), (void**)&state_object);
+
+	printf("CALLED!\n");
+
+	PYDX12_COM_CALL_HRESULT(ID3D12Device5, CreateStateObject, desc, __uuidof(ID3D12StateObject), (void**)&state_object);
+
+	printf("CALLED CreateStateObject %p\n", state_object);
+
+	return PYDX12_COM_INSTANTIATE(ID3D12StateObject, state_object, false);
+}
+
+PYDX12_METHODS(ID3D12Device5) = {
+	{"CreateStateObject", (PyCFunction)pydx12_ID3D12Device5_CreateStateObject, METH_VARARGS, "Creates an ID3D12StateObject"},
+	{NULL}  /* Sentinel */
+};
+
 
 static PyObject* pydx12_ID3D12InfoQueue_GetNumStoredMessages(pydx12_ID3D12InfoQueue* self, PyObject* args)
 {
@@ -440,10 +470,16 @@ static PyObject* pydx12_ID3D12InfoQueue_GetMessage(pydx12_ID3D12InfoQueue* self,
 	return py_message;
 }
 
+static PyObject* pydx12_ID3D12InfoQueue_ClearStoredMessages(pydx12_ID3D12InfoQueue* self, PyObject* args)
+{
+	self->com_ptr->ClearStoredMessages();
+	Py_RETURN_NONE;
+}
 
 PYDX12_METHODS(ID3D12InfoQueue) = {
 	{"GetNumStoredMessages", (PyCFunction)pydx12_ID3D12InfoQueue_GetNumStoredMessages, METH_NOARGS, "Get the number of messages currently stored in the message queue"},
 	{"GetMessage", (PyCFunction)pydx12_ID3D12InfoQueue_GetMessage, METH_VARARGS, "Get a message from the message queue"},
+	{"ClearStoredMessages", (PyCFunction)pydx12_ID3D12InfoQueue_ClearStoredMessages, METH_NOARGS, "Clear all messages from the message queue"},
 	{NULL}  /* Sentinel */
 };
 
@@ -455,6 +491,8 @@ int pydx12_init_device(PyObject* m)
 	PYDX12_REGISTER_COM(ID3D12Device2, ID3D12Device1);
 	PYDX12_REGISTER_COM(ID3D12Device3, ID3D12Device2);
 	PYDX12_REGISTER_COM(ID3D12Device4, ID3D12Device3);
+
+	pydx12_ID3D12Device5Type.tp_methods = pydx12_ID3D12Device5_methods;
 	PYDX12_REGISTER_COM(ID3D12Device5, ID3D12Device4);
 	PYDX12_REGISTER_COM(ID3D12Device6, ID3D12Device5);
 	PYDX12_REGISTER_COM(ID3D12Device7, ID3D12Device6);

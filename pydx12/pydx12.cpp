@@ -1,4 +1,5 @@
 #include "pydx12.h"
+#include <pathcch.h>
 
 PYDX12_IMPORT_COM(IDXGIAdapter);
 PYDX12_IMPORT_COM(IDXGIFactory);
@@ -49,6 +50,9 @@ PYDX12_TYPE_COM(IDXGIObject);
 PYDX12_TYPE_COM(ID3D12Object);
 PYDX12_TYPE_COM(IDXGIDeviceSubObject);
 PYDX12_TYPE_COM(ID3D12Debug);
+
+DxcCreateInstanceProc DxcCreateInstanceLazy = NULL;
+DxcCreateInstanceProc DxcCreateInstanceDXIL = NULL;
 
 
 static PyObject* pydx12_CreateDXGIFactory(PyObject* self, PyObject* args)
@@ -138,7 +142,6 @@ static PyObject* pydx12_D3DCompile(PyObject* self, PyObject* args)
 	UINT flags1 = 0;
 	UINT flags2 = 0;
 
-	D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
 	if (!PyArg_ParseTuple(args, "OzOOzs|LL", &py_src_data, &source_name, &py_defines, &py_include, &entry_point, &target, &flags1, &flags2))
 		return NULL;
 
@@ -532,16 +535,16 @@ static PyObject* pydx12_DxcCreateInstance(PyObject* self, PyObject* args)
 	{
 		return PyErr_Format(PyExc_ValueError, "expected a type object");
 	}
-	
+
 	if ((PyTypeObject*)py_type == pydx12_IDxcLibrary_get_type())
 	{
-		PYDX12_INTERFACE_CREATE_LAST(IDxcLibrary, DxcCreateInstance, CLSID_DxcLibrary);
+		PYDX12_INTERFACE_CREATE_LAST(IDxcLibrary, DxcCreateInstanceLazy, CLSID_DxcLibrary);
 	}
 
 
 	if ((PyTypeObject*)py_type == pydx12_IDxcCompiler_get_type())
 	{
-		PYDX12_INTERFACE_CREATE_LAST(IDxcCompiler, DxcCreateInstance, CLSID_DxcCompiler);
+		PYDX12_INTERFACE_CREATE_LAST(IDxcCompiler, DxcCreateInstanceLazy, CLSID_DxcCompiler);
 	}
 
 	return PyErr_Format(PyExc_ValueError, "unsupported type object");
@@ -570,6 +573,17 @@ static struct PyModuleDef pydx12_module =
 	NULL,
 	-1,
 	pydx12_methods
+};
+
+static PyObject* pydx12_IUnknown_get_ptr(pydx12_IUnknown* self)
+{
+	return PyLong_FromUnsignedLongLong((unsigned long long)self->com_ptr);
+}
+
+
+PYDX12_METHODS(IUnknown) = {
+	{"get_ptr", (PyCFunction)pydx12_IUnknown_get_ptr, METH_NOARGS, "Returns the COM pointer"},
+	{NULL}  /* Sentinel */
 };
 
 static PyObject* pydx12_ID3D12Object_SetName(pydx12_ID3D12Object* self, PyObject* args)
@@ -634,6 +648,24 @@ static int pydx12_init_base(PyObject* m)
 {
 	CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
+	wchar_t path[4096];
+	wchar_t new_path[4096];
+	HMODULE handle;
+	GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)pydx12_init_base, &handle);
+	GetModuleFileNameW(handle, path, MAX_PATH);
+	PathCchRemoveFileSpec(path, 4096);
+	PathCchCombine(new_path, 4096, path, L"dxcompiler.dll");
+
+
+	HMODULE dxcompiler = LoadLibraryW(new_path);
+	DxcCreateInstanceLazy = (DxcCreateInstanceProc)GetProcAddress(dxcompiler, "DxcCreateInstance");
+
+	PathCchCombine(new_path, 4096, path, L"dxil.dll");
+	HMODULE dxil = LoadLibraryW(new_path);
+	DxcCreateInstanceDXIL = (DxcCreateInstanceProc)GetProcAddress(dxil, "DxcCreateInstance");
+
+	printf("PROCS %p %p\n", DxcCreateInstanceLazy, DxcCreateInstanceDXIL);
+
 	WNDCLASSW window_class = {};
 	window_class.lpfnWndProc = pydx12_DefWindowProcW;
 	window_class.hInstance = GetModuleHandle(NULL);
@@ -650,7 +682,9 @@ static int pydx12_init_base(PyObject* m)
 	pydx12_WindowType.tp_methods = pydx12_Window_methods;
 	PYDX12_REGISTER_HANDLE(Window);
 
+	pydx12_IUnknownType.tp_methods = pydx12_IUnknown_methods;
 	PYDX12_REGISTER_COM_BASE(IUnknown);
+
 	PYDX12_REGISTER_COM(IDXGIObject, IUnknown);
 
 	pydx12_ID3D12DebugType.tp_methods = pydx12_ID3D12Debug_methods;

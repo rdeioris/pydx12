@@ -455,6 +455,7 @@ static int pydx12_##t##_init(pydx12_##t* self, PyObject *args, PyObject *kwds)\
 	{\
 		return -1;\
 	}\
+	self->data_len = sizeof(t);\
 	self->data_owner = NULL;\
 	if (pydx12_##t##Type.tp_getset && kwds != NULL && PyDict_Check(kwds) && PyDict_Size(kwds))\
 	{\
@@ -494,13 +495,13 @@ static int pydx12_##t##_init(pydx12_##t* self, PyObject *args, PyObject *kwds)\
 }\
 static PyObject* pydx12_##t##_sq_item(pydx12_##t* self, Py_ssize_t index)\
 {\
-	return pydx12_##t##_instantiate(self->data + index, PYDX12_OWNER, self->com_owner);\
+       return pydx12_##t##_instantiate(self->data + index, PYDX12_OWNER, self->com_owner);\
 }\
 static PySequenceMethods pydx12_##t##_sequence_methods = {\
-	NULL,\
-	NULL,\
-	NULL,\
-	(ssizeargfunc)pydx12_##t##_sq_item\
+       NULL,\
+       NULL,\
+       NULL,\
+       (ssizeargfunc)pydx12_##t##_sq_item\
 };\
 static PyObject* pydx12_##t##_get_fields(pydx12_##t* self)\
 {\
@@ -561,12 +562,20 @@ static PyObject* pydx12_##t##_get_chunks(pydx12_##t* self)\
 	}\
 	return py_list;\
 }\
+static PyObject* pydx12_##t##_get_ptr(pydx12_##t* self)\
+{\
+	if (!self->data)\
+		Py_RETURN_NONE;\
+	printf(".get_ptr() = %p\n", self->data);\
+	return PyLong_FromUnsignedLongLong((unsigned long long)self->data);\
+}\
 static PyMethodDef pydx12_##t##_methods[] = {\
 	{"get_fields", (PyCFunction)pydx12_##t##_get_fields, METH_NOARGS, "returns a list of structure's fields"},\
 	{"to_dict", (PyCFunction)pydx12_##t##_to_dict, METH_NOARGS, "returns a dictionary representation of the structure"},\
 	{"to_bytes", (PyCFunction)pydx12_##t##_to_bytes, METH_NOARGS, "returns structure's content as a bytes object"},\
 	{"to_bytearray", (PyCFunction)pydx12_##t##_to_bytearray, METH_NOARGS, "returns structure's content as a bytearray object"},\
 	{"get_chunks", (PyCFunction)pydx12_##t##_get_chunks, METH_NOARGS, "returns structure's memory chunks"},\
+	{"get_ptr", (PyCFunction)pydx12_##t##_get_ptr, METH_NOARGS, "returns structure's data pointer"},\
 	{NULL}\
 };\
 static int pydx12_##t##_get_buffer(pydx12_##t* exporter, Py_buffer* view, int flags)\
@@ -725,8 +734,8 @@ if (!pydx12_##t##Type.tp_dealloc)\
 	pydx12_##t##Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
 pydx12_##t##Type.tp_getset = pydx12_##t##_getsetters;\
 pydx12_##t##Type.tp_init = (initproc)pydx12_##t##_init;\
-pydx12_##t##Type.tp_as_sequence = &pydx12_##t##_sequence_methods;\
 pydx12_##t##Type.tp_methods = pydx12_##t##_methods;\
+pydx12_##t##Type.tp_as_sequence = &pydx12_##t##_sequence_methods;\
 pydx12_##t##Type.tp_weaklistoffset  = offsetof(pydx12_##t, weakreflist);\
 pydx12_##t##Type.tp_as_buffer = &pydx12_##t##_as_buffer;\
 PYDX12_REGISTER(t)
@@ -766,6 +775,25 @@ PYDX12_REGISTER(t)
 
 #define PYDX12_GETTER_SETTER(t, field, py_type, cast) PYDX12_GETTER(t, field, py_type)\
 PYDX12_SETTER(t, field, py_type, cast)
+
+#define PYDX12_PTR_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
+{\
+	return PyLong_FromUnsignedLongLong((unsigned long long)self->data->##field);\
+}
+
+#define PYDX12_PTR_SETTER(t, field, cast) static int pydx12_##t##_set##field(pydx12_##t##* self, PyObject* value, void* closure)\
+{\
+	if (!PyNumber_Check(value))\
+	{\
+		PyErr_SetString(PyExc_TypeError, "value must be a number");\
+		return -1;\
+	}\
+	self->data->##field = (cast *)PyLong_AsUnsignedLongLong(value);\
+	return 0;\
+}
+
+#define PYDX12_PTR_GETTER_SETTER(t, field, cast) PYDX12_PTR_GETTER(t, field)\
+PYDX12_PTR_SETTER(t, field, cast)
 
 #define PYDX12_FLOAT_GETTER(t, field) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
 {\
@@ -827,7 +855,7 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 
 #define PYDX12_STRUCT_GETTER(t, field, type) static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
 {\
-	return pydx12_##type##_instantiate(&self->data->##field, PYDX12_OWNER, self->com_owner);\
+	return pydx12_instantiate<type>(&self->data->##field, PYDX12_OWNER, self->com_owner);\
 }
 
 #define PYDX12_STRUCT_SETTER(t, field, type) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
@@ -1012,7 +1040,7 @@ PYDX12_STRING_SETTER(t, field)
 	pydx12_##t##_chunk_free(self, (void*)self->data->##field);\
 	Py_ssize_t size;\
 	wchar_t* unicode = PyUnicode_AsWideCharString(value, &size);\
-	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_alloc(self, (void*) unicode, size + 1, 1);\
+	pydx12_memory_chunk* chunk = pydx12_##t##_chunk_alloc(self, (void*) unicode, (size * sizeof(wchar_t)) + 1, 1);\
 	if (!chunk)\
 	{\
 		PyErr_SetString(PyExc_MemoryError, "unable to allocate memory chunk for " #t "::" #field);\
