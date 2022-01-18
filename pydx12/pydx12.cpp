@@ -90,7 +90,11 @@ static PyObject* pydx12_D3D12CreateDevice(PyObject* self, PyObject* args)
 	if (!PyArg_ParseTuple(args, "O|L", &py_adapter, &feature_level))
 		return nullptr;
 
+	printf("ops...\n");
+
 	PYDX12_ARG_CHECK_COM(IDXGIAdapter, adapter);
+
+	printf("ok...\n");
 
 	PYDX12_INTERFACE_CREATE(ID3D12Device8, D3D12CreateDevice, adapter, feature_level);
 	PYDX12_INTERFACE_CREATE(ID3D12Device7, D3D12CreateDevice, adapter, feature_level);

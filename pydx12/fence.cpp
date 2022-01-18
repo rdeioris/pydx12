@@ -27,7 +27,7 @@ static PyObject* pydx12_ID3D12Fence_SetEventOnCompletion(pydx12_COM<ID3D12Fence>
 
 	PYDX12_ARG_CHECK_HANDLE(Event, handle_event);
 
-	PYDX12_COM_CALL_HRESULT(ID3D12Fence, SetEventOnCompletion, value, handle_event);
+	PYDX12_COM_CALL_HRESULT(ID3D12Fence, SetEventOnCompletion, value, *handle_event);
 
 	Py_RETURN_NONE;
 }

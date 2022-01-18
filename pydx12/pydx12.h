@@ -112,7 +112,7 @@ pydx12_##t##_Type.tp_init = (initproc)pydx12_##t##_init;\
 if (pydx12_register<t>(m))\
 	return -1
 
-#define PYDX12_REGISTER_SUBHANDLE(t, s) pydx12_##t##_Type.tp_base = pydx12_##s##_get_type();\
+#define PYDX12_REGISTER_SUBHANDLE(t, s) pydx12_##t##_Type.tp_base = pydx12_get_type<s>();\
 if (pydx12_register<t>(m))\
 	return -1
 
@@ -767,14 +767,14 @@ if (!py_##value)\
 py_##value->handle = value;\
 return (PyObject*)py_##value
 
-#define PYDX12_HANDLE_NEW_WITH_COM(t, value, destroy, com_field) pydx12_##t* py_##value = PyObject_New(pydx12_##t, pydx12_##t##_get_type());\
+#define PYDX12_HANDLE_NEW_WITH_COM(t, value, destroy, field) pydx12_HANDLE<t>* py_##value = PyObject_New(pydx12_HANDLE<t>, pydx12_get_type<t>());\
 if (!py_##value)\
 {\
 	value->##destroy();\
 	return NULL;\
 }\
 py_##value->handle = value;\
-py_##value->##com_field = self->com_ptr;\
+py_##value->##field = self->com_ptr;\
 self->com_ptr->AddRef();\
 return (PyObject*)py_##value
 
@@ -788,4 +788,28 @@ struct Window
 	PyObject* py_window_proc;
 	WINDOWPLACEMENT pre_fullscreen_placement;
 	bool py_window_proc_exception;
+};
+
+template<>
+struct pydx12_HANDLE<IXAudio2Voice>
+{
+	PyObject_HEAD;
+	IXAudio2Voice* handle;
+	IXAudio2* xaudio2;
+};
+
+template<>
+struct pydx12_HANDLE<IXAudio2MasteringVoice>
+{
+	PyObject_HEAD;
+	IXAudio2MasteringVoice* handle;
+	IXAudio2* xaudio2;
+};
+
+template<>
+struct pydx12_HANDLE<IXAudio2SourceVoice>
+{
+	PyObject_HEAD;
+	IXAudio2SourceVoice* handle;
+	IXAudio2* xaudio2;
 };

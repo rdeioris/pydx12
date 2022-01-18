@@ -119,9 +119,7 @@ t = threading.Thread(target=render_loop)
 t.start()
 
 while running:
-    for message, wparam, lparam in window.dequeue():
-        if message in (WM_QUIT, WM_CLOSE):
-            running = False
+    window.dequeue()
     if not message_queue.empty():
         new_title = message_queue.get_nowait()
         window.set_title(new_title)

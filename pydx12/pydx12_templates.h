@@ -120,7 +120,7 @@ T* pydx12_structure_get_data(PyObject* py_object)
 template<typename T>
 T* pydx12_structure_check(PyObject* py_object)
 {
-	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>))
+	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>()))
 	{
 		return NULL;
 	}
@@ -137,7 +137,7 @@ T* pydx12_com_get_ptr(PyObject* py_object)
 template<typename T>
 T* pydx12_com_check(PyObject* py_object)
 {
-	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>))
+	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>()))
 	{
 		return NULL;
 	}
@@ -154,7 +154,7 @@ T* pydx12_handle_get_ptr(PyObject* py_object)
 template<typename T>
 T* pydx12_handle_check(PyObject* py_object)
 {
-	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>))
+	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>()))
 	{
 		return NULL;
 	}
@@ -186,13 +186,13 @@ void pydx12_com_addref(pydx12_Structure<T>* self, IUnknown* com_ptr)
 			return;
 		}
 	}
-	owner->number_of_tracked_coms++;
-	pydx12_com_track* new_com_tracked = (pydx12_com_track*)PyMem_Realloc(owner->coms, sizeof(pydx12_com_track) * owner->number_of_coms);
-	if (!new_com_tracked)
+	owner->number_of_coms++;
+	pydx12_com_track* new_coms = (pydx12_com_track*)PyMem_Realloc(owner->coms, sizeof(pydx12_com_track) * owner->number_of_coms);
+	if (!new_coms)
 	{
 		return;
 	}
-	owner->coms = new_com_tracked;
+	owner->coms = new_coms;
 	owner->coms[owner->number_of_coms - 1].com_ptr = com_ptr;
 	owner->coms[owner->number_of_coms - 1].refs = 1;
 	com_ptr->AddRef();
@@ -202,9 +202,9 @@ template<typename T>
 void pydx12_com_release(pydx12_Structure<T>* self, IUnknown* com_ptr)
 {
 	pydx12_Structure<T>* owner = (pydx12_Structure<T>*) (self->data_owner ? self->data_owner : (PyObject*)self);
-	for (size_t i = 0; i < owner->number_of_tracked_coms; i++)
+	for (size_t i = 0; i < owner->number_of_coms; i++)
 	{
-		pydx12_com_track* com_track = &owner->tracked_coms[i];
+		pydx12_com_track* com_track = &owner->coms[i];
 		if (com_track->com_ptr == com_ptr)
 		{
 			assert(com_track->refs > 0);
@@ -240,7 +240,7 @@ void pydx12_chunk_free(pydx12_Structure<T>* self, void* addr)
 template<typename T>
 void pydx12_chunk_clear(pydx12_Structure<T>* self, T* data)
 {
-	PyGetSetDef* getset = pydx12_get_type<T>().tp_getset;
+	PyGetSetDef* getset = pydx12_get_type<T>()->tp_getset;
 	while (getset->name)
 	{
 		if (getset->closure != NULL)\

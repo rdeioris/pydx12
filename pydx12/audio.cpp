@@ -1,9 +1,9 @@
 #include "pydx12.h"
 
 PYDX12_TYPE_COM(IXAudio2);
-PYDX12_TYPE_HANDLE(IXAudio2Voice, IXAudio2Voice*, IXAudio2* xaudio2);
-PYDX12_TYPE_HANDLE(IXAudio2MasteringVoice, IXAudio2MasteringVoice*, IXAudio2* xaudio2);
-PYDX12_TYPE_HANDLE(IXAudio2SourceVoice, IXAudio2SourceVoice*, IXAudio2* xaudio2);
+PYDX12_TYPE_HANDLE(IXAudio2Voice);
+PYDX12_TYPE_HANDLE(IXAudio2MasteringVoice);
+PYDX12_TYPE_HANDLE(IXAudio2SourceVoice);
 
 PYDX12_TYPE(WAVEFORMATEX);
 PYDX12_GETTER_SETTER(WAVEFORMATEX, wFormatTag, UnsignedLong, WORD);
@@ -97,7 +97,7 @@ PYDX12_METHODS(IXAudio2) = {
 };
 
 void* pydx12_IXAudio2Voice_init = NULL; // no need for __init__
-static void pydx12_IXAudio2Voice_dealloc(pydx12_IXAudio2Voice* self)\
+static void pydx12_IXAudio2Voice_dealloc(pydx12_HANDLE<IXAudio2Voice>* self)\
 {
 	if (self->handle)
 		self->handle->DestroyVoice();
@@ -106,7 +106,7 @@ static void pydx12_IXAudio2Voice_dealloc(pydx12_IXAudio2Voice* self)\
 	Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-static PyObject* pydx12_IXAudio2SourceVoice_SubmitSourceBuffer(pydx12_IXAudio2SourceVoice* self, PyObject* args)
+static PyObject* pydx12_IXAudio2SourceVoice_SubmitSourceBuffer(pydx12_HANDLE<IXAudio2SourceVoice>* self, PyObject* args)
 {
 	PyObject* py_buffer;
 	PyObject* py_buffer_wma = NULL;
@@ -126,7 +126,7 @@ static PyObject* pydx12_IXAudio2SourceVoice_SubmitSourceBuffer(pydx12_IXAudio2So
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_IXAudio2SourceVoice_Start(pydx12_IXAudio2SourceVoice* self, PyObject* args)
+static PyObject* pydx12_IXAudio2SourceVoice_Start(pydx12_HANDLE<IXAudio2SourceVoice>* self, PyObject* args)
 {
 	UINT32 flags = 0;
 	UINT32 operation_set = XAUDIO2_COMMIT_NOW;
@@ -139,7 +139,7 @@ static PyObject* pydx12_IXAudio2SourceVoice_Start(pydx12_IXAudio2SourceVoice* se
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_IXAudio2SourceVoice_Stop(pydx12_IXAudio2SourceVoice* self, PyObject* args)
+static PyObject* pydx12_IXAudio2SourceVoice_Stop(pydx12_HANDLE<IXAudio2SourceVoice>* self, PyObject* args)
 {
 	UINT32 flags = 0;
 	UINT32 operation_set = XAUDIO2_COMMIT_NOW;
@@ -152,13 +152,13 @@ static PyObject* pydx12_IXAudio2SourceVoice_Stop(pydx12_IXAudio2SourceVoice* sel
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_IXAudio2SourceVoice_FlushSourceBuffers(pydx12_IXAudio2SourceVoice* self)
+static PyObject* pydx12_IXAudio2SourceVoice_FlushSourceBuffers(pydx12_HANDLE<IXAudio2SourceVoice>* self)
 {
 	PYDX12_CALL_HRESULT(self->handle->FlushSourceBuffers);
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_IXAudio2SourceVoice_GetState(pydx12_IXAudio2SourceVoice* self, PyObject* args)
+static PyObject* pydx12_IXAudio2SourceVoice_GetState(pydx12_HANDLE<IXAudio2SourceVoice>* self, PyObject* args)
 {
 	UINT32 flags = 0;
 	if (!PyArg_ParseTuple(args, "|L", &flags))
