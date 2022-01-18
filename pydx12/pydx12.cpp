@@ -16,8 +16,8 @@ int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
 int pydx12_init_audio(PyObject* m);
 
-PYDX12_TYPE_HANDLE(Event, HANDLE);
-PYDX12_TYPE_HANDLE(Window, HWND, PyObject* py_window_proc; bool py_window_proc_exception; WINDOWPLACEMENT pre_fullscreen_placement);
+PYDX12_TYPE_HANDLE(Event);
+PYDX12_TYPE_HANDLE(Window);
 
 PYDX12_TYPE_COM(IUnknown);
 PYDX12_TYPE_COM(IDXGIObject);
@@ -90,9 +90,7 @@ static PyObject* pydx12_D3D12CreateDevice(PyObject* self, PyObject* args)
 	if (!PyArg_ParseTuple(args, "O|L", &py_adapter, &feature_level))
 		return nullptr;
 
-	IDXGIAdapter* adapter = pydx12_check<IDXGIAdapter>(py_adapter);
-	if (!adapter)
-		return PyErr_Format(PyExc_TypeError, "first argument must be an IDXGIAdapter");
+	PYDX12_ARG_CHECK_COM(IDXGIAdapter, adapter);
 
 	PYDX12_INTERFACE_CREATE(ID3D12Device8, D3D12CreateDevice, adapter, feature_level);
 	PYDX12_INTERFACE_CREATE(ID3D12Device7, D3D12CreateDevice, adapter, feature_level);
@@ -189,21 +187,21 @@ static PyObject* pydx12_D3D12GetDebugInterface(PyObject* self)
 	return pydx12_com_instantiate<ID3D12Debug>(debug, false);
 }
 
-static void pydx12_Event_dealloc(pydx12_Event* self)\
+static void pydx12_Event_dealloc(pydx12_HANDLE<Event>* self)\
 {
 	if (self->handle)
 		CloseHandle(self->handle);
 	Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-static int pydx12_Event_init(pydx12_Event* self, PyObject* args, PyObject* kwds)
+static int pydx12_Event_init(pydx12_HANDLE<Event>* self, PyObject* args, PyObject* kwds)
 {
 	self->handle = CreateEvent(NULL, FALSE, FALSE, NULL);
 
 	return 0;
 }
 
-static PyObject* pydx12_Event_wait(pydx12_Event* self, PyObject* args)
+static PyObject* pydx12_Event_wait(pydx12_HANDLE<Event>* self, PyObject* args)
 {
 	DWORD milliseconds = INFINITE;
 	if (!PyArg_ParseTuple(args, "|I", &milliseconds))
@@ -226,7 +224,7 @@ PYDX12_METHODS(Event) = {
 static const DWORD windowed_style = WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME | WS_BORDER;
 static const DWORD fullscreen_style = WS_POPUP;
 
-static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwds)
+static int pydx12_Window_init(pydx12_HANDLE<Window>* self, PyObject* args, PyObject* kwds)
 {
 	PyObject* py_title;
 	int width;
@@ -251,9 +249,9 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 	size.bottom = height;
 	AdjustWindowRect(&size, windowed_style, FALSE);
 
-	self->py_window_proc_exception = false;
+	self->handle.py_window_proc_exception = false;
 
-	self->handle = CreateWindowExW(
+	self->handle.hwnd = CreateWindowExW(
 		WS_EX_APPWINDOW,
 		L"pydx12",
 		title,
@@ -265,31 +263,31 @@ static int pydx12_Window_init(pydx12_Window* self, PyObject* args, PyObject* kwd
 
 	PyMem_Free(title);
 
-	if (!self->handle)
+	if (!self->handle.hwnd)
 	{
 		PyErr_SetString(PyExc_Exception, "unable to create Window");
 		return -1;
 	}
 
-	SetWindowLongPtr(self->handle, GWLP_USERDATA, (LONG_PTR)self);
+	SetWindowLongPtr(self->handle.hwnd, GWLP_USERDATA, (LONG_PTR)self);
 
-	ShowWindow(self->handle, SW_SHOW);
-	UpdateWindow(self->handle);
+	ShowWindow(self->handle.hwnd, SW_SHOW);
+	UpdateWindow(self->handle.hwnd);
 
 	return 0;
 }
 
-static void pydx12_Window_dealloc(pydx12_Window* self)\
+static void pydx12_Window_dealloc(pydx12_HANDLE<Window>* self)\
 {
-	Py_XDECREF(self->py_window_proc);
-	if (self->handle)
-		DestroyWindow(self->handle);
+	Py_XDECREF(self->handle.py_window_proc);
+	if (self->handle.hwnd)
+		DestroyWindow(self->handle.hwnd);
 	Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-static PyObject* pydx12_Window_show(pydx12_Window* self, PyObject* args)
+static PyObject* pydx12_Window_show(pydx12_HANDLE<Window>* self, PyObject* args)
 {
-	ShowWindow(self->handle, SW_SHOW);
+	ShowWindow(self->handle.hwnd, SW_SHOW);
 
 	if (PyErr_Occurred())
 	{
@@ -299,9 +297,9 @@ static PyObject* pydx12_Window_show(pydx12_Window* self, PyObject* args)
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_Window_hide(pydx12_Window* self, PyObject* args)
+static PyObject* pydx12_Window_hide(pydx12_HANDLE<Window>* self, PyObject* args)
 {
-	ShowWindow(self->handle, SW_HIDE);
+	ShowWindow(self->handle.hwnd, SW_HIDE);
 
 	if (PyErr_Occurred())
 	{
@@ -311,9 +309,9 @@ static PyObject* pydx12_Window_hide(pydx12_Window* self, PyObject* args)
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_Window_minimize(pydx12_Window* self, PyObject* args)
+static PyObject* pydx12_Window_minimize(pydx12_HANDLE<Window>* self, PyObject* args)
 {
-	ShowWindow(self->handle, SW_MINIMIZE);
+	ShowWindow(self->handle.hwnd, SW_MINIMIZE);
 
 	if (PyErr_Occurred())
 	{
@@ -323,9 +321,9 @@ static PyObject* pydx12_Window_minimize(pydx12_Window* self, PyObject* args)
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_Window_maximize(pydx12_Window* self, PyObject* args)
+static PyObject* pydx12_Window_maximize(pydx12_HANDLE<Window>* self, PyObject* args)
 {
-	ShowWindow(self->handle, SW_MAXIMIZE);
+	ShowWindow(self->handle.hwnd, SW_MAXIMIZE);
 
 	if (PyErr_Occurred())
 	{
@@ -335,7 +333,7 @@ static PyObject* pydx12_Window_maximize(pydx12_Window* self, PyObject* args)
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
+static PyObject* pydx12_Window_dequeue(pydx12_HANDLE<Window>* self, PyObject* args)
 {
 	MSG message;
 
@@ -350,10 +348,10 @@ static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 	{
 		TranslateMessage(&message);
 		DispatchMessage(&message);
-		if (self->py_window_proc_exception)
+		if (self->handle.py_window_proc_exception)
 		{
 			PyEval_RestoreThread(_save);
-			self->py_window_proc_exception = false;
+			self->handle.py_window_proc_exception = false;
 			return NULL;
 
 		}
@@ -363,7 +361,7 @@ static PyObject* pydx12_Window_dequeue(pydx12_Window* self, PyObject* args)
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_Window_set_title(pydx12_Window* self, PyObject* args)
+static PyObject* pydx12_Window_set_title(pydx12_HANDLE<Window>* self, PyObject* args)
 {
 	PyObject* py_title;
 	if (!PyArg_ParseTuple(args, "O", &py_title))
@@ -380,7 +378,7 @@ static PyObject* pydx12_Window_set_title(pydx12_Window* self, PyObject* args)
 		return NULL;
 	}
 
-	SetWindowTextW(self->handle, title);
+	SetWindowTextW(self->handle.hwnd, title);
 
 	PyMem_Free(title);
 
@@ -392,7 +390,7 @@ static PyObject* pydx12_Window_set_title(pydx12_Window* self, PyObject* args)
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_Window_set_proc(pydx12_Window* self, PyObject* args)
+static PyObject* pydx12_Window_set_proc(pydx12_HANDLE<Window>* self, PyObject* args)
 {
 	PyObject* py_proc;
 	if (!PyArg_ParseTuple(args, "O", &py_proc))
@@ -400,8 +398,8 @@ static PyObject* pydx12_Window_set_proc(pydx12_Window* self, PyObject* args)
 
 	if (py_proc == Py_None)
 	{
-		Py_XDECREF(self->py_window_proc);
-		self->py_window_proc = NULL;
+		Py_XDECREF(self->handle.py_window_proc);
+		self->handle.py_window_proc = NULL;
 		Py_RETURN_NONE;
 	}
 
@@ -410,14 +408,14 @@ static PyObject* pydx12_Window_set_proc(pydx12_Window* self, PyObject* args)
 		return PyErr_Format(PyExc_ValueError, "Window message processor must be a callable");
 	}
 
-	Py_XDECREF(self->py_window_proc);
-	self->py_window_proc = py_proc;
-	Py_INCREF(self->py_window_proc);
+	Py_XDECREF(self->handle.py_window_proc);
+	self->handle.py_window_proc = py_proc;
+	Py_INCREF(self->handle.py_window_proc);
 
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_Window_set_fullscreen(pydx12_Window* self, PyObject* args)
+static PyObject* pydx12_Window_set_fullscreen(pydx12_HANDLE<Window>* self, PyObject* args)
 {
 	PyObject* py_enable;
 	if (!PyArg_ParseTuple(args, "O", &py_enable))
@@ -425,20 +423,20 @@ static PyObject* pydx12_Window_set_fullscreen(pydx12_Window* self, PyObject* arg
 
 	if (PyObject_IsTrue(py_enable))
 	{
-		self->pre_fullscreen_placement.length = sizeof(WINDOWPLACEMENT);
-		GetWindowPlacement(self->handle, &self->pre_fullscreen_placement);
+		self->handle.pre_fullscreen_placement.length = sizeof(WINDOWPLACEMENT);
+		GetWindowPlacement(self->handle.hwnd, &self->handle.pre_fullscreen_placement);
 
-		SetWindowLong(self->handle, GWL_STYLE, fullscreen_style);
-		SetWindowPos(self->handle, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-		ShowWindow(self->handle, SW_RESTORE);
-		HMONITOR monitor = MonitorFromWindow(self->handle, MONITOR_DEFAULTTONEAREST);
+		SetWindowLong(self->handle.hwnd, GWL_STYLE, fullscreen_style);
+		SetWindowPos(self->handle.hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+		ShowWindow(self->handle.hwnd, SW_RESTORE);
+		HMONITOR monitor = MonitorFromWindow(self->handle.hwnd, MONITOR_DEFAULTTONEAREST);
 		MONITORINFO monitor_info;
 		monitor_info.cbSize = sizeof(MONITORINFO);
 		GetMonitorInfo(monitor, &monitor_info);
 		LONG monitor_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
 		LONG monitor_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
 
-		SetWindowPos(self->handle, NULL,
+		SetWindowPos(self->handle.hwnd, NULL,
 			monitor_info.rcMonitor.left,
 			monitor_info.rcMonitor.top,
 			monitor_width, monitor_height,
@@ -446,26 +444,26 @@ static PyObject* pydx12_Window_set_fullscreen(pydx12_Window* self, PyObject* arg
 	}
 	else
 	{
-		SetWindowLong(self->handle, GWL_STYLE, windowed_style);
-		SetWindowPos(self->handle, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-		SetWindowPlacement(self->handle, &self->pre_fullscreen_placement);
+		SetWindowLong(self->handle.hwnd, GWL_STYLE, windowed_style);
+		SetWindowPos(self->handle.hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+		SetWindowPlacement(self->handle.hwnd, &self->handle.pre_fullscreen_placement);
 	}
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_Window_get_fullscreen(pydx12_Window* self)
+static PyObject* pydx12_Window_get_fullscreen(pydx12_HANDLE<Window>* self)
 {
-	if (GetWindowLong(self->handle, GWL_STYLE) & fullscreen_style)
+	if (GetWindowLong(self->handle.hwnd, GWL_STYLE) & fullscreen_style)
 	{
 		Py_RETURN_TRUE;
 	}
 	Py_RETURN_FALSE;
 }
 
-static PyObject* pydx12_Window_get_client_rect(pydx12_Window* self)
+static PyObject* pydx12_Window_get_client_rect(pydx12_HANDLE<Window>* self)
 {
 	RECT rect;
-	GetClientRect(self->handle, &rect);
+	GetClientRect(self->handle.hwnd, &rect);
 	return Py_BuildValue("(llll)", rect.left, rect.top, rect.right, rect.bottom);
 }
 
@@ -594,11 +592,11 @@ PYDX12_METHODS(ID3D12Debug) = {
 
 static LRESULT pydx12_DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
-	pydx12_Window* self = (pydx12_Window*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-	if (self && self->py_window_proc && !self->py_window_proc_exception)
+	pydx12_HANDLE<Window>* self = (pydx12_HANDLE<Window>*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+	if (self && self->handle.py_window_proc && !self->handle.py_window_proc_exception)
 	{
 		PyGILState_STATE _state = PyGILState_Ensure();
-		PyObject* py_ret = PyObject_CallFunction(self->py_window_proc, "OIKL", self, Msg, wParam, lParam);
+		PyObject* py_ret = PyObject_CallFunction(self->handle.py_window_proc, "OIKL", self, Msg, wParam, lParam);
 		if (py_ret)
 		{
 			if (PyObject_IsTrue(py_ret))
@@ -611,7 +609,7 @@ static LRESULT pydx12_DefWindowProcW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM 
 		}
 		else
 		{
-			self->py_window_proc_exception = true;
+			self->handle.py_window_proc_exception = true;
 		}
 		PyGILState_Release(_state);
 	}

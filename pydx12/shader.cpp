@@ -59,7 +59,7 @@ static PyObject* pydx12_ID3DBlob_to_bytearray(pydx12_COM<ID3DBlob>* self)
 	return PyByteArray_FromStringAndSize((const char*)self->com_ptr->GetBufferPointer(), self->com_ptr->GetBufferSize());
 }
 
-static int pydx12_ID3DBlob_get_buffer(pydx12_ID3DBlob* exporter, Py_buffer* view, int flags)
+static int pydx12_ID3DBlob_get_buffer(pydx12_COM<ID3DBlob>* exporter, Py_buffer* view, int flags)
 {
 	LPVOID buffer_ptr = exporter->com_ptr->GetBufferPointer();
 	if (!buffer_ptr)
@@ -72,7 +72,7 @@ static int pydx12_ID3DBlob_get_buffer(pydx12_ID3DBlob* exporter, Py_buffer* view
 	return 0;
 }
 
-static void pydx12_ID3DBlob_release_buffer(pydx12_ID3DBlob* exporter, Py_buffer* view)
+static void pydx12_ID3DBlob_release_buffer(pydx12_COM<ID3DBlob>* exporter, Py_buffer* view)
 {
 }
 
@@ -89,12 +89,12 @@ PYDX12_METHODS(ID3DBlob) = {
 	{NULL} /* Sentinel */
 };
 
-static PyObject* pydx12_IDxcBlob_GetBufferPointer(pydx12_IDxcBlob* self)
+static PyObject* pydx12_IDxcBlob_GetBufferPointer(pydx12_COM<IDxcBlob>* self)
 {
 	return PyLong_FromUnsignedLongLong((unsigned long long)self->com_ptr->GetBufferPointer());
 }
 
-static PyObject* pydx12_IDxcBlob_GetBufferSize(pydx12_IDxcBlob* self)
+static PyObject* pydx12_IDxcBlob_GetBufferSize(pydx12_COM<IDxcBlob>* self)
 {
 	printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^IDxcBlob buffer size: %llu\n", self->com_ptr->GetBufferSize());
 	return PyLong_FromUnsignedLongLong(self->com_ptr->GetBufferSize());
@@ -106,7 +106,7 @@ PYDX12_METHODS(IDxcBlob) = {
 	{NULL} /* Sentinel */
 };
 
-static PyObject* pydx12_IDxcLibrary_CreateBlobWithEncodingOnHeapCopy(pydx12_IDxcLibrary* self, PyObject* args)
+static PyObject* pydx12_IDxcLibrary_CreateBlobWithEncodingOnHeapCopy(pydx12_COM<IDxcLibrary>* self, PyObject* args)
 {
 	Py_buffer view;
 	UINT32 code_page = CP_UTF8;
@@ -116,7 +116,7 @@ static PyObject* pydx12_IDxcLibrary_CreateBlobWithEncodingOnHeapCopy(pydx12_IDxc
 	IDxcBlobEncoding* blob_encoding;
 	PYDX12_COM_CALL_HRESULT_AND_BUFFER_RELEASE(view, IDxcLibrary, CreateBlobWithEncodingOnHeapCopy, view.buf, (UINT32)view.len, code_page, &blob_encoding);
 
-	return PYDX12_COM_INSTANTIATE(IDxcBlobEncoding, blob_encoding, false);
+	return pydx12_com_instantiate<IDxcBlobEncoding>(blob_encoding, false);
 }
 
 PYDX12_METHODS(IDxcLibrary) = {
@@ -190,7 +190,7 @@ static PyObject* pydx12_IDxcCompiler_Compile(pydx12_COM<IDxcCompiler>* self, PyO
 	return pydx12_com_instantiate<IDxcBlob>(compiled_blob, false);
 }
 
-static int pydx12_IDxcBlob_get_buffer(pydx12_IDxcBlob* exporter, Py_buffer* view, int flags)
+static int pydx12_IDxcBlob_get_buffer(pydx12_COM<IDxcBlob>* exporter, Py_buffer* view, int flags)
 {
 	LPVOID buffer_ptr = exporter->com_ptr->GetBufferPointer();
 	if (!buffer_ptr)
@@ -211,7 +211,7 @@ static int pydx12_IDxcBlob_get_buffer(pydx12_IDxcBlob* exporter, Py_buffer* view
 	return 0;
 }
 
-static void pydx12_IDxcBlob_release_buffer(pydx12_IDxcBlob* exporter, Py_buffer* view)
+static void pydx12_IDxcBlob_release_buffer(pydx12_COM<IDxcBlob>* exporter, Py_buffer* view)
 {
 }
 

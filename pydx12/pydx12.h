@@ -4,11 +4,11 @@
 
 #include "pydx12_templates.h"
 
-#define PYDX12_TYPE_DEFINE(t) static PyTypeObject pydx12_##t##_Type = \
+#define PYDX12_TYPE_DEFINE(base, t) static PyTypeObject pydx12_##t##_Type = \
 {\
 	PyVarObject_HEAD_INIT(NULL, 0)\
 	"pydx12." #t,              /* tp_name */ \
-	sizeof(pydx12_Structure<t>), /* tp_basicsize */\
+	sizeof(base<t>), /* tp_basicsize */\
 	0,                         /* tp_itemsize */\
 	0,                         /* tp_dealloc */\
 	0,                         /* tp_print */\
@@ -135,7 +135,7 @@ void pydx12_##t##_chunk_clear(pydx12_##t* self, t* data)\
 	}\
 }
 
-#define PYDX12_TYPE(t, ...) PYDX12_TYPE_DEFINE(t);\
+#define PYDX12_TYPE(t) PYDX12_TYPE_DEFINE(pydx12_Structure, t);\
 PYDX12_TYPE_STRUCT_MEMBERS(t);\
 template<>\
 PyTypeObject* pydx12_get_type<t>()\
@@ -148,7 +148,7 @@ const char* pydx12_get_type_name<t>()\
 	return #t;\
 }
 
-#define PYDX12_TYPE_COM(t, ...) PYDX12_TYPE_DEFINE(t);\
+#define PYDX12_TYPE_COM(t) PYDX12_TYPE_DEFINE(pydx12_COM, t);\
 template<>\
 PyTypeObject* pydx12_get_type<t>()\
 {\
@@ -160,29 +160,16 @@ const char* pydx12_get_type_name<t>()\
 	return #t;\
 }
 
-#define PYDX12_TYPE_HANDLE(t, ht, ...) typedef struct\
+#define PYDX12_TYPE_HANDLE(t) PYDX12_TYPE_DEFINE(pydx12_HANDLE, t);\
+template<>\
+PyTypeObject* pydx12_get_type<t>()\
 {\
-	PyObject_HEAD\
-	ht handle;\
-	__VA_ARGS__;\
-} pydx12_##t;\
-PYDX12_TYPE_MEMBERS(t);\
-ht pydx12_##t##_check(PyObject* py_object)\
-{\
-	if (PyLong_Check(py_object))\
-	{\
-		return (ht)PyLong_AsUnsignedLongLong(py_object);\
-	}\
-	if (!PyObject_IsInstance(py_object, (PyObject*)&pydx12_##t##Type))\
-	{\
-		return NULL; \
-	}\
-	pydx12_##t##* pydx12_object = (pydx12_##t*)py_object; \
-	return pydx12_object->handle; \
+	return &pydx12_##t##_Type;\
 }\
-PyTypeObject* pydx12_##t##_get_type()\
+template<>\
+const char* pydx12_get_type_name<t>()\
 {\
-	return (PyTypeObject*)&pydx12_##t##Type; \
+	return #t;\
 }
 
 #define PYDX12_ENUM(t) PyModule_AddObject(m, #t, PyLong_FromLongLong(t))
@@ -196,7 +183,7 @@ pydx12_##t##_Type.tp_methods = pydx12_##t##_methods;\
 pydx12_##t##_Type.tp_as_sequence = &pydx12_##t##_sequence_methods;\
 pydx12_##t##_Type.tp_weaklistoffset  = offsetof(pydx12_Structure<t>, weakreflist);\
 pydx12_##t##_Type.tp_as_buffer = &pydx12_##t##_as_buffer;\
-if (pydx12_register<t>())\
+if (pydx12_register<t>(m))\
 	return -1
 
 #define PYDX12_REGISTER_COM(t, s) pydx12_##t##_Type.tp_base = pydx12_get_type<s>();\
@@ -205,18 +192,18 @@ pydx12_##t##_Type.tp_init = (initproc)pydx12_com_init<t>;\
 pydx12_##t##_Type.tp_richcompare = (richcmpfunc)pydx12_com_richcompare<t>;\
 PYDX12_REGISTER_COM_BASE(t)
 
-#define PYDX12_REGISTER_HANDLE(t) pydx12_##t##Type.tp_new = PyType_GenericNew;\
+#define PYDX12_REGISTER_HANDLE(t) pydx12_##t##_Type.tp_new = PyType_GenericNew;\
 pydx12_##t##_Type.tp_dealloc = (destructor)pydx12_##t##_dealloc;\
 pydx12_##t##_Type.tp_init = (initproc)pydx12_##t##_init;\
-if (pydx12_register<t>())\
+if (pydx12_register<t>(m))\
 	return -1
 
 #define PYDX12_REGISTER_SUBHANDLE(t, s) pydx12_##t##_Type.tp_base = pydx12_##s##_get_type();\
-if (pydx12_register<t>())\
+if (pydx12_register<t>(m))\
 	return -1
 
 #define PYDX12_REGISTER_COM_BASE(t) pydx12_##t##_Type.tp_dealloc = (destructor)pydx12_com_dealloc<t>;\
-if (pydx12_register<t>())\
+if (pydx12_register<t>(m))\
 	return -1
 
 #define PYDX12_GETTER(t, field, py_type) static PyObject* pydx12_##t##_get_##field(pydx12_Structure<t>* self, void* closure)\
@@ -276,7 +263,7 @@ PYDX12_PTR_SETTER(t, field, cast)
 #define PYDX12_FLOAT_GETTER_SETTER(t, field, cast) PYDX12_FLOAT_GETTER(t, field)\
 PYDX12_FLOAT_SETTER(t, field, cast)
 
-#define PYDX12_ARRAY_GETTER(t, field, cast, len, func) static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
+#define PYDX12_ARRAY_GETTER(t, field, cast, len, func) static PyObject* pydx12_##t##_get_##field(pydx12_Structure<t>* self, void* closure)\
 {\
 	PyObject* py_tuple = PyTuple_New(len);\
 	for(Py_ssize_t i = 0; i < len; i++)\
@@ -286,7 +273,7 @@ PYDX12_FLOAT_SETTER(t, field, cast)
 	return py_tuple;\
 }
 
-#define PYDX12_ARRAY_SETTER(t, field, cast, len, func) static int pydx12_##t##_set##field(pydx12_##t##* self, PyObject* value, void* closure)\
+#define PYDX12_ARRAY_SETTER(t, field, cast, len, func) static int pydx12_##t##_set_##field(pydx12_Structure<t>* self, PyObject* value, void* closure)\
 {\
 	if (!PyTuple_Check(value))\
 	{\
@@ -322,7 +309,7 @@ PYDX12_ARRAY_SETTER(t, field, cast, len, set_func)
 
 #define PYDX12_STRUCT_SETTER(t, field, type) static int pydx12_##t##_set_##field(pydx12_Structure<t>* self, PyObject* value, void* closure)\
 {\
-	type* data = pydx12_check<type>(value);\
+	type* data = pydx12_structure_check<type>(value);\
 	if (!data)\
 	{\
 		PyErr_SetString(PyExc_TypeError, "value must be a " #type);\
@@ -339,7 +326,7 @@ PYDX12_STRUCT_SETTER(t, field, type)
 
 #define PYDX12_STRUCT_CARRAY_GETTER(t, field, type) static PyObject* pydx12_##t##_get##field(pydx12_##t* self, void* closure)\
 {\
-	return pydx12_##type##_instantiate(&self->data->##field[0], PYDX12_OWNER, self->com_owner);\
+	return pydx12_instantiate<type>(&self->data->##field[0], PYDX12_OWNER, self->com_owner);\
 }
 
 #define PYDX12_STRUCT_CARRAY_SETTER(t, field, type) static int pydx12_##t##_set##field(pydx12_##t* self, PyObject* value, void* closure)\
@@ -672,36 +659,36 @@ PYDX12_BOOL_SETTER(t, field)
 #define PYDX12_BUFFER_GETTER_SETTER(t, field, cast) PYDX12_BUFFER_GETTER(t, field)\
 PYDX12_BUFFER_SETTER(t, field, cast)
 
-#define PYDX12_COM_GETTER(t, field_t, field) static pydx12_field_track_type pydx12_##t##_##field##_track_com_type = {PYDX12_TRACK_TYPE_COM, offsetof(t, field)}; static PyObject* pydx12_##t##_get##field(pydx12_##t##* self, void* closure)\
+#define PYDX12_COM_GETTER(t, field_type, field) static pydx12_field_track_type pydx12_##t##_##field##_track_com_type = {PYDX12_TRACK_TYPE_COM, offsetof(t, field)}; static PyObject* pydx12_##t##_get_##field(pydx12_Structure<t>* self, void* closure)\
 {\
 	if (self->data->##field)\
 	{\
-		return pydx12_##field_t##_instantiate(self->data->##field, true);\
+		return pydx12_com_instantiate<field_type>(self->data->##field, true);\
 	}\
 	Py_RETURN_NONE;\
 }
 
-#define PYDX12_COM_SETTER(t, field_t, field) static int pydx12_##t##_set##field(pydx12_##t##* self, PyObject* py_value, void* closure)\
+#define PYDX12_COM_SETTER(t, field_type, field) static int pydx12_##t##_set_##field(pydx12_Structure<t>* self, PyObject* py_value, void* closure)\
 {\
-	field_t* value = NULL;\
+	field_type* value = NULL;\
 	if (py_value && py_value != Py_None)\
 	{\
-		value = pydx12_##field_t##_check(py_value);\
+		value = pydx12_com_check<field_type>(py_value);\
 		if (!value)\
 		{\
-			PyErr_SetString(PyExc_ValueError, "value must be a " #field_t);\
+			PyErr_SetString(PyExc_ValueError, "value must be a " #field_type);\
 			return -1;\
 		}\
-		pydx12_##t##_com_addref(self, value);\
+		pydx12_com_addref<t>(self, value);\
 	}\
 	if (self->data->##field)\
-		pydx12_##t##_com_release(self, self->data->##field);\
+		pydx12_com_release<t>(self, self->data->##field);\
 	self->data->##field = value;\
 	return 0;\
 }
 
-#define PYDX12_COM_GETTER_SETTER(t, field_t, field) PYDX12_COM_GETTER(t, field_t, field)\
-PYDX12_COM_SETTER(t, field_t, field)
+#define PYDX12_COM_GETTER_SETTER(t, field_type, field) PYDX12_COM_GETTER(t, field_type, field)\
+PYDX12_COM_SETTER(t, field_type, field)
 
 #define PYDX12_DECLARE_GETTER_SETTER_CLOSURE(t, field, closure) {#field, (getter)pydx12_##t##_get_##field, (setter)pydx12_##t##_set_##field, #t " " #field " field", closure}
 #define PYDX12_DECLARE_GETTER_CLOSURE(t, field, closure) {#field, (getter)pydx12_##t##_get_##field, NULL, #t " " #field " field", closure}
@@ -773,18 +760,22 @@ else if (py_##name != Py_None)\
 	return PyErr_Format(PyExc_TypeError, "expected a unicode object");\
 }
 
-#define PYDX12_ARG_CHECK(t, name) t* name = pydx12_check<t>(py_##name);\
+#define PYDX12_ARG_CHECK(t, name) t* name = pydx12_structure_check<t>(py_##name);\
 if (!name)\
 	return PyErr_Format(PyExc_TypeError, "argument must be a " #t);
 
-#define PYDX12_ARG_CHECK_HANDLE(t, ht, name) ht name = pydx12_check<t>(py_##name);\
+#define PYDX12_ARG_CHECK_COM(t, name) t* name = pydx12_com_check<t>(py_##name);\
 if (!name)\
-	return PyErr_Format(PyExc_TypeError, "argument must be a raw numeric HANDLE or " #t);
+	return PyErr_Format(PyExc_TypeError, "argument must be a " #t);
+
+#define PYDX12_ARG_CHECK_HANDLE(t, name) t* name = pydx12_handle_check<t>(py_##name);\
+if (!name)\
+	return PyErr_Format(PyExc_TypeError, "argument must be a " #t);
 
 #define PYDX12_ARG_CHECK_NONE(t, name) t* name = NULL;\
 if (py_##name && py_##name != Py_None)\
 {\
-	name = pydx12_check<t>(py_##name);\
+	name = pydx12_structure_check<t>(py_##name);\
 	if (!name)\
 		return PyErr_Format(PyExc_TypeError, "argument must be a " #t);\
 }
@@ -800,7 +791,6 @@ if (py_##name && py_##name != Py_None)\
 	if (!name)\
 		return NULL;\
 }
-
 
 #define PYDX12_INTERFACE_CREATE(t, func, ...) { t* interface_ptr;\
 	HRESULT ret = func(__VA_ARGS__, __uuidof(t), (void**)&interface_ptr);\
@@ -873,3 +863,15 @@ py_##value->handle = value;\
 py_##value->##com_field = self->com_ptr;\
 self->com_ptr->AddRef();\
 return (PyObject*)py_##value
+
+/** Custom Structures **/
+
+using Event = HANDLE;
+
+struct Window
+{
+	HWND hwnd;
+	PyObject* py_window_proc;
+	WINDOWPLACEMENT pre_fullscreen_placement;
+	bool py_window_proc_exception;
+};

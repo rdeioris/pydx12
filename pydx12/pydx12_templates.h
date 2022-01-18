@@ -41,8 +41,8 @@ struct pydx12_Structure
 	IUnknown* com_owner;
 	pydx12_memory_chunk* chunks;
 	size_t number_of_chunks;
-	pydx12_com_track* tracked_coms;
-	size_t number_of_tracked_coms;
+	pydx12_com_track* coms;
+	size_t number_of_coms;
 	PyObject* weakreflist;
 };
 
@@ -51,6 +51,13 @@ struct pydx12_COM
 {
 	PyObject_HEAD;
 	T* com_ptr;
+};
+
+template<typename T>
+struct pydx12_HANDLE
+{
+	PyObject_HEAD;
+	T handle;
 };
 
 
@@ -64,7 +71,7 @@ const char* pydx12_get_type_name();
 template<typename T>
 PyObject* pydx12_instantiate_with_size(T* data, PyObject* data_owner, IUnknown* com_owner, const size_t len)
 {
-	pydx12_Structure<T>* py_object = PyObject_New(pydx12_Structure<T>, pydx12_get_type<T>);
+	pydx12_Structure<T>* py_object = PyObject_New(pydx12_Structure<T>, pydx12_get_type<T>());
 	if (!py_object)
 	{
 		return NULL;
@@ -97,33 +104,67 @@ PyObject* pydx12_instantiate_with_size(T* data, PyObject* data_owner, IUnknown* 
 template<typename T>
 PyObject* pydx12_instantiate(T* data, PyObject* data_owner, IUnknown* com_owner)
 {
-	return pydx12_instantiate_with_size<T>(data, data_owner, com_owner, sizeof(t));
+	return pydx12_instantiate_with_size<T>(data, data_owner, com_owner, sizeof(T));
 }
 
 template<typename T>
-T* pydx12_get_data(PyObject* py_object)
+T* pydx12_structure_get_data(PyObject* py_object)
 {
 	pydx12_Structure<T>* pydx12_object = (pydx12_Structure<T>*)py_object;
 	return pydx12_object->data;
 }
 
 template<typename T>
-T* pydx12_check(PyObject* py_object)
+T* pydx12_structure_check(PyObject* py_object)
 {
 	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>))
 	{
 		return NULL;
 	}
-	return pydx12_get_data<T>(py_object);
+	return pydx12_structure_get_data<T>(py_object);
+}
+
+template<typename T>
+T* pydx12_com_get_ptr(PyObject* py_object)
+{
+	pydx12_COM<T>* pydx12_object = (pydx12_COM<T>*)py_object;
+	return pydx12_object->com_ptr;
+}
+
+template<typename T>
+T* pydx12_com_check(PyObject* py_object)
+{
+	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>))
+	{
+		return NULL;
+	}
+	return pydx12_com_get_ptr<T>(py_object);
+}
+
+template<typename T>
+T* pydx12_handle_get_ptr(PyObject* py_object)
+{
+	pydx12_HANDLE<T>* pydx12_object = (pydx12_HANDLE<T>*)py_object;
+	return &pydx12_object->handle;
+}
+
+template<typename T>
+T* pydx12_handle_check(PyObject* py_object)
+{
+	if (!PyObject_IsInstance(py_object, (PyObject*)pydx12_get_type<T>))
+	{
+		return NULL;
+	}
+	return pydx12_handle_get_ptr<T>(py_object);
 }
 
 template<typename T>
 void pydx12_com_addref(pydx12_Structure<T>* self, IUnknown* com_ptr)
 {
 	pydx12_Structure<T>* owner = (pydx12_Structure<T>*) (self->data_owner ? self->data_owner : (PyObject*)self);
-	for (size_t i = 0; i < owner->number_of_tracked_coms; i++)
+	for (size_t i = 0; i < owner->number_of_coms; i++)
 	{
-		pydx12_com_track* com_track = &owner->tracked_coms[i];
+		pydx12_com_track* com_track = &owner->coms[i];
 		if (com_track->com_ptr == com_ptr)
 		{
 			com_track->refs++;
@@ -131,9 +172,9 @@ void pydx12_com_addref(pydx12_Structure<T>* self, IUnknown* com_ptr)
 			return;
 		}
 	}
-	for (size_t i = 0; i < owner->number_of_tracked_coms; i++)
+	for (size_t i = 0; i < owner->number_of_coms; i++)
 	{
-		pydx12_com_track* com_track = &owner->tracked_coms[i];
+		pydx12_com_track* com_track = &owner->coms[i];
 		if (com_track->com_ptr == NULL)
 		{
 			com_track->com_ptr = com_ptr;
@@ -143,14 +184,14 @@ void pydx12_com_addref(pydx12_Structure<T>* self, IUnknown* com_ptr)
 		}
 	}
 	owner->number_of_tracked_coms++;
-	pydx12_com_track* new_com_tracked = (pydx12_com_track*)PyMem_Realloc(owner->tracked_coms, sizeof(pydx12_com_track) * owner->number_of_tracked_coms);
+	pydx12_com_track* new_com_tracked = (pydx12_com_track*)PyMem_Realloc(owner->coms, sizeof(pydx12_com_track) * owner->number_of_coms);
 	if (!new_com_tracked)
 	{
 		return;
 	}
-	owner->tracked_coms = new_com_tracked;
-	owner->tracked_coms[owner->number_of_tracked_coms - 1].com_ptr = com_ptr;
-	owner->tracked_coms[owner->number_of_tracked_coms - 1].refs = 1;
+	owner->coms = new_com_tracked;
+	owner->coms[owner->number_of_coms - 1].com_ptr = com_ptr;
+	owner->coms[owner->number_of_coms - 1].refs = 1;
 	com_ptr->AddRef();
 }
 
@@ -171,29 +212,6 @@ void pydx12_com_release(pydx12_Structure<T>* self, IUnknown* com_ptr)
 			return;
 		}
 	}
-}
-
-template<typename T>
-PyObject* pydx12_to_dict(pydx12_Structure<T>* self)
-{
-	PyObject* py_dict = PyDict_New();
-	PyGetSetDef* getset = pydx12_get_type<T>().tp_getset;
-	while (getset->name)\
-	{
-		if (getset->get)\
-		{
-			PyObject* py_value = getset->get((PyObject*)self, getset->closure);
-			if (!py_value)
-			{
-				Py_DECREF(py_dict);
-				return NULL;
-			}
-			PyDict_SetItemString(py_dict, getset->name, py_value);
-			Py_DECREF(py_value);
-		}
-		getset++;
-	}
-	return py_dict;
 }
 
 template<typename T>
@@ -267,24 +285,24 @@ T* pydx12_iter(PyObject* py_object, UINT* list_counter, const bool append_null)
 	*list_counter = 0;
 	while (PyObject* py_item = PyIter_Next(py_iter))
 	{
-		T* item = pydx12_check<T>(py_item);
+		T* item = pydx12_structure_check<T>(py_item);
 		if (!item)
 		{
 			Py_DECREF(py_item);
 			Py_DECREF(py_iter);
 			if (list)
 				PyMem_Free(list);
-			return (t*)PyErr_Format(PyExc_TypeError, "argument must be an iterable of %s", pydx12_get_type_name<T>());
+			return (T*)PyErr_Format(PyExc_TypeError, "argument must be an iterable of %s", pydx12_get_type_name<T>());
 		}
 		(*list_counter)++;
-		T* new_list = (t*)PyMem_Realloc(list, sizeof(T) * (*list_counter));
+		T* new_list = (T*)PyMem_Realloc(list, sizeof(T) * (*list_counter));
 		if (!new_list)
 		{
 			Py_DECREF(py_item);
 			Py_DECREF(py_iter);
 			if (list)
 				PyMem_Free(list);
-			return (t*)PyErr_Format(PyExc_MemoryError, "unable to allocate memory for %s array", pydx12_get_type_name<T>());
+			return (T*)PyErr_Format(PyExc_MemoryError, "unable to allocate memory for %s array", pydx12_get_type_name<T>());
 		}
 		list = new_list;
 		list[(*list_counter) - 1] = *item;
@@ -299,10 +317,10 @@ T* pydx12_iter(PyObject* py_object, UINT* list_counter, const bool append_null)
 		{
 			if (list)
 				PyMem_Free(list);
-			return (t*)PyErr_Format(PyExc_MemoryError, "unable to allocate memory for %s array", pydx12_get_type_name<T>());
+			return (T*)PyErr_Format(PyExc_MemoryError, "unable to allocate memory for %s array", pydx12_get_type_name<T>());
 		}
 		list = new_list;
-		memset(&list[(*list_counter) - 1], 0, sizeof(t));
+		memset(&list[(*list_counter) - 1], 0, sizeof(T));
 	}
 	return list;
 }
@@ -336,11 +354,11 @@ void pydx12_dealloc(pydx12_Structure<T>* self)
 	if (self->chunks)
 		PyMem_Free(self->chunks);
 
-	for (size_t i = 0; i < self->number_of_tracked_coms; i++)
+	for (size_t i = 0; i < self->number_of_coms; i++)
 	{
-		for (size_t j = 0; j < self->tracked_coms[i].refs; j++)
+		for (size_t j = 0; j < self->coms[i].refs; j++)
 		{
-			self->tracked_coms[i].com_ptr->Release();
+			self->coms[i].com_ptr->Release();
 		}
 	}
 
@@ -356,7 +374,7 @@ void pydx12_dealloc(pydx12_Structure<T>* self)
 template<typename T>
 PyObject* pydx12_com_instantiate(T* com_ptr, const bool add_ref)
 {
-	pydx12_Structure<T>* py_object = PyObject_New(pydx12_Structure<T>, pydx12_get_type<T>());
+	pydx12_COM<T>* py_object = PyObject_New(pydx12_COM<T>, pydx12_get_type<T>());
 	if (!py_object)
 	{
 		if (com_ptr && !add_ref)
@@ -364,7 +382,7 @@ PyObject* pydx12_com_instantiate(T* com_ptr, const bool add_ref)
 		return NULL;
 	}
 	char* offset = (char*)py_object;
-	memset(offset + sizeof(PyObject), 0, sizeof(pydx12_Structure<T>) - sizeof(PyObject));
+	memset(offset + sizeof(PyObject), 0, sizeof(pydx12_COM<T>) - sizeof(PyObject));
 	if (com_ptr && add_ref)
 	{
 		com_ptr->AddRef();
@@ -376,7 +394,7 @@ PyObject* pydx12_com_instantiate(T* com_ptr, const bool add_ref)
 template<typename T>
 int pydx12_init(pydx12_Structure<T>* self, PyObject* args, PyObject* kwds)
 {
-	self->data = (t*)PyMem_Calloc(1, sizeof(t));
+	self->data = (T*)PyMem_Calloc(1, sizeof(T));
 	if (!self->data)
 	{
 		return -1;
@@ -476,7 +494,7 @@ PyObject* pydx12_to_bytearray(pydx12_Structure<T>* self)
 }
 
 template<typename T>
-PyObject* pydx12_get_chunks(pydx12_Structure<T> self)
+PyObject* pydx12_get_chunks(pydx12_Structure<T>* self)
 {
 	PyObject* py_list = PyList_New(0);
 	for (size_t i = 0; i < self->number_of_chunks; i++)
@@ -499,7 +517,7 @@ PyObject* pydx12_get_ptr(pydx12_Structure<T>* self)
 }
 
 template<typename T>
-int pydx12_register()
+int pydx12_register(PyObject* m)
 {
 	PyTypeObject* type = pydx12_get_type<T>();
 	if (PyType_Ready(type) < 0)
@@ -549,16 +567,16 @@ int pydx12_com_init(pydx12_COM<T>* self, PyObject* args, PyObject* kwds)
 	{
 		return -1;
 	}
-	IUnknown* unknown = pydx12_IUnknown_check(py_unknown);
+	IUnknown* unknown = pydx12_com_check<IUnknown>(py_unknown);
 	if (!unknown)
 	{
 		PyErr_SetString(PyExc_ValueError, "expected a IUnknown");
 		return -1;
 	}
 	self->com_ptr = NULL;
-	if (unknown->QueryInterface<t>(&self->com_ptr) != S_OK)
+	if (unknown->QueryInterface<T>(&self->com_ptr) != S_OK)
 	{
-		PyErr_SetString(PyExc_ValueError, "QueryInterface<%s> failed", pydx12_get_type_name<T>());
+		PyErr_Format(PyExc_ValueError, "QueryInterface<%s> failed", pydx12_get_type_name<T>());
 		return -1;
 	}
 	return 0;
@@ -569,7 +587,7 @@ PyObject* pydx12_com_richcompare(pydx12_COM<T>* self, PyObject* other, int op)
 {
 	if (op == Py_EQ)
 	{
-		IUnknown* unknown = pydx12_IUnknown_check(other);
+		IUnknown* unknown = pydx12_com_check<IUnknown>(other);
 		if (unknown)
 		{
 			if (self->com_ptr == unknown)

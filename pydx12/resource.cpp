@@ -1,10 +1,5 @@
 #include "pydx12.h"
 
-PYDX12_IMPORT(DXGI_SAMPLE_DESC);
-PYDX12_IMPORT(D3D12_DEPTH_STENCIL_VALUE);
-
-PYDX12_IMPORT_COM(ID3D12Pageable);
-
 PYDX12_TYPE(D3D12_CLEAR_VALUE);
 PYDX12_GETTER_SETTER(D3D12_CLEAR_VALUE, Format, LongLong, DXGI_FORMAT);
 PYDX12_STRUCT_GETTER_SETTER(D3D12_CLEAR_VALUE, DepthStencil, D3D12_DEPTH_STENCIL_VALUE);
@@ -196,7 +191,7 @@ PYDX12_GETSETTERS(D3D12_HEAP_DESC) = {
 	{NULL}  /* Sentinel */
 };
 
-static PyObject* pydx12_ID3D12Resource_Map(pydx12_ID3D12Resource* self, PyObject* args)
+static PyObject* pydx12_ID3D12Resource_Map(pydx12_COM<ID3D12Resource>* self, PyObject* args)
 {
 	UINT sub_resource = 0;
 	PyObject* py_read_range = NULL;
@@ -250,7 +245,7 @@ static PyObject* pydx12_ID3D12Resource_Map(pydx12_ID3D12Resource* self, PyObject
 	return PyWeakref_NewProxy(py_memory_view, NULL);
 }
 
-static PyObject* pydx12_ID3D12Resource_Unmap(pydx12_ID3D12Resource* self, PyObject* args)
+static PyObject* pydx12_ID3D12Resource_Unmap(pydx12_COM<ID3D12Resource>* self, PyObject* args)
 {
 	UINT sub_resource = 0;
 	PyObject* py_written_range;
@@ -269,13 +264,13 @@ static PyObject* pydx12_ID3D12Resource_Unmap(pydx12_ID3D12Resource* self, PyObje
 	Py_RETURN_NONE;
 }
 
-static void pydx12_ID3D12Resource_dealloc_wrapper(pydx12_ID3D12Resource* self)
+static void pydx12_ID3D12Resource_dealloc_wrapper(pydx12_COM<ID3D12Resource>* self)
 {
 	Py_XDECREF(self->memory_view_list);
-	pydx12_ID3D12Resource_dealloc(self);
+	pydx12_com_dealloc<ID3D12Resource>(self);
 }
 
-static PyObject* pydx12_ID3D12Resource_upload(pydx12_ID3D12Resource* self, PyObject* args)
+static PyObject* pydx12_ID3D12Resource_upload(pydx12_COM<ID3D12Resource>* self, PyObject* args)
 {
 	Py_buffer view;
 	UINT sub_resource = 0;
@@ -317,7 +312,7 @@ static PyObject* pydx12_ID3D12Resource_upload(pydx12_ID3D12Resource* self, PyObj
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12Resource_download(pydx12_ID3D12Resource* self, PyObject* args)
+static PyObject* pydx12_ID3D12Resource_download(pydx12_COM<ID3D12Resource>* self, PyObject* args)
 {
 	UINT sub_resource = 0;
 	if (!PyArg_ParseTuple(args, "|I", &sub_resource))
@@ -345,15 +340,15 @@ static PyObject* pydx12_ID3D12Resource_download(pydx12_ID3D12Resource* self, PyO
 	return py_bytes;
 }
 
-static PyObject* pydx12_ID3D12Resource_GetGPUVirtualAddress(pydx12_ID3D12Resource* self, PyObject* args)
+static PyObject* pydx12_ID3D12Resource_GetGPUVirtualAddress(pydx12_COM<ID3D12Resource>* self, PyObject* args)
 {
 	return PyLong_FromUnsignedLongLong(self->com_ptr->GetGPUVirtualAddress());
 }
 
-static PyObject* pydx12_ID3D12Resource_GetDesc(pydx12_ID3D12Resource* self)
+static PyObject* pydx12_ID3D12Resource_GetDesc(pydx12_COM<ID3D12Resource>* self)
 {
 	D3D12_RESOURCE_DESC desc = self->com_ptr->GetDesc();
-	return pydx12_D3D12_RESOURCE_DESC_instantiate(&desc, NULL, NULL);
+	return pydx12_instantiate<D3D12_RESOURCE_DESC>(&desc, NULL, NULL);
 }
 
 PYDX12_METHODS(ID3D12Resource) = {
@@ -390,8 +385,8 @@ int pydx12_init_resource(PyObject* m)
 
 	PYDX12_REGISTER_STRUCT(D3D12_HEAP_DESC);
 
-	pydx12_ID3D12ResourceType.tp_methods = pydx12_ID3D12Resource_methods;
-	pydx12_ID3D12ResourceType.tp_dealloc = (destructor)pydx12_ID3D12Resource_dealloc_wrapper;
+	pydx12_ID3D12Resource_Type.tp_methods = pydx12_ID3D12Resource_methods;
+	pydx12_ID3D12Resource_Type.tp_dealloc = (destructor)pydx12_ID3D12Resource_dealloc_wrapper;
 	PYDX12_REGISTER_COM(ID3D12Resource, ID3D12Pageable);
 
 	PYDX12_ENUM(D3D12_RESOURCE_DIMENSION_UNKNOWN);

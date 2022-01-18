@@ -94,11 +94,11 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_CopyResource(pydx12_COM<ID3D12
 	if (!PyArg_ParseTuple(args, "OO", &py_dst_resource, &py_src_resource))
 		return NULL;
 
-	ID3D12Resource* dst_resource = pydx12_check<ID3D12Resource>(py_dst_resource);
+	ID3D12Resource* dst_resource = pydx12_com_check<ID3D12Resource>(py_dst_resource);
 	if (!dst_resource)
 		return PyErr_Format(PyExc_TypeError, "first argument must be a ID3D12Resource");
 
-	ID3D12Resource* src_resource = pydx12_check<ID3D12Resource>(py_src_resource);
+	ID3D12Resource* src_resource = pydx12_com_check<ID3D12Resource>(py_src_resource);
 	if (!src_resource)
 		return PyErr_Format(PyExc_TypeError, "second argument must be a ID3D12Resource");
 
@@ -143,7 +143,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_ResourceBarrier(pydx12_COM<ID3
 
 	while (PyObject* py_item = PyIter_Next(py_iter))
 	{
-		D3D12_RESOURCE_BARRIER* resource_barrier = pydx12_D3D12_RESOURCE_BARRIER_check(py_item);
+		D3D12_RESOURCE_BARRIER* resource_barrier = pydx12_structure_check<D3D12_RESOURCE_BARRIER>(py_item);
 		if (!resource_barrier)
 		{
 			Py_DECREF(py_item);
@@ -176,7 +176,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_ResourceBarrier(pydx12_COM<ID3
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_ClearRenderTargetView(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_ClearRenderTargetView(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_render_target_view;
 	FLOAT color_rgba[4];
@@ -196,7 +196,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_ClearRenderTargetView(pydx12_I
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_ClearDepthStencilView(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_ClearDepthStencilView(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_depth_stencil_view;
 	D3D12_CLEAR_FLAGS clear_flags;
@@ -218,7 +218,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_ClearDepthStencilView(pydx12_I
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_DrawInstanced(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_DrawInstanced(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT vertex_count_per_instance;
 	UINT instance_count;
@@ -232,7 +232,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_DrawInstanced(pydx12_ID3D12Gra
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_DrawIndexedInstanced(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_DrawIndexedInstanced(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT index_count_per_instance;
 	UINT instance_count;
@@ -247,7 +247,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_DrawIndexedInstanced(pydx12_ID
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_IASetPrimitiveTopology(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_IASetPrimitiveTopology(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	D3D12_PRIMITIVE_TOPOLOGY primitive_topology;
 	if (!PyArg_ParseTuple(args, "L", &primitive_topology))
@@ -258,7 +258,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_IASetPrimitiveTopology(pydx12_
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootSignature(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootSignature(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_root_signature;
 	if (!PyArg_ParseTuple(args, "O", &py_root_signature))
@@ -270,7 +270,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootSignature(pydx1
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootSignature(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootSignature(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_root_signature;
 	if (!PyArg_ParseTuple(args, "O", &py_root_signature))
@@ -282,7 +282,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootSignature(pydx12
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_IASetVertexBuffers(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_IASetVertexBuffers(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT start_slot;
 	PyObject* py_views;
@@ -299,7 +299,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_IASetVertexBuffers(pydx12_ID3D
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_IASetIndexBuffer(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_IASetIndexBuffer(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_view;
 	if (!PyArg_ParseTuple(args, "O", &py_view))
@@ -313,7 +313,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_IASetIndexBuffer(pydx12_ID3D12
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_OMSetRenderTargets(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_OMSetRenderTargets(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_render_target_descriptors;
 	PyObject* py_depth_stencil_descriptor = NULL;
@@ -332,7 +332,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_OMSetRenderTargets(pydx12_ID3D
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetViewports(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetViewports(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_viewports;
 	if (!PyArg_ParseTuple(args, "O", &py_viewports))
@@ -348,7 +348,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetViewports(pydx12_ID3D12Gr
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetScissorRects(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetScissorRects(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_rects;
 	if (!PyArg_ParseTuple(args, "O", &py_rects))
@@ -405,7 +405,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant(p
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT root_parameter_index;
 	PyObject* py_src_data;
@@ -441,7 +441,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(
 	return PyErr_Format(PyExc_ValueError, "unsupported 32bit constant values");
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT root_parameter_index;
 	PyObject* py_base_descriptor;
@@ -455,7 +455,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetComputeRootDescriptorTable(
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT root_parameter_index;
 	D3D12_GPU_VIRTUAL_ADDRESS py_buffer_location;
@@ -467,7 +467,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferV
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootShaderResourceView(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootShaderResourceView(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT root_parameter_index;
 	D3D12_GPU_VIRTUAL_ADDRESS py_buffer_location;
@@ -479,7 +479,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRootShaderResourceV
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_SetDescriptorHeaps(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetDescriptorHeaps(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_descriptor_heaps;
 	if (!PyArg_ParseTuple(args, "O", &py_descriptor_heaps))
@@ -496,7 +496,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_SetDescriptorHeaps(pydx12_ID3D
 
 	while (PyObject* py_item = PyIter_Next(py_iter))
 	{
-		ID3D12DescriptorHeap* descriptor_heap = pydx12_ID3D12DescriptorHeap_check(py_item);
+		ID3D12DescriptorHeap* descriptor_heap = pydx12_com_check<ID3D12DescriptorHeap>(py_item);
 		if (!descriptor_heap)
 		{
 			Py_DECREF(py_item);
@@ -557,7 +557,7 @@ PYDX12_METHODS(ID3D12GraphicsCommandList) = {
 	{NULL}  /* Sentinel */
 };
 
-static PyObject* pydx12_ID3D12CommandQueue_ExecuteCommandLists(pydx12_ID3D12CommandQueue* self, PyObject* args)
+static PyObject* pydx12_ID3D12CommandQueue_ExecuteCommandLists(pydx12_COM<ID3D12CommandQueue>* self, PyObject* args)
 {
 	PyObject* py_list_command_lists;
 	if (!PyArg_ParseTuple(args, "O", &py_list_command_lists))
@@ -574,7 +574,7 @@ static PyObject* pydx12_ID3D12CommandQueue_ExecuteCommandLists(pydx12_ID3D12Comm
 
 	while (PyObject* py_item = PyIter_Next(py_iter))
 	{
-		ID3D12GraphicsCommandList* command_list = pydx12_check<ID3D12GraphicsCommandList>(py_item);
+		ID3D12GraphicsCommandList* command_list = pydx12_com_check<ID3D12GraphicsCommandList>(py_item);
 		if (!command_list)
 		{
 			Py_DECREF(py_item);
@@ -607,7 +607,7 @@ static PyObject* pydx12_ID3D12CommandQueue_ExecuteCommandLists(pydx12_ID3D12Comm
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12CommandQueue_Signal(pydx12_ID3D12CommandQueue* self, PyObject* args)
+static PyObject* pydx12_ID3D12CommandQueue_Signal(pydx12_COM<ID3D12CommandQueue>* self, PyObject* args)
 {
 	PyObject* py_fence;
 	UINT64 value;
@@ -621,7 +621,7 @@ static PyObject* pydx12_ID3D12CommandQueue_Signal(pydx12_ID3D12CommandQueue* sel
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12CommandQueue_GetClockCalibration(pydx12_ID3D12CommandQueue* self)
+static PyObject* pydx12_ID3D12CommandQueue_GetClockCalibration(pydx12_COM<ID3D12CommandQueue>* self)
 {
 	UINT64 gpu_timestamp;
 	UINT64 cpu_timestamp;
@@ -629,7 +629,7 @@ static PyObject* pydx12_ID3D12CommandQueue_GetClockCalibration(pydx12_ID3D12Comm
 	return Py_BuildValue("(KK)", gpu_timestamp, cpu_timestamp);
 }
 
-static PyObject* pydx12_ID3D12CommandQueue_GetTimestampFrequency(pydx12_ID3D12CommandQueue* self)
+static PyObject* pydx12_ID3D12CommandQueue_GetTimestampFrequency(pydx12_COM<ID3D12CommandQueue>* self)
 {
 	UINT64 frequency;
 	PYDX12_COM_CALL_HRESULT(ID3D12CommandQueue, GetTimestampFrequency, &frequency);
@@ -656,7 +656,7 @@ int pydx12_init_queue(PyObject* m)
 	PYDX12_REGISTER_COM(ID3D12CommandAllocator, ID3D12Pageable);
 	PYDX12_REGISTER_COM(ID3D12CommandList, ID3D12DeviceChild);
 
-	pydx12_ID3D12GraphicsCommandListType.tp_methods = pydx12_ID3D12GraphicsCommandList_methods;
+	pydx12_ID3D12GraphicsCommandList_Type.tp_methods = pydx12_ID3D12GraphicsCommandList_methods;
 	PYDX12_REGISTER_COM(ID3D12GraphicsCommandList, ID3D12CommandList);
 
 	PYDX12_ENUM(D3D12_COMMAND_LIST_TYPE_DIRECT);

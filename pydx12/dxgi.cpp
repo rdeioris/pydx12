@@ -1,18 +1,5 @@
 #include "pydx12.h"
 
-PYDX12_IMPORT_COM(IDXGIObject);
-PYDX12_IMPORT_COM(IDXGIAdapter);
-PYDX12_IMPORT_COM(IDXGIAdapter1);
-PYDX12_IMPORT_COM(IDXGISwapChain);
-PYDX12_IMPORT_COM(IDXGISwapChain1);
-PYDX12_IMPORT_COM(IDXGISwapChain2);
-PYDX12_IMPORT_COM(IDXGISwapChain3);
-PYDX12_IMPORT_COM(IDXGISwapChain4);
-PYDX12_IMPORT_COM(ID3D12CommandQueue);
-PYDX12_IMPORT(DXGI_SWAP_CHAIN_DESC1);
-
-PYDX12_IMPORT_HANDLE(Window, HWND);
-
 PYDX12_TYPE_COM(IDXGIFactory);
 PYDX12_TYPE_COM(IDXGIFactory1);
 PYDX12_TYPE_COM(IDXGIFactory2);
@@ -22,7 +9,7 @@ PYDX12_TYPE_COM(IDXGIFactory5);
 PYDX12_TYPE_COM(IDXGIFactory6);
 PYDX12_TYPE_COM(IDXGIFactory7);
 
-static PyObject* pydx12_IDXGIFactory_EnumAdapters(pydx12_IDXGIFactory* self)
+static PyObject* pydx12_IDXGIFactory_EnumAdapters(pydx12_COM<IDXGIFactory>* self)
 {
 	PyObject* py_adapters = PyList_New(0);
 	UINT i = 0;
@@ -30,7 +17,7 @@ static PyObject* pydx12_IDXGIFactory_EnumAdapters(pydx12_IDXGIFactory* self)
 
 	while (self->com_ptr->EnumAdapters(i++, &adapter) != DXGI_ERROR_NOT_FOUND)
 	{
-		PyObject* py_adapter = pydx12_IDXGIAdapter_instantiate(adapter, false);
+		PyObject* py_adapter = pydx12_com_instantiate<IDXGIAdapter>(adapter, false);
 		PyList_Append(py_adapters, py_adapter);
 		Py_DECREF(py_adapter);
 	}
@@ -38,7 +25,7 @@ static PyObject* pydx12_IDXGIFactory_EnumAdapters(pydx12_IDXGIFactory* self)
 	return py_adapters;
 }
 
-static PyObject* pydx12_IDXGIFactory1_EnumAdapters1(pydx12_IDXGIFactory1* self)
+static PyObject* pydx12_IDXGIFactory1_EnumAdapters1(pydx12_COM<IDXGIFactory1>* self)
 {
 	PyObject* py_adapters = PyList_New(0);
 	UINT i = 0;
@@ -46,7 +33,7 @@ static PyObject* pydx12_IDXGIFactory1_EnumAdapters1(pydx12_IDXGIFactory1* self)
 
 	while (self->com_ptr->EnumAdapters1(i++, &adapter) != DXGI_ERROR_NOT_FOUND)
 	{
-		PyObject* py_adapter = pydx12_IDXGIAdapter1_instantiate(adapter, false);
+		PyObject* py_adapter = pydx12_com_instantiate<IDXGIAdapter1>(adapter, false);
 		PyList_Append(py_adapters, py_adapter);
 		Py_DECREF(py_adapter);
 	}
@@ -54,7 +41,7 @@ static PyObject* pydx12_IDXGIFactory1_EnumAdapters1(pydx12_IDXGIFactory1* self)
 	return py_adapters;
 }
 
-static PyObject* pydx12_IDXGIFactory2_CreateSwapChainForHwnd(pydx12_IDXGIFactory2* self, PyObject* args)
+static PyObject* pydx12_IDXGIFactory2_CreateSwapChainForHwnd(pydx12_COM<IDXGIFactory2>* self, PyObject* args)
 {
 	PyObject* py_queue;
 	PyObject* py_handle;
@@ -66,17 +53,26 @@ static PyObject* pydx12_IDXGIFactory2_CreateSwapChainForHwnd(pydx12_IDXGIFactory
 		return NULL;
 
 	PYDX12_ARG_CHECK(ID3D12CommandQueue, queue);
-	PYDX12_ARG_CHECK_HANDLE(Window, HWND, handle);
+	HWND hwnd = NULL;
+	if (PyLong_Check(py_handle))
+	{
+		hwnd = (HWND)PyLong_AsUnsignedLongLong(py_handle);
+	}
+	else
+	{
+		PYDX12_ARG_CHECK_HANDLE(Window, handle);
+		hwnd = handle->hwnd;
+	}
 
 	PYDX12_ARG_CHECK(DXGI_SWAP_CHAIN_DESC1, swap_chain_desc1);
 
 	if (swap_chain_desc1->BufferCount < 1)
 		return PyErr_Format(PyExc_TypeError, "BufferCount in DXGI_SWAP_CHAIN_DESC1 cannot be 0");
 
-	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain4, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, handle, swap_chain_desc1, NULL, NULL);
-	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain3, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, handle, swap_chain_desc1, NULL, NULL);
-	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain2, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, handle, swap_chain_desc1, NULL, NULL);
-	PYDX12_INTERFACE_CREATE_CAST_LAST(IDXGISwapChain1, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, handle, swap_chain_desc1, NULL, NULL);
+	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain4, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, hwnd, swap_chain_desc1, NULL, NULL);
+	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain3, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, hwnd, swap_chain_desc1, NULL, NULL);
+	PYDX12_INTERFACE_CREATE_CAST(IDXGISwapChain2, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, hwnd, swap_chain_desc1, NULL, NULL);
+	PYDX12_INTERFACE_CREATE_CAST_LAST(IDXGISwapChain1, IDXGISwapChain1, self->com_ptr->CreateSwapChainForHwnd, queue, hwnd, swap_chain_desc1, NULL, NULL);
 }
 
 PYDX12_METHODS(IDXGIFactory) = {
@@ -106,12 +102,12 @@ PYDX12_GETSETTERS(DXGI_SAMPLE_DESC) = {
 
 int pydx12_init_dxgi(PyObject* m)
 {
-	pydx12_IDXGIFactoryType.tp_methods = pydx12_IDXGIFactory_methods;
+	pydx12_IDXGIFactory_Type.tp_methods = pydx12_IDXGIFactory_methods;
 	PYDX12_REGISTER_COM(IDXGIFactory, IDXGIObject);
 
 	PYDX12_REGISTER_COM(IDXGIFactory1, IDXGIFactory);
 
-	pydx12_IDXGIFactory2Type.tp_methods = pydx12_IDXGIFactory2_methods;
+	pydx12_IDXGIFactory2_Type.tp_methods = pydx12_IDXGIFactory2_methods;
 	PYDX12_REGISTER_COM(IDXGIFactory2, IDXGIFactory1);
 
 	PYDX12_REGISTER_COM(IDXGIFactory3, IDXGIFactory2);

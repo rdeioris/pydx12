@@ -23,7 +23,7 @@ PYDX12_TYPE_COM(ID3D12DeviceChild);
 PYDX12_TYPE_COM(ID3D12Pageable);
 PYDX12_TYPE_COM(ID3D12Heap);
 
-static PyObject* pydx12_ID3D12Device_CreateCommittedResource(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateCommittedResource(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_heap_properties;
 	D3D12_HEAP_FLAGS py_heap_flags;
@@ -33,10 +33,7 @@ static PyObject* pydx12_ID3D12Device_CreateCommittedResource(pydx12_ID3D12Device
 	if (!PyArg_ParseTuple(args, "OLOL|O", &py_heap_properties, &py_heap_flags, &py_resource_desc, &initial_resource_state, &py_clear_value))
 		return NULL;
 
-	D3D12_HEAP_PROPERTIES* heap_properties = pydx12_D3D12_HEAP_PROPERTIES_check(py_heap_properties);
-	if (!heap_properties)
-		return PyErr_Format(PyExc_TypeError, "first argument must be a D3D12_HEAP_PROPERTIES");
-
+	PYDX12_ARG_CHECK(D3D12_HEAP_PROPERTIES, heap_properties);
 	PYDX12_ARG_CHECK(D3D12_RESOURCE_DESC, resource_desc);
 
 	PYDX12_ARG_CHECK_NONE(D3D12_CLEAR_VALUE, clear_value);
@@ -47,10 +44,10 @@ static PyObject* pydx12_ID3D12Device_CreateCommittedResource(pydx12_ID3D12Device
 		return PyErr_Format(PyExc_ValueError, "unable to create ID3D12Resource");
 	}
 
-	return pydx12_ID3D12Resource_instantiate(resource, false);
+	return pydx12_com_instantiate<ID3D12Resource>(resource, false);
 }
 
-static PyObject* pydx12_ID3D12Device_CreatePlacedResource(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreatePlacedResource(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_heap;
 	UINT64 heap_offset;
@@ -68,10 +65,10 @@ static PyObject* pydx12_ID3D12Device_CreatePlacedResource(pydx12_ID3D12Device* s
 	ID3D12Resource* resource;
 	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreatePlacedResource, heap, heap_offset, resource_desc, initial_resource_state, clear_value, __uuidof(ID3D12Resource), (void**)&resource);
 
-	return PYDX12_COM_INSTANTIATE(ID3D12Resource, resource, false);
+	return pydx12_com_instantiate<ID3D12Resource>(resource, false);
 }
 
-static PyObject* pydx12_ID3D12Device_CreateHeap(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateHeap(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_desc;
 	if (!PyArg_ParseTuple(args, "O", &py_desc))
@@ -82,15 +79,15 @@ static PyObject* pydx12_ID3D12Device_CreateHeap(pydx12_ID3D12Device* self, PyObj
 	ID3D12Heap* heap;
 	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateHeap, desc, __uuidof(ID3D12Heap), (void**)&heap);
 
-	return PYDX12_COM_INSTANTIATE(ID3D12Heap, heap, false);
+	return pydx12_com_instantiate<ID3D12Heap>(heap, false);
 }
 
-static PyObject* pydx12_ID3D12Device_GetAdapterLuid(pydx12_ID3D12Device* self)
+static PyObject* pydx12_ID3D12Device_GetAdapterLuid(pydx12_COM<ID3D12Device>* self)
 {
-	return pydx12_LUID_instantiate(&self->com_ptr->GetAdapterLuid(), NULL, NULL);
+	return pydx12_instantiate<LUID>(&self->com_ptr->GetAdapterLuid(), NULL, NULL);
 }
 
-static PyObject* pydx12_ID3D12Device_CreateCommandAllocator(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateCommandAllocator(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	D3D12_COMMAND_LIST_TYPE type;
 	if (!PyArg_ParseTuple(args, "L", &type))
@@ -102,18 +99,16 @@ static PyObject* pydx12_ID3D12Device_CreateCommandAllocator(pydx12_ID3D12Device*
 		return PyErr_Format(PyExc_ValueError, "unable to create ID3D12CommandAllocator");
 	}
 
-	return pydx12_ID3D12CommandAllocator_instantiate(allocator, false);
+	return pydx12_com_instantiate<ID3D12CommandAllocator>(allocator, false);
 }
 
-static PyObject* pydx12_ID3D12Device_CreateCommandQueue(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateCommandQueue(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_command_queue_desc;
 	if (!PyArg_ParseTuple(args, "O", &py_command_queue_desc))
 		return NULL;
 
-	D3D12_COMMAND_QUEUE_DESC* command_queue_desc = pydx12_D3D12_COMMAND_QUEUE_DESC_check(py_command_queue_desc);
-	if (!command_queue_desc)
-		return PyErr_Format(PyExc_TypeError, "first argument must be a D3D12_COMMAND_QUEUE_DESC");
+	PYDX12_ARG_CHECK(D3D12_COMMAND_QUEUE_DESC, command_queue_desc);
 
 	ID3D12CommandQueue* queue;
 	if (self->com_ptr->CreateCommandQueue(command_queue_desc, __uuidof(ID3D12CommandQueue), (void**)&queue) != S_OK)
@@ -121,10 +116,10 @@ static PyObject* pydx12_ID3D12Device_CreateCommandQueue(pydx12_ID3D12Device* sel
 		return PyErr_Format(PyExc_ValueError, "unable to create ID3D12CommandQueue");
 	}
 
-	return pydx12_ID3D12CommandQueue_instantiate(queue, false);
+	return pydx12_com_instantiate<ID3D12CommandQueue>(queue, false);
 }
 
-static PyObject* pydx12_ID3D12Device_CreateCommandList(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateCommandList(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	UINT node_mask;
 	D3D12_COMMAND_LIST_TYPE type;
@@ -139,10 +134,10 @@ static PyObject* pydx12_ID3D12Device_CreateCommandList(pydx12_ID3D12Device* self
 	ID3D12GraphicsCommandList* command_list;
 	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateCommandList, node_mask, type, command_allocator, initial_state, __uuidof(ID3D12GraphicsCommandList), (void**)&command_list);
 
-	return pydx12_ID3D12GraphicsCommandList_instantiate(command_list, false);
+	return pydx12_com_instantiate<ID3D12GraphicsCommandList>(command_list, false);
 }
 
-static PyObject* pydx12_ID3D12Device_CreateFence(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateFence(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	UINT64 initial_value = 0;
 	D3D12_FENCE_FLAGS flags = D3D12_FENCE_FLAG_NONE;
@@ -152,10 +147,10 @@ static PyObject* pydx12_ID3D12Device_CreateFence(pydx12_ID3D12Device* self, PyOb
 	ID3D12Fence* fence;
 	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateFence, initial_value, flags, __uuidof(ID3D12Fence), (void**)&fence);
 
-	return pydx12_ID3D12Fence_instantiate(fence, false);
+	return pydx12_com_instantiate<ID3D12Fence>(fence, false);
 }
 
-static PyObject* pydx12_ID3D12Device_CreateDescriptorHeap(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateDescriptorHeap(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_descriptor_heap_desc;
 	if (!PyArg_ParseTuple(args, "O", &py_descriptor_heap_desc))
@@ -169,7 +164,7 @@ static PyObject* pydx12_ID3D12Device_CreateDescriptorHeap(pydx12_ID3D12Device* s
 	return pydx12_com_instantiate<ID3D12DescriptorHeap>(descriptor_heap, false);
 }
 
-static PyObject* pydx12_ID3D12Device_CreateShaderResourceView(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateShaderResourceView(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_resource;
 	PyObject* py_shader_resource_view_desc;
@@ -186,7 +181,7 @@ static PyObject* pydx12_ID3D12Device_CreateShaderResourceView(pydx12_ID3D12Devic
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12Device_CreateUnorderedAccessView(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateUnorderedAccessView(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_resource;
 	PyObject* py_counter_resource;
@@ -205,7 +200,7 @@ static PyObject* pydx12_ID3D12Device_CreateUnorderedAccessView(pydx12_ID3D12Devi
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12Device_CreateConstantBufferView(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateConstantBufferView(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_constant_buffer_view_desc;
 	PyObject* py_dest_descriptor;
@@ -220,7 +215,7 @@ static PyObject* pydx12_ID3D12Device_CreateConstantBufferView(pydx12_ID3D12Devic
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12Device_CreateDepthStencilView(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateDepthStencilView(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_resource;
 	PyObject* py_depth_stencil_view_desc;
@@ -237,7 +232,7 @@ static PyObject* pydx12_ID3D12Device_CreateDepthStencilView(pydx12_ID3D12Device*
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12Device_CreateRenderTargetView(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateRenderTargetView(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_resource;
 	PyObject* py_render_target_view_desc;
@@ -254,7 +249,7 @@ static PyObject* pydx12_ID3D12Device_CreateRenderTargetView(pydx12_ID3D12Device*
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12Device_CreateRootSignature(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateRootSignature(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	UINT node_mask;
 	Py_buffer view;
@@ -268,10 +263,10 @@ static PyObject* pydx12_ID3D12Device_CreateRootSignature(pydx12_ID3D12Device* se
 	{
 		return PyErr_Format(PyExc_Exception, "ID3D12Device::CreateRootSignature");
 	}
-	return PYDX12_COM_INSTANTIATE(ID3D12RootSignature, root_signature, false);
+	return pydx12_com_instantiate<ID3D12RootSignature>(root_signature, false);
 }
 
-static PyObject* pydx12_ID3D12Device_CreateGraphicsPipelineState(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateGraphicsPipelineState(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_desc;
 	if (!PyArg_ParseTuple(args, "O", &py_desc))
@@ -282,10 +277,10 @@ static PyObject* pydx12_ID3D12Device_CreateGraphicsPipelineState(pydx12_ID3D12De
 	ID3D12PipelineState* pipeline_state;
 	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateGraphicsPipelineState, desc, __uuidof(ID3D12PipelineState), (void**)&pipeline_state);
 
-	return PYDX12_COM_INSTANTIATE(ID3D12PipelineState, pipeline_state, false);
+	return pydx12_com_instantiate<ID3D12PipelineState>(pipeline_state, false);
 }
 
-static PyObject* pydx12_ID3D12Device_GetNodeCount(pydx12_ID3D12Device* self)
+static PyObject* pydx12_ID3D12Device_GetNodeCount(pydx12_COM<ID3D12Device>* self)
 {
 	return PyLong_FromUnsignedLong(self->com_ptr->GetNodeCount());
 }
@@ -327,7 +322,7 @@ static PyObject* pydx12_ID3D12Device_GetCopyableFootprints(pydx12_COM<ID3D12Devi
 		PyTuple_SetItem(py_num_rows, i, PyLong_FromUnsignedLong(num_rows[i]));
 		PyTuple_SetItem(py_row_size_in_bytes, i, PyLong_FromUnsignedLongLong(row_size_in_bytes[i]));
 	}
-	PyObject* py_ret = Py_BuildValue("(NNNK)", pydx12_D3D12_PLACED_SUBRESOURCE_FOOTPRINT_instantiate(&layouts, NULL, NULL), py_num_rows, py_row_size_in_bytes, total_bytes);
+	PyObject* py_ret = Py_BuildValue("(NNNK)", pydx12_instantiate<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(&layouts, NULL, NULL), py_num_rows, py_row_size_in_bytes, total_bytes);
 	PyMem_Free(num_rows);
 	PyMem_Free(row_size_in_bytes);
 	return py_ret;
@@ -344,7 +339,7 @@ static PyObject* pydx12_ID3D12Device_CreateComputePipelineState(pydx12_COM<ID3D1
 	ID3D12PipelineState* pipeline_state;
 	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateComputePipelineState, desc, __uuidof(ID3D12PipelineState), (void**)&pipeline_state);
 
-	return PYDX12_COM_INSTANTIATE(ID3D12PipelineState, pipeline_state, false);
+	return pydx12_com_instantiate<ID3D12PipelineState>(pipeline_state, false);
 }
 
 PYDX12_METHODS(ID3D12Device) = {
@@ -370,7 +365,7 @@ PYDX12_METHODS(ID3D12Device) = {
 	{NULL}  /* Sentinel */
 };
 
-static PyObject* pydx12_ID3D12Device5_CreateStateObject(pydx12_ID3D12Device5* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device5_CreateStateObject(pydx12_COM<ID3D12Device5>* self, PyObject* args)
 {
 	PyObject* py_desc;
 	if (!PyArg_ParseTuple(args, "O", &py_desc))
@@ -390,7 +385,7 @@ static PyObject* pydx12_ID3D12Device5_CreateStateObject(pydx12_ID3D12Device5* se
 
 	printf("CALLED CreateStateObject %p\n", state_object);
 
-	return PYDX12_COM_INSTANTIATE(ID3D12StateObject, state_object, false);
+	return pydx12_com_instantiate<ID3D12StateObject>(state_object, false);
 }
 
 PYDX12_METHODS(ID3D12Device5) = {
@@ -399,12 +394,12 @@ PYDX12_METHODS(ID3D12Device5) = {
 };
 
 
-static PyObject* pydx12_ID3D12InfoQueue_GetNumStoredMessages(pydx12_ID3D12InfoQueue* self, PyObject* args)
+static PyObject* pydx12_ID3D12InfoQueue_GetNumStoredMessages(pydx12_COM<ID3D12InfoQueue>* self, PyObject* args)
 {
 	return PyLong_FromUnsignedLongLong(self->com_ptr->GetNumStoredMessages());
 }
 
-static PyObject* pydx12_ID3D12InfoQueue_GetMessage(pydx12_ID3D12InfoQueue* self, PyObject* args)
+static PyObject* pydx12_ID3D12InfoQueue_GetMessage(pydx12_COM<ID3D12InfoQueue>* self, PyObject* args)
 {
 	UINT64 message_index;
 	if (!PyArg_ParseTuple(args, "K", &message_index))
@@ -422,13 +417,13 @@ static PyObject* pydx12_ID3D12InfoQueue_GetMessage(pydx12_ID3D12InfoQueue* self,
 		return PyErr_Format(PyExc_MemoryError, "unable to allocate D3D12_MESSAGE");
 	}
 
-	PyObject* py_message = pydx12_D3D12_MESSAGE_instantiate_with_size(NULL, NULL, NULL, message_len);
+	PyObject* py_message = pydx12_instantiate_with_size<D3D12_MESSAGE>(NULL, NULL, NULL, message_len);
 	if (!py_message)
 	{
 		return PyErr_Format(PyExc_MemoryError, "unable to allocate D3D12_MESSAGE");
 	}
 
-	D3D12_MESSAGE* message = pydx12_D3D12_MESSAGE_get_data(py_message);
+	D3D12_MESSAGE* message = pydx12_structure_get_data<D3D12_MESSAGE>(py_message);
 
 	if (self->com_ptr->GetMessage(message_index, message, &message_len) != S_OK)
 	{
@@ -439,7 +434,7 @@ static PyObject* pydx12_ID3D12InfoQueue_GetMessage(pydx12_ID3D12InfoQueue* self,
 	return py_message;
 }
 
-static PyObject* pydx12_ID3D12InfoQueue_ClearStoredMessages(pydx12_ID3D12InfoQueue* self, PyObject* args)
+static PyObject* pydx12_ID3D12InfoQueue_ClearStoredMessages(pydx12_COM<ID3D12InfoQueue>* self, PyObject* args)
 {
 	self->com_ptr->ClearStoredMessages();
 	Py_RETURN_NONE;
@@ -454,14 +449,14 @@ PYDX12_METHODS(ID3D12InfoQueue) = {
 
 int pydx12_init_device(PyObject* m)
 {
-	pydx12_ID3D12DeviceType.tp_methods = pydx12_ID3D12Device_methods;
+	pydx12_ID3D12Device_Type.tp_methods = pydx12_ID3D12Device_methods;
 	PYDX12_REGISTER_COM(ID3D12Device, ID3D12Object);
 	PYDX12_REGISTER_COM(ID3D12Device1, ID3D12Device);
 	PYDX12_REGISTER_COM(ID3D12Device2, ID3D12Device1);
 	PYDX12_REGISTER_COM(ID3D12Device3, ID3D12Device2);
 	PYDX12_REGISTER_COM(ID3D12Device4, ID3D12Device3);
 
-	pydx12_ID3D12Device5Type.tp_methods = pydx12_ID3D12Device5_methods;
+	pydx12_ID3D12Device5_Type.tp_methods = pydx12_ID3D12Device5_methods;
 	PYDX12_REGISTER_COM(ID3D12Device5, ID3D12Device4);
 	PYDX12_REGISTER_COM(ID3D12Device6, ID3D12Device5);
 	PYDX12_REGISTER_COM(ID3D12Device7, ID3D12Device6);
@@ -471,7 +466,7 @@ int pydx12_init_device(PyObject* m)
 	PYDX12_REGISTER_COM(ID3D12DeviceChild, ID3D12Object);
 	PYDX12_REGISTER_COM(ID3D12Pageable, ID3D12DeviceChild);
 
-	pydx12_ID3D12InfoQueueType.tp_methods = pydx12_ID3D12InfoQueue_methods;
+	pydx12_ID3D12InfoQueue_Type.tp_methods = pydx12_ID3D12InfoQueue_methods;
 	PYDX12_REGISTER_COM(ID3D12InfoQueue, IUnknown);
 
 	PYDX12_REGISTER_COM(ID3D12Heap, ID3D12Pageable);
