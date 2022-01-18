@@ -1,22 +1,5 @@
 #include "pydx12.h"
 
-PYDX12_IMPORT(D3D12_TEXTURE_COPY_LOCATION);
-PYDX12_IMPORT(D3D12_RESOURCE_BARRIER);
-PYDX12_IMPORT(D3D12_CPU_DESCRIPTOR_HANDLE);
-PYDX12_IMPORT(D3D12_GPU_DESCRIPTOR_HANDLE);
-PYDX12_IMPORT(D3D12_VERTEX_BUFFER_VIEW);
-PYDX12_IMPORT(D3D12_INDEX_BUFFER_VIEW);
-PYDX12_IMPORT(D3D12_STREAM_OUTPUT_BUFFER_VIEW);
-PYDX12_IMPORT(D3D12_VIEWPORT);
-
-PYDX12_IMPORT_COM(ID3D12Resource);
-PYDX12_IMPORT_COM(ID3D12Pageable);
-PYDX12_IMPORT_COM(ID3D12DeviceChild);
-PYDX12_IMPORT_COM(ID3D12Fence);
-PYDX12_IMPORT_COM(ID3D12PipelineState);
-PYDX12_IMPORT_COM(ID3D12RootSignature);
-PYDX12_IMPORT_COM(ID3D12DescriptorHeap);
-
 PYDX12_TYPE(D3D12_COMMAND_QUEUE_DESC);
 PYDX12_GETTER_SETTER(D3D12_COMMAND_QUEUE_DESC, Type, LongLong, D3D12_COMMAND_LIST_TYPE);
 PYDX12_GETTER_SETTER(D3D12_COMMAND_QUEUE_DESC, Priority, Long, INT);
@@ -67,7 +50,7 @@ PYDX12_TYPE_COM(ID3D12CommandAllocator);
 PYDX12_TYPE_COM(ID3D12CommandList);
 PYDX12_TYPE_COM(ID3D12GraphicsCommandList);
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_Reset(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_Reset(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_command_allocator;
 	PyObject* py_initial_state = NULL;
@@ -82,7 +65,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_Reset(pydx12_ID3D12GraphicsCom
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_Dispatch(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_Dispatch(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT ThreadGroupCountX;
 	UINT ThreadGroupCountY;
@@ -94,7 +77,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_Dispatch(pydx12_ID3D12Graphics
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_Close(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_Close(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	if (self->com_ptr->Close() != S_OK)
 	{
@@ -104,18 +87,18 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_Close(pydx12_ID3D12GraphicsCom
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_CopyResource(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_CopyResource(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_dst_resource;
 	PyObject* py_src_resource;
 	if (!PyArg_ParseTuple(args, "OO", &py_dst_resource, &py_src_resource))
 		return NULL;
 
-	ID3D12Resource* dst_resource = pydx12_ID3D12Resource_check(py_dst_resource);
+	ID3D12Resource* dst_resource = pydx12_check<ID3D12Resource>(py_dst_resource);
 	if (!dst_resource)
 		return PyErr_Format(PyExc_TypeError, "first argument must be a ID3D12Resource");
 
-	ID3D12Resource* src_resource = pydx12_ID3D12Resource_check(py_src_resource);
+	ID3D12Resource* src_resource = pydx12_check<ID3D12Resource>(py_src_resource);
 	if (!src_resource)
 		return PyErr_Format(PyExc_TypeError, "second argument must be a ID3D12Resource");
 
@@ -123,7 +106,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_CopyResource(pydx12_ID3D12Grap
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_CopyTextureRegion(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_CopyTextureRegion(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_dst;
 	UINT dst_x;
@@ -143,7 +126,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_CopyTextureRegion(pydx12_ID3D1
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_ResourceBarrier(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_ResourceBarrier(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	PyObject* py_list_resource_barriers;
 	if (!PyArg_ParseTuple(args, "O", &py_list_resource_barriers))
@@ -382,7 +365,7 @@ static PyObject* pydx12_ID3D12GraphicsCommandList_RSSetScissorRects(pydx12_ID3D1
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant(pydx12_ID3D12GraphicsCommandList* self, PyObject* args)
+static PyObject* pydx12_ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstant(pydx12_COM<ID3D12GraphicsCommandList>* self, PyObject* args)
 {
 	UINT root_parameter_index;
 	PyObject* py_src_data;
@@ -591,7 +574,7 @@ static PyObject* pydx12_ID3D12CommandQueue_ExecuteCommandLists(pydx12_ID3D12Comm
 
 	while (PyObject* py_item = PyIter_Next(py_iter))
 	{
-		ID3D12GraphicsCommandList* command_list = pydx12_ID3D12GraphicsCommandList_check(py_item);
+		ID3D12GraphicsCommandList* command_list = pydx12_check<ID3D12GraphicsCommandList>(py_item);
 		if (!command_list)
 		{
 			Py_DECREF(py_item);
@@ -667,7 +650,7 @@ int pydx12_init_queue(PyObject* m)
 	PYDX12_REGISTER_STRUCT(D3D12_BOX);
 	PYDX12_REGISTER_STRUCT(D3D12_RECT);
 
-	pydx12_ID3D12CommandQueueType.tp_methods = pydx12_ID3D12CommandQueue_methods;
+	pydx12_ID3D12CommandQueue_Type.tp_methods = pydx12_ID3D12CommandQueue_methods;
 	PYDX12_REGISTER_COM(ID3D12CommandQueue, ID3D12Pageable);
 
 	PYDX12_REGISTER_COM(ID3D12CommandAllocator, ID3D12Pageable);

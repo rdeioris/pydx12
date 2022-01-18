@@ -54,7 +54,7 @@ PYDX12_GETSETTERS(XAUDIO2_VOICE_STATE) = {
 	{ NULL }  /* Sentinel */
 };
 
-static PyObject* pydx12_IXAudio2_CreateMasteringVoice(pydx12_IXAudio2* self, PyObject* args)
+static PyObject* pydx12_IXAudio2_CreateMasteringVoice(pydx12_COM<IXAudio2>* self, PyObject* args)
 {
 	UINT32 input_channels = 0;
 	UINT32 input_sample_rate = 0;
@@ -70,7 +70,7 @@ static PyObject* pydx12_IXAudio2_CreateMasteringVoice(pydx12_IXAudio2* self, PyO
 	PYDX12_HANDLE_NEW_WITH_COM(IXAudio2MasteringVoice, mastering_voice, DestroyVoice, xaudio2);
 }
 
-static PyObject* pydx12_IXAudio2_CreateSourceVoice(pydx12_IXAudio2* self, PyObject* args)
+static PyObject* pydx12_IXAudio2_CreateSourceVoice(pydx12_COM<IXAudio2>* self, PyObject* args)
 {
 	PyObject* py_source_format;
 	UINT32 flags = 0;
@@ -165,7 +165,7 @@ static PyObject* pydx12_IXAudio2SourceVoice_GetState(pydx12_IXAudio2SourceVoice*
 		return NULL;
 	XAUDIO2_VOICE_STATE voice_state;
 	self->handle->GetState(&voice_state, flags);
-	return pydx12_XAUDIO2_VOICE_STATE_instantiate(&voice_state, NULL, NULL);
+	return pydx12_instantiate<XAUDIO2_VOICE_STATE>(&voice_state, NULL, NULL);
 }
 
 PYDX12_METHODS(IXAudio2SourceVoice) = {
@@ -180,14 +180,14 @@ PYDX12_METHODS(IXAudio2SourceVoice) = {
 
 int pydx12_init_audio(PyObject* m)
 {
-	pydx12_IXAudio2Type.tp_methods = pydx12_IXAudio2_methods;
+	pydx12_IXAudio2_Type.tp_methods = pydx12_IXAudio2_methods;
 	PYDX12_REGISTER_COM(IXAudio2, IUnknown);
 
 	PYDX12_REGISTER_HANDLE(IXAudio2Voice);
 
 	PYDX12_REGISTER_SUBHANDLE(IXAudio2MasteringVoice, IXAudio2Voice);
 
-	pydx12_IXAudio2SourceVoiceType.tp_methods = pydx12_IXAudio2SourceVoice_methods;
+	pydx12_IXAudio2SourceVoice_Type.tp_methods = pydx12_IXAudio2SourceVoice_methods;
 	PYDX12_REGISTER_SUBHANDLE(IXAudio2SourceVoice, IXAudio2Voice);
 
 	PYDX12_REGISTER_STRUCT(WAVEFORMATEX);

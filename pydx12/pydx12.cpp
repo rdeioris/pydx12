@@ -1,32 +1,6 @@
 #include "pydx12.h"
 #include <pathcch.h>
 
-PYDX12_IMPORT_COM(IDXGIAdapter);
-PYDX12_IMPORT_COM(IDXGIFactory);
-PYDX12_IMPORT_COM(IDXGIFactory1);
-PYDX12_IMPORT_COM(IDXGIFactory2);
-PYDX12_IMPORT_COM(IDXGIFactory3);
-PYDX12_IMPORT_COM(IDXGIFactory4);
-PYDX12_IMPORT_COM(IDXGIFactory5);
-PYDX12_IMPORT_COM(IDXGIFactory6);
-PYDX12_IMPORT_COM(IDXGIFactory7);
-PYDX12_IMPORT_COM(ID3D12Device);
-PYDX12_IMPORT_COM(ID3D12Device1);
-PYDX12_IMPORT_COM(ID3D12Device2);
-PYDX12_IMPORT_COM(ID3D12Device3);
-PYDX12_IMPORT_COM(ID3D12Device4);
-PYDX12_IMPORT_COM(ID3D12Device5);
-PYDX12_IMPORT_COM(ID3D12Device6);
-PYDX12_IMPORT_COM(ID3D12Device7);
-PYDX12_IMPORT_COM(ID3D12Device8);
-PYDX12_IMPORT_COM(ID3DBlob);
-PYDX12_IMPORT_COM(IXAudio2);
-PYDX12_IMPORT_COM(IDxcLibrary);
-PYDX12_IMPORT_COM(IDxcCompiler);
-
-PYDX12_IMPORT(D3D12_VERSIONED_ROOT_SIGNATURE_DESC);
-PYDX12_IMPORT(D3D_SHADER_MACRO);
-
 int pydx12_init_dxgi(PyObject* m);
 int pydx12_init_adapter(PyObject* m);
 int pydx12_init_luid(PyObject* m);
@@ -105,7 +79,7 @@ static PyObject* pydx12_XAudio2Create(PyObject* self, PyObject* args)
 	IXAudio2* xaudio2;
 	PYDX12_CALL_HRESULT(XAudio2Create, &xaudio2, flags, processor);
 
-	return PYDX12_COM_INSTANTIATE(IXAudio2, xaudio2, false);
+	return pydx12_com_instantiate<IXAudio2>(xaudio2, false);
 }
 
 static PyObject* pydx12_D3D12CreateDevice(PyObject* self, PyObject* args)
@@ -116,7 +90,7 @@ static PyObject* pydx12_D3D12CreateDevice(PyObject* self, PyObject* args)
 	if (!PyArg_ParseTuple(args, "O|L", &py_adapter, &feature_level))
 		return nullptr;
 
-	IDXGIAdapter* adapter = pydx12_IDXGIAdapter_check(py_adapter);
+	IDXGIAdapter* adapter = pydx12_check<IDXGIAdapter>(py_adapter);
 	if (!adapter)
 		return PyErr_Format(PyExc_TypeError, "first argument must be an IDXGIAdapter");
 
@@ -178,7 +152,7 @@ static PyObject* pydx12_D3DCompile(PyObject* self, PyObject* args)
 	if (defines)
 		PyMem_Free(defines);
 
-	return PYDX12_COM_INSTANTIATE(ID3DBlob, code, false);
+	return pydx12_com_instantiate<ID3DBlob>(code, false);
 }
 
 static PyObject* pydx12_D3D12SerializeVersionedRootSignature(PyObject* self, PyObject* args)
@@ -204,7 +178,7 @@ static PyObject* pydx12_D3D12SerializeVersionedRootSignature(PyObject* self, PyO
 		return PyErr_Format(PyExc_ValueError, "unable to create the root signature");
 	}
 
-	return PYDX12_COM_INSTANTIATE(ID3DBlob, blob, false);
+	return pydx12_com_instantiate<ID3DBlob>(blob, false);
 }
 
 static PyObject* pydx12_D3D12GetDebugInterface(PyObject* self)
@@ -212,7 +186,7 @@ static PyObject* pydx12_D3D12GetDebugInterface(PyObject* self)
 	ID3D12Debug* debug;
 	D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&debug);
 
-	return PYDX12_COM_INSTANTIATE(ID3D12Debug, debug, false);
+	return pydx12_com_instantiate<ID3D12Debug>(debug, false);
 }
 
 static void pydx12_Event_dealloc(pydx12_Event* self)\
@@ -536,13 +510,13 @@ static PyObject* pydx12_DxcCreateInstance(PyObject* self, PyObject* args)
 		return PyErr_Format(PyExc_ValueError, "expected a type object");
 	}
 
-	if ((PyTypeObject*)py_type == pydx12_IDxcLibrary_get_type())
+	if ((PyTypeObject*)py_type == pydx12_get_type<IDxcLibrary>())
 	{
 		PYDX12_INTERFACE_CREATE_LAST(IDxcLibrary, DxcCreateInstanceLazy, CLSID_DxcLibrary);
 	}
 
 
-	if ((PyTypeObject*)py_type == pydx12_IDxcCompiler_get_type())
+	if ((PyTypeObject*)py_type == pydx12_get_type<IDxcCompiler>())
 	{
 		PYDX12_INTERFACE_CREATE_LAST(IDxcCompiler, DxcCreateInstanceLazy, CLSID_DxcCompiler);
 	}
@@ -575,7 +549,7 @@ static struct PyModuleDef pydx12_module =
 	pydx12_methods
 };
 
-static PyObject* pydx12_IUnknown_get_ptr(pydx12_IUnknown* self)
+static PyObject* pydx12_IUnknown_get_ptr(pydx12_COM<IUnknown>* self)
 {
 	return PyLong_FromUnsignedLongLong((unsigned long long)self->com_ptr);
 }
@@ -586,7 +560,7 @@ PYDX12_METHODS(IUnknown) = {
 	{NULL}  /* Sentinel */
 };
 
-static PyObject* pydx12_ID3D12Object_SetName(pydx12_ID3D12Object* self, PyObject* args)
+static PyObject* pydx12_ID3D12Object_SetName(pydx12_COM<ID3D12Object>* self, PyObject* args)
 {
 	PyObject* py_name;
 	if (!PyArg_ParseTuple(args, "O", &py_name))
@@ -606,7 +580,7 @@ PYDX12_METHODS(ID3D12Object) = {
 };
 
 
-static PyObject* pydx12_ID3D12Debug_EnableDebugLayer(pydx12_ID3D12Debug* self)
+static PyObject* pydx12_ID3D12Debug_EnableDebugLayer(pydx12_COM<ID3D12Debug>* self)
 {
 	PYDX12_COM_CALL(EnableDebugLayer);
 	Py_RETURN_NONE;
@@ -676,21 +650,21 @@ static int pydx12_init_base(PyObject* m)
 		return -1;
 	}
 
-	pydx12_EventType.tp_methods = pydx12_Event_methods;
+	pydx12_Event_Type.tp_methods = pydx12_Event_methods;
 	PYDX12_REGISTER_HANDLE(Event);
 
-	pydx12_WindowType.tp_methods = pydx12_Window_methods;
+	pydx12_Window_Type.tp_methods = pydx12_Window_methods;
 	PYDX12_REGISTER_HANDLE(Window);
 
-	pydx12_IUnknownType.tp_methods = pydx12_IUnknown_methods;
+	pydx12_IUnknown_Type.tp_methods = pydx12_IUnknown_methods;
 	PYDX12_REGISTER_COM_BASE(IUnknown);
 
 	PYDX12_REGISTER_COM(IDXGIObject, IUnknown);
 
-	pydx12_ID3D12DebugType.tp_methods = pydx12_ID3D12Debug_methods;
+	pydx12_ID3D12Debug_Type.tp_methods = pydx12_ID3D12Debug_methods;
 	PYDX12_REGISTER_COM(ID3D12Debug, IUnknown);
 
-	pydx12_ID3D12ObjectType.tp_methods = pydx12_ID3D12Object_methods;
+	pydx12_ID3D12Object_Type.tp_methods = pydx12_ID3D12Object_methods;
 	PYDX12_REGISTER_COM(ID3D12Object, IUnknown);
 	PYDX12_REGISTER_COM(IDXGIDeviceSubObject, IDXGIObject);
 

@@ -54,24 +54,18 @@ PYDX12_GETSETTERS(DXGI_ADAPTER_DESC1) = {
 PYDX12_TYPE_COM(IDXGIAdapter);
 PYDX12_TYPE_COM(IDXGIAdapter1);
 
-static PyObject* pydx12_IDXGIAdapter_GetDesc(pydx12_IDXGIAdapter* self, void* closure)
+static PyObject* pydx12_IDXGIAdapter_GetDesc(pydx12_COM<IDXGIAdapter>* self)
 {
 	DXGI_ADAPTER_DESC desc;
-	if (self->com_ptr->GetDesc(&desc) != S_OK)
-	{
-		Py_RETURN_NONE;
-	}
-	return pydx12_DXGI_ADAPTER_DESC_instantiate(&desc, NULL, NULL);
+	PYDX12_COM_CALL_HRESULT(IDXGIAdapter, GetDesc, &desc);
+	return pydx12_instantiate<DXGI_ADAPTER_DESC>(&desc, NULL, NULL);
 }
 
-static PyObject* pydx12_IDXGIAdapter_GetDesc1(pydx12_IDXGIAdapter1* self, void* closure)
+static PyObject* pydx12_IDXGIAdapter1_GetDesc1(pydx12_COM<IDXGIAdapter1>* self)
 {
 	DXGI_ADAPTER_DESC1 desc;
-	if (self->com_ptr->GetDesc1(&desc) != S_OK)
-	{
-		Py_RETURN_NONE;
-	}
-	return pydx12_DXGI_ADAPTER_DESC1_instantiate(&desc, NULL, NULL);
+	PYDX12_COM_CALL_HRESULT(IDXGIAdapter1, GetDesc1, &desc);
+	return pydx12_instantiate<DXGI_ADAPTER_DESC1>(&desc, NULL, NULL);
 }
 
 PYDX12_METHODS(IDXGIAdapter) = {
@@ -80,16 +74,16 @@ PYDX12_METHODS(IDXGIAdapter) = {
 };
 
 PYDX12_METHODS(IDXGIAdapter1) = {
-	{"GetDesc1", (PyCFunction)pydx12_IDXGIAdapter_GetDesc1, METH_NOARGS, "Describes an adapter (or video card) using DXGI 1.1"},
+	{"GetDesc1", (PyCFunction)pydx12_IDXGIAdapter1_GetDesc1, METH_NOARGS, "Gets a DXGI 1.1 description of an adapter (or video card)"},
 	{NULL}  /* Sentinel */
 };
 
 int pydx12_init_adapter(PyObject* m)
 {
-	pydx12_IDXGIAdapterType.tp_methods = pydx12_IDXGIAdapter_methods;
+	pydx12_IDXGIAdapter_Type.tp_methods = pydx12_IDXGIAdapter_methods;
 	PYDX12_REGISTER_COM(IDXGIAdapter, IDXGIObject);
 
-	pydx12_IDXGIAdapterType.tp_methods = pydx12_IDXGIAdapter1_methods;
+	pydx12_IDXGIAdapter_Type.tp_methods = pydx12_IDXGIAdapter1_methods;
 	PYDX12_REGISTER_COM(IDXGIAdapter1, IDXGIAdapter);
 
 	PYDX12_REGISTER_STRUCT(DXGI_ADAPTER_DESC);

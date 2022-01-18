@@ -1,11 +1,5 @@
 #include "pydx12.h"
 
-PYDX12_IMPORT(D3D12_SHADER_BYTECODE);
-PYDX12_IMPORT(DXGI_SAMPLE_DESC);
-
-PYDX12_IMPORT_COM(ID3D12RootSignature);
-PYDX12_IMPORT_COM(ID3D12Pageable);
-
 PYDX12_TYPE(D3D12_INPUT_ELEMENT_DESC);
 PYDX12_STRING_GETTER_SETTER(D3D12_INPUT_ELEMENT_DESC, SemanticName);
 PYDX12_GETTER_SETTER(D3D12_INPUT_ELEMENT_DESC, SemanticIndex, UnsignedLong, UINT);
@@ -248,7 +242,7 @@ PYDX12_GETSETTERS(D3D12_DXIL_LIBRARY_DESC) = {
 };
 
 PYDX12_TYPE(D3D12_STATE_SUBOBJECT, D3D12_STATE_SUBOBJECT_TYPE _InternalType);
-static PyObject* pydx12_D3D12_STATE_SUBOBJECT_getpDesc(pydx12_D3D12_STATE_SUBOBJECT* self, void* closure)
+static PyObject* pydx12_D3D12_STATE_SUBOBJECT_getpDesc(pydx12_Structure<D3D12_STATE_SUBOBJECT>* self, void* closure)
 {
 	if (!self->data->pDesc)
 	{
@@ -258,7 +252,7 @@ static PyObject* pydx12_D3D12_STATE_SUBOBJECT_getpDesc(pydx12_D3D12_STATE_SUBOBJ
 	if (self->_InternalType = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE)
 	{
 		ID3D12RootSignature** com_ptr_ptr = (ID3D12RootSignature**)self->data->pDesc;
-		return pydx12_ID3D12RootSignature_instantiate(*com_ptr_ptr, true);
+		return pydx12_com_instantiate<ID3D12RootSignature>(*com_ptr_ptr, true);
 	}
 	Py_RETURN_NONE;
 }

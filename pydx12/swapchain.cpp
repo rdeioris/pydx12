@@ -1,9 +1,5 @@
 #include "pydx12.h"
 
-PYDX12_IMPORT(DXGI_SAMPLE_DESC);
-PYDX12_IMPORT_COM(IDXGIDeviceSubObject);
-PYDX12_IMPORT_COM(ID3D12Resource);
-
 PYDX12_TYPE(DXGI_SWAP_CHAIN_DESC1);
 PYDX12_GETTER_SETTER(DXGI_SWAP_CHAIN_DESC1, Width, UnsignedLong, UINT);
 PYDX12_GETTER_SETTER(DXGI_SWAP_CHAIN_DESC1, Height, UnsignedLong, UINT);
@@ -37,7 +33,7 @@ PYDX12_TYPE_COM(IDXGISwapChain2);
 PYDX12_TYPE_COM(IDXGISwapChain3);
 PYDX12_TYPE_COM(IDXGISwapChain4);
 
-static PyObject* pydx12_IDXGISwapChain_GetBuffer(pydx12_IDXGISwapChain* self, PyObject* args)
+static PyObject* pydx12_IDXGISwapChain_GetBuffer(pydx12_COM<IDXGISwapChain>* self, PyObject* args)
 {
 	UINT buffer_index;
 	if (!PyArg_ParseTuple(args, "I", &buffer_index))
@@ -49,10 +45,10 @@ static PyObject* pydx12_IDXGISwapChain_GetBuffer(pydx12_IDXGISwapChain* self, Py
 		return PyErr_Format(PyExc_Exception, "unable to retrieve SwapChain buffer %u", buffer_index);
 	}
 
-	return pydx12_ID3D12Resource_instantiate(resource, false);
+	return pydx12_com_instantiate<ID3D12Resource>(resource, false);
 }
 
-static PyObject* pydx12_IDXGISwapChain_Present(pydx12_IDXGISwapChain* self, PyObject* args)
+static PyObject* pydx12_IDXGISwapChain_Present(pydx12_COM<IDXGISwapChain>* self, PyObject* args)
 {
 	UINT sync_interval;
 	UINT flags = 0;
@@ -67,7 +63,7 @@ static PyObject* pydx12_IDXGISwapChain_Present(pydx12_IDXGISwapChain* self, PyOb
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_IDXGISwapChain_ResizeBuffers(pydx12_IDXGISwapChain* self, PyObject* args)
+static PyObject* pydx12_IDXGISwapChain_ResizeBuffers(pydx12_COM<IDXGISwapChain>* self, PyObject* args)
 {
 	UINT buffer_count;
 	UINT width;
@@ -82,7 +78,7 @@ static PyObject* pydx12_IDXGISwapChain_ResizeBuffers(pydx12_IDXGISwapChain* self
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_IDXGISwapChain_SetFullscreenState(pydx12_IDXGISwapChain* self, PyObject* args)
+static PyObject* pydx12_IDXGISwapChain_SetFullscreenState(pydx12_COM<IDXGISwapChain>* self, PyObject* args)
 {
 	PyObject* py_fullscreen;
 	PyObject* py_target = NULL;
@@ -94,18 +90,18 @@ static PyObject* pydx12_IDXGISwapChain_SetFullscreenState(pydx12_IDXGISwapChain*
 	Py_RETURN_NONE;
 }
 
-static PyObject* pydx12_IDXGISwapChain3_GetCurrentBackBufferIndex(pydx12_IDXGISwapChain3* self)
+static PyObject* pydx12_IDXGISwapChain3_GetCurrentBackBufferIndex(pydx12_COM<IDXGISwapChain3>* self)
 {
 	return PyLong_FromUnsignedLong(self->com_ptr->GetCurrentBackBufferIndex());
 }
 
-static PyObject* pydx12_IDXGISwapChain1_GetDesc1(pydx12_IDXGISwapChain1* self)
+static PyObject* pydx12_IDXGISwapChain1_GetDesc1(pydx12_COM<IDXGISwapChain1>* self)
 {
 	DXGI_SWAP_CHAIN_DESC1 desc1;
 
 	PYDX12_COM_CALL_HRESULT(IDXGISwapChain1, GetDesc1, &desc1);
 
-	return pydx12_DXGI_SWAP_CHAIN_DESC1_instantiate(&desc1, NULL, NULL);
+	return pydx12_instantiate<DXGI_SWAP_CHAIN_DESC1>(&desc1, NULL, NULL);
 }
 
 PYDX12_METHODS(IDXGISwapChain) = {
@@ -130,15 +126,15 @@ int pydx12_init_swapchain(PyObject* m)
 {
 	PYDX12_REGISTER_STRUCT(DXGI_SWAP_CHAIN_DESC1);
 
-	pydx12_IDXGISwapChainType.tp_methods = pydx12_IDXGISwapChain_methods;
+	pydx12_IDXGISwapChain_Type.tp_methods = pydx12_IDXGISwapChain_methods;
 	PYDX12_REGISTER_COM(IDXGISwapChain, IDXGIDeviceSubObject);
 
-	pydx12_IDXGISwapChain1Type.tp_methods = pydx12_IDXGISwapChain1_methods;
+	pydx12_IDXGISwapChain1_Type.tp_methods = pydx12_IDXGISwapChain1_methods;
 	PYDX12_REGISTER_COM(IDXGISwapChain1, IDXGISwapChain);
 
 	PYDX12_REGISTER_COM(IDXGISwapChain2, IDXGISwapChain1);
 
-	pydx12_IDXGISwapChain3Type.tp_methods = pydx12_IDXGISwapChain3_methods;
+	pydx12_IDXGISwapChain3_Type.tp_methods = pydx12_IDXGISwapChain3_methods;
 	PYDX12_REGISTER_COM(IDXGISwapChain3, IDXGISwapChain2);
 
 	PYDX12_REGISTER_COM(IDXGISwapChain4, IDXGISwapChain3);

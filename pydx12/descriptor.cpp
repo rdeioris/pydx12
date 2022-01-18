@@ -1,7 +1,5 @@
 #include "pydx12.h"
 
-PYDX12_IMPORT_COM(ID3D12Pageable);
-
 PYDX12_TYPE(D3D12_CPU_DESCRIPTOR_HANDLE);
 PYDX12_GETTER_SETTER(D3D12_CPU_DESCRIPTOR_HANDLE, ptr, UnsignedLongLong, SIZE_T);
 PYDX12_GETSETTERS(D3D12_CPU_DESCRIPTOR_HANDLE) = {
@@ -171,17 +169,17 @@ PYDX12_GETSETTERS(D3D12_CONSTANT_BUFFER_VIEW_DESC) = {
 
 PYDX12_TYPE_COM(ID3D12DescriptorHeap);
 
-static PyObject* pydx12_ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(pydx12_ID3D12DescriptorHeap* self)
+static PyObject* pydx12_ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(pydx12_COM<ID3D12DescriptorHeap>* self)
 {
-	return pydx12_D3D12_CPU_DESCRIPTOR_HANDLE_instantiate(&self->com_ptr->GetCPUDescriptorHandleForHeapStart(), NULL, self->com_ptr);
+	return pydx12_instantiate<D3D12_CPU_DESCRIPTOR_HANDLE>(&self->com_ptr->GetCPUDescriptorHandleForHeapStart(), NULL, self->com_ptr);
 }
 
-static PyObject* pydx12_ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(pydx12_ID3D12DescriptorHeap* self)
+static PyObject* pydx12_ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(pydx12_COM<ID3D12DescriptorHeap>* self)
 {
-	return pydx12_D3D12_GPU_DESCRIPTOR_HANDLE_instantiate(&self->com_ptr->GetGPUDescriptorHandleForHeapStart(), NULL, self->com_ptr);
+	return pydx12_instantiate<D3D12_GPU_DESCRIPTOR_HANDLE>(&self->com_ptr->GetGPUDescriptorHandleForHeapStart(), NULL, self->com_ptr);
 }
 
-static PyObject* pydx12_ID3D12DescriptorHeap_cpu(pydx12_ID3D12DescriptorHeap* self, PyObject* args)
+static PyObject* pydx12_ID3D12DescriptorHeap_cpu(pydx12_COM<ID3D12DescriptorHeap>* self, PyObject* args)
 {
 	PyObject* py_index;
 	if (!PyArg_ParseTuple(args, "O", &py_index))
@@ -201,7 +199,7 @@ static PyObject* pydx12_ID3D12DescriptorHeap_cpu(pydx12_ID3D12DescriptorHeap* se
 			return PyErr_Format(PyExc_IndexError, "invalid descriptor index %u", index);
 		}
 		descriptor_start.ptr += index * increment;
-		return pydx12_D3D12_CPU_DESCRIPTOR_HANDLE_instantiate(&descriptor_start, NULL, self->com_ptr);
+		return pydx12_instantiate<D3D12_CPU_DESCRIPTOR_HANDLE>(&descriptor_start, NULL, self->com_ptr);
 	}
 
 	PyObject* py_iter = PyObject_GetIter(py_index);
@@ -231,7 +229,7 @@ static PyObject* pydx12_ID3D12DescriptorHeap_cpu(pydx12_ID3D12DescriptorHeap* se
 		D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptor_start;
 		descriptor.ptr += index * increment;
 
-		PyObject* py_descriptor = pydx12_D3D12_CPU_DESCRIPTOR_HANDLE_instantiate(&descriptor, NULL, self->com_ptr);
+		PyObject* py_descriptor = pydx12_instantiate<D3D12_CPU_DESCRIPTOR_HANDLE>(&descriptor, NULL, self->com_ptr);
 		if (!py_descriptor)
 		{
 			Py_DECREF(py_item);

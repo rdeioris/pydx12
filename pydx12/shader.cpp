@@ -39,22 +39,22 @@ extern DxcCreateInstanceProc DxcCreateInstanceDXIL;
 
 
 
-static PyObject* pydx12_ID3DBlob_GetBufferPointer(pydx12_ID3DBlob* self)
+static PyObject* pydx12_ID3DBlob_GetBufferPointer(pydx12_COM<ID3DBlob>* self)
 {
 	return PyLong_FromUnsignedLongLong((unsigned long long)self->com_ptr->GetBufferPointer());
 }
 
-static PyObject* pydx12_ID3DBlob_GetBufferSize(pydx12_ID3DBlob* self)
+static PyObject* pydx12_ID3DBlob_GetBufferSize(pydx12_COM<ID3DBlob>* self)
 {
 	return PyLong_FromUnsignedLongLong(self->com_ptr->GetBufferSize());
 }
 
-static PyObject* pydx12_ID3DBlob_to_bytes(pydx12_ID3DBlob* self)
+static PyObject* pydx12_ID3DBlob_to_bytes(pydx12_COM<ID3DBlob>* self)
 {
 	return PyBytes_FromStringAndSize((const char*)self->com_ptr->GetBufferPointer(), self->com_ptr->GetBufferSize());
 }
 
-static PyObject* pydx12_ID3DBlob_to_bytearray(pydx12_ID3DBlob* self)
+static PyObject* pydx12_ID3DBlob_to_bytearray(pydx12_COM<ID3DBlob>* self)
 {
 	return PyByteArray_FromStringAndSize((const char*)self->com_ptr->GetBufferPointer(), self->com_ptr->GetBufferSize());
 }
@@ -124,7 +124,7 @@ PYDX12_METHODS(IDxcLibrary) = {
 	{NULL} /* Sentinel */
 };
 
-static PyObject* pydx12_IDxcCompiler_Compile(pydx12_IDxcCompiler* self, PyObject* args)
+static PyObject* pydx12_IDxcCompiler_Compile(pydx12_COM<IDxcCompiler>* self, PyObject* args)
 {
 	PyObject* py_blob;
 	PyObject* py_source_name;
@@ -187,7 +187,7 @@ static PyObject* pydx12_IDxcCompiler_Compile(pydx12_IDxcCompiler* self, PyObject
 	DxcCreateInstanceDXIL(CLSID_DxcValidator, __uuidof(IDxcValidator), (void**)&validator);
 	validator->Validate(compiled_blob, DxcValidatorFlags_InPlaceEdit, &result);
 
-	return PYDX12_COM_INSTANTIATE(IDxcBlob, compiled_blob, false);
+	return pydx12_com_instantiate<IDxcBlob>(compiled_blob, false);
 }
 
 static int pydx12_IDxcBlob_get_buffer(pydx12_IDxcBlob* exporter, Py_buffer* view, int flags)
@@ -231,18 +231,18 @@ int pydx12_init_shader(PyObject* m)
 
 	PYDX12_REGISTER_STRUCT(D3D12_SHADER_BYTECODE);
 
-	pydx12_ID3DBlobType.tp_methods = pydx12_ID3DBlob_methods;
-	pydx12_ID3DBlobType.tp_as_buffer = &pydx12_ID3DBlob_as_buffer;
+	pydx12_ID3DBlob_Type.tp_methods = pydx12_ID3DBlob_methods;
+	pydx12_ID3DBlob_Type.tp_as_buffer = &pydx12_ID3DBlob_as_buffer;
 	PYDX12_REGISTER_COM(ID3DBlob, IUnknown);
 
-	pydx12_IDxcLibraryType.tp_methods = pydx12_IDxcLibrary_methods;
+	pydx12_IDxcLibrary_Type.tp_methods = pydx12_IDxcLibrary_methods;
 	PYDX12_REGISTER_COM(IDxcLibrary, IUnknown);
 
-	pydx12_IDxcCompilerType.tp_methods = pydx12_IDxcCompiler_methods;
+	pydx12_IDxcCompiler_Type.tp_methods = pydx12_IDxcCompiler_methods;
 	PYDX12_REGISTER_COM(IDxcCompiler, IUnknown);
 
-	pydx12_IDxcBlobType.tp_methods = pydx12_IDxcBlob_methods;
-	pydx12_IDxcBlobType.tp_as_buffer = &pydx12_IDxcBlob_as_buffer;
+	pydx12_IDxcBlob_Type.tp_methods = pydx12_IDxcBlob_methods;
+	pydx12_IDxcBlob_Type.tp_as_buffer = &pydx12_IDxcBlob_as_buffer;
 	PYDX12_REGISTER_COM(IDxcBlob, IUnknown);
 
 	PYDX12_REGISTER_COM(IDxcBlobEncoding, IDxcBlob);

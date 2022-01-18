@@ -1,36 +1,5 @@
 #include "pydx12.h"
 
-PYDX12_IMPORT(LUID);
-PYDX12_IMPORT(D3D12_HEAP_PROPERTIES);
-PYDX12_IMPORT(D3D12_RESOURCE_DESC);
-PYDX12_IMPORT(D3D12_CLEAR_VALUE);
-PYDX12_IMPORT(D3D12_COMMAND_QUEUE_DESC);
-PYDX12_IMPORT(D3D12_MESSAGE);
-PYDX12_IMPORT(D3D12_DESCRIPTOR_HEAP_DESC);
-PYDX12_IMPORT(D3D12_RENDER_TARGET_VIEW_DESC);
-PYDX12_IMPORT(D3D12_CPU_DESCRIPTOR_HANDLE);
-PYDX12_IMPORT(D3D12_GRAPHICS_PIPELINE_STATE_DESC);
-PYDX12_IMPORT(D3D12_PLACED_SUBRESOURCE_FOOTPRINT);
-PYDX12_IMPORT(D3D12_COMPUTE_PIPELINE_STATE_DESC);
-PYDX12_IMPORT(D3D12_SHADER_RESOURCE_VIEW_DESC);
-PYDX12_IMPORT(D3D12_UNORDERED_ACCESS_VIEW_DESC);
-PYDX12_IMPORT(D3D12_DEPTH_STENCIL_VIEW_DESC);
-PYDX12_IMPORT(D3D12_CONSTANT_BUFFER_VIEW_DESC);
-PYDX12_IMPORT(D3D12_HEAP_DESC);
-PYDX12_IMPORT(D3D12_STATE_OBJECT_DESC);
-
-
-PYDX12_IMPORT_COM(ID3D12Object);
-PYDX12_IMPORT_COM(ID3D12Resource);
-PYDX12_IMPORT_COM(ID3D12CommandQueue);
-PYDX12_IMPORT_COM(ID3D12CommandAllocator);
-PYDX12_IMPORT_COM(ID3D12GraphicsCommandList);
-PYDX12_IMPORT_COM(ID3D12Fence);
-PYDX12_IMPORT_COM(ID3D12DescriptorHeap);
-PYDX12_IMPORT_COM(ID3D12RootSignature);
-PYDX12_IMPORT_COM(ID3D12PipelineState);
-PYDX12_IMPORT_COM(ID3D12StateObject);
-
 PYDX12_TYPE(D3D12_DEPTH_STENCIL_VALUE);
 PYDX12_FLOAT_GETTER_SETTER(D3D12_DEPTH_STENCIL_VALUE, Depth, FLOAT);
 PYDX12_GETTER_SETTER(D3D12_DEPTH_STENCIL_VALUE, Stencil, UnsignedLong, UINT8);
@@ -197,7 +166,7 @@ static PyObject* pydx12_ID3D12Device_CreateDescriptorHeap(pydx12_ID3D12Device* s
 	ID3D12DescriptorHeap* descriptor_heap;
 	PYDX12_COM_CALL_HRESULT(ID3D12Device, CreateDescriptorHeap, descriptor_heap_desc, __uuidof(ID3D12DescriptorHeap), (void**)&descriptor_heap);
 
-	return PYDX12_COM_INSTANTIATE(ID3D12DescriptorHeap, descriptor_heap, false);
+	return pydx12_com_instantiate<ID3D12DescriptorHeap>(descriptor_heap, false);
 }
 
 static PyObject* pydx12_ID3D12Device_CreateShaderResourceView(pydx12_ID3D12Device* self, PyObject* args)
@@ -321,7 +290,7 @@ static PyObject* pydx12_ID3D12Device_GetNodeCount(pydx12_ID3D12Device* self)
 	return PyLong_FromUnsignedLong(self->com_ptr->GetNodeCount());
 }
 
-static PyObject* pydx12_ID3D12Device_GetCopyableFootprints(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_GetCopyableFootprints(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_resource_desc;
 	UINT first_subresource;
@@ -364,7 +333,7 @@ static PyObject* pydx12_ID3D12Device_GetCopyableFootprints(pydx12_ID3D12Device* 
 	return py_ret;
 }
 
-static PyObject* pydx12_ID3D12Device_CreateComputePipelineState(pydx12_ID3D12Device* self, PyObject* args)
+static PyObject* pydx12_ID3D12Device_CreateComputePipelineState(pydx12_COM<ID3D12Device>* self, PyObject* args)
 {
 	PyObject* py_desc;
 	if (!PyArg_ParseTuple(args, "O", &py_desc))

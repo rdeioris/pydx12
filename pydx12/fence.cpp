@@ -44,7 +44,7 @@ PYDX12_METHODS(ID3D12Fence) = {
 
 int pydx12_init_fence(PyObject* m)
 {
-	pydx12_ID3D12FenceType.tp_methods = pydx12_ID3D12Fence_methods;
+	pydx12_ID3D12Fence_Type.tp_methods = pydx12_ID3D12Fence_methods;
 	PYDX12_REGISTER_COM(ID3D12Fence, ID3D12Pageable);
 
 	PYDX12_ENUM(D3D12_FENCE_FLAG_NONE);
