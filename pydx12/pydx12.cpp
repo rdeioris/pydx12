@@ -15,6 +15,7 @@ int pydx12_init_descriptor(PyObject* m);
 int pydx12_init_shader(PyObject* m);
 int pydx12_init_pipeline(PyObject* m);
 int pydx12_init_audio(PyObject* m);
+int pydx12_init_input(PyObject* m);
 
 PYDX12_TYPE_HANDLE(Event);
 PYDX12_TYPE_HANDLE(Window);
@@ -526,6 +527,28 @@ static PyObject* pydx12_DxcCreateInstance(PyObject* self, PyObject* args)
 	return PyErr_Format(PyExc_ValueError, "unsupported type object");
 }
 
+static PyObject* pydx12_XInputGetState(PyObject* self, PyObject* args)
+{
+	DWORD user_index;
+	if (!PyArg_ParseTuple(args, "k", &user_index))
+		return NULL;
+
+	XINPUT_STATE xinput_state;
+	DWORD error = XInputGetState(user_index, &xinput_state);
+	if (error != ERROR_SUCCESS)
+	{
+		char error_text[512];
+		DWORD ret = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, 0, error_text, sizeof(error_text), NULL);
+		if (ret > 0)
+		{
+			error_text[ret - 2] = 0;
+			return PyErr_Format(PyExc_Exception, "%s", error_text);
+		}
+		return PyErr_Format(PyExc_Exception, "XInputGetStatus failed with code: %ul", error);;
+	}
+	return pydx12_instantiate<XINPUT_STATE>(&xinput_state, NULL, NULL);
+}
+
 static PyMethodDef pydx12_methods[] =
 {
 	{"CreateDXGIFactory", pydx12_CreateDXGIFactory, METH_VARARGS, "Creates a DXGI 1.0 factory that you can use to generate other DXGI objects"},
@@ -539,6 +562,7 @@ static PyMethodDef pydx12_methods[] =
 	{"QueryPerformanceFrequency", (PyCFunction)pydx12_QueryPerformanceFrequency, METH_NOARGS, "Retrieves the frequency of the performance counter"},
 	{"XAudio2Create", (PyCFunction)pydx12_XAudio2Create, METH_VARARGS, "Creates a new XAudio2 object and returns a pointer to its IXAudio2 interface"},
 	{"DxcCreateInstance", (PyCFunction)pydx12_DxcCreateInstance, METH_VARARGS, "Creates a new XAudio2 object and returns a pointer to its IXAudio2 interface"},
+	{"XInputGetState", (PyCFunction)pydx12_XInputGetState, METH_VARARGS, "Retrieves the current state of the specified controller"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -774,6 +798,12 @@ PyInit_api(void)
 	}
 
 	if (pydx12_init_audio(m))
+	{
+		Py_DECREF(m);
+		return NULL;
+	}
+
+	if (pydx12_init_input(m))
 	{
 		Py_DECREF(m);
 		return NULL;

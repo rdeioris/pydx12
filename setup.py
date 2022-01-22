@@ -1,7 +1,7 @@
 from setuptools import setup, Extension
 
 module = Extension('pydx12.api',
-                   libraries=['dxgi', 'd3d12', 'd3dcompiler', 'user32', 'pathcch'],
+                   libraries=['dxgi', 'd3d12', 'd3dcompiler', 'user32', 'pathcch', 'xinput'],
                    depends=['pydx12/pydx12.h', 'pydx12/pydx12_templates.h'],
                    sources=['pydx12/' + source for source in ('pydx12.cpp',
                                                               'dxgi.cpp',
@@ -17,7 +17,8 @@ module = Extension('pydx12.api',
                                                               'descriptor.cpp',
                                                               'shader.cpp',
                                                               'pipeline.cpp',
-                                                              'audio.cpp')
+                                                              'audio.cpp',
+                                                              'input.cpp')
                             ])
 
 setup(name='pydx12',

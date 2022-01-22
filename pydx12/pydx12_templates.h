@@ -7,6 +7,7 @@
 #include <xaudio2.h>
 #include <dxcapi.h>
 #include <comdef.h>
+#include <Xinput.h>
 
 struct pydx12_memory_chunk
 {
