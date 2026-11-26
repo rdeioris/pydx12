@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pydx12"
-version = "0.2.0"
+version = "0.3.0"
 description = "Pure ctypes bindings for DirectX 12 (D3D12 + DX12 Ultimate, DXGI, DXC, DirectML, DirectStorage, GameInput, PIX, XAudio2, XInput)"
 readme = "README.md"
 license = "MIT"
