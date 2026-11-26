@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "pydx12"
 version = "0.2.0"
 description = "Pure ctypes bindings for DirectX 12 (D3D12 + DX12 Ultimate, DXGI, DXC, DirectML, XAudio2, XInput)"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Roberto De Ioris", email = "roberto.deioris@gmail.com" }]
 requires-python = ">=3.9"
 classifiers = [
@@ -24,6 +25,8 @@ test = ["pytest", "numpy"]
 
 [tool.setuptools]
 packages = ["pydx12"]
+
+# the bundled DXC DLLs are x64: build with  python -m build -C--build-option=--plat-name=win_amd64
 
 [tool.setuptools.package-data]
 pydx12 = ["dxcompiler.dll", "dxil.dll"]
