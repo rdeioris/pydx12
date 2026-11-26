@@ -1,43 +1,64 @@
+import ctypes
+
 from pydx12 import *
 
 
+def enum_adapters(factory):
+    adapters = []
+    index = 0
+    while True:
+        try:
+            adapters.append(factory.EnumAdapters1(index))
+        except DXError as e:
+            if e.hresult != DXGI_ERROR_NOT_FOUND:
+                raise
+            return adapters
+        index += 1
+
+
 def get_best_adapter():
-    factory = CreateDXGIFactory2()
-    return sorted(factory.EnumAdapters(), key=lambda a: a.GetDesc().DedicatedVideoMemory)[0]
+    return max(enum_adapters(CreateDXGIFactory2()), key=lambda a: a.GetDesc1().DedicatedVideoMemory)
+
+
+def buffer_desc(size):
+    desc = D3D12_RESOURCE_DESC()
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
+    desc.Width = size
+    desc.Height = 1
+    desc.DepthOrArraySize = 1
+    desc.Format = DXGI_FORMAT_UNKNOWN
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
+    desc.MipLevels = 1
+    desc.SampleDesc.Count = 1
+    return desc
 
 
 class UploadBuffer:
 
     def __init__(self, device, size):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
-        buffer_desc.Width = size
-        buffer_desc.Height = 1
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_UNKNOWN
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-
+        self.size = size
         self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, None)
+            Type=D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, buffer_desc(size), D3D12_RESOURCE_STATE_GENERIC_READ)
 
     def upload(self, data):
-        self.resource.upload(data)
+        data = bytes(data)
+        address = self.resource.Map(0, D3D12_RANGE(0, 0))  # we are not going to read it
+        ctypes.memmove(address, data, min(len(data), self.size))
+        self.resource.Unmap(0)
 
 
 class Texture:
 
-    def __init__(self, device, width, height):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D
-        buffer_desc.Width = width
-        buffer_desc.Height = height
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-
+    def __init__(self, device, width, height, flags=D3D12_RESOURCE_FLAG_NONE, state=D3D12_RESOURCE_STATE_COMMON):
+        desc = D3D12_RESOURCE_DESC()
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D
+        desc.Width = width
+        desc.Height = height
+        desc.DepthOrArraySize = 1
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM
+        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN
+        desc.MipLevels = 1
+        desc.SampleDesc.Count = 1
+        desc.Flags = flags
         self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COMMON, None)
+            Type=D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE, desc, state)

@@ -1,370 +1,434 @@
-from re import sub
-from numpy import pi
-from pydx12 import *
-import sys
+"""Helpers shared by the windowed tutorials (009-017).
+
+Everything here is plain tutorial code written against the raw pydx12 API:
+pydx12 itself only exposes DirectX, so windows come from tkinter, timing
+from time.perf_counter and so on.
+"""
+import argparse
 import atexit
-import random
-import traceback
+import ctypes
+import time
+import tkinter
+
+import numpy
+
+from pydx12 import *
+
+FRAME_COUNT = 2  # swapchain back buffers
 
 
-class App:
-    running = True
+def parse_args(description):
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument('--frames', type=int, default=0,
+                        help='exit after N frames (default: run until the window is closed)')
+    return parser.parse_args()
 
+
+# ---------------------------------------------------------------------------
+# device and debug layer
+# ---------------------------------------------------------------------------
 
 def enable_debug():
     D3D12GetDebugInterface().EnableDebugLayer()
 
 
 def get_best_adapter():
-    factory = CreateDXGIFactory2()
-    return sorted(factory.EnumAdapters(), key=lambda a: a.GetDesc().DedicatedVideoMemory)[-1]
+    return CreateDXGIFactory2().EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE)
 
 
-def print_debug(info):
-    for index in range(0, info.GetNumStoredMessages()):
-        print(info.GetMessage(index).pDescription)
-    info.ClearStoredMessages()
+def get_messages(info):
+    """Yield (severity, text) for every message stored in an ID3D12InfoQueue."""
+    for index in range(info.GetNumStoredMessages()):
+        size = ctypes.c_size_t()
+        info.GetMessage(index, None, ctypes.byref(size))  # first call: size of the message
+        buf = ctypes.create_string_buffer(size.value)
+        message = ctypes.cast(buf, ctypes.POINTER(D3D12_MESSAGE))
+        info.GetMessage(index, message, ctypes.byref(size))
+        yield message.contents.Severity, message.contents.pDescription
+
+
+def count_errors(info):
+    return sum(1 for severity, _ in get_messages(info) if severity <= D3D12_MESSAGE_SEVERITY_ERROR)
 
 
 def setup_debug(device):
+    """Print the debug layer messages at exit; returns the ID3D12InfoQueue."""
     info = ID3D12InfoQueue(device)
 
-    def d3d12_debug_hook(*exc):
-        traceback.print_exception(*exc)
-        print_debug(info)
-        App.running = False
-
-    def d3d12_debug_exit_hook():
-        print_debug(info)
-
-    sys.excepthook = d3d12_debug_hook
-    atexit.register(d3d12_debug_exit_hook)
+    def dump():
+        for severity, text in get_messages(info):
+            print('[D3D12]', text)
+        print('debug layer errors:', count_errors(info))
+    atexit.register(dump)
+    return info
 
 
-class UploadBuffer:
+# ---------------------------------------------------------------------------
+# resources
+# ---------------------------------------------------------------------------
 
-    def __init__(self, device, size):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
-        buffer_desc.Width = size
-        buffer_desc.Height = 1
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_UNKNOWN
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-
-        self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, None)
-
-    def upload(self, data):
-        self.resource.upload(data)
+def buffer_desc(size, flags=D3D12_RESOURCE_FLAG_NONE):
+    desc = D3D12_RESOURCE_DESC(Dimension=D3D12_RESOURCE_DIMENSION_BUFFER, Width=size, Height=1,
+                               DepthOrArraySize=1, MipLevels=1, Format=DXGI_FORMAT_UNKNOWN,
+                               Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR, Flags=flags)
+    desc.SampleDesc.Count = 1
+    return desc
 
 
-class ResourceBuffer:
-    def __init__(self, device, data):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
-        buffer_desc.Width = data.nbytes
-        buffer_desc.Height = 1
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_UNKNOWN
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-
-        resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, None)
-
-        resource.upload(data)
-
-        self.vertex_resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, None)
-
-        command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
-            Type=D3D12_COMMAND_LIST_TYPE_COPY)
-        queue = device.CreateCommandQueue(command_queue_desc)
-
-        fence = device.CreateFence()
-        fence_event = Event()
-        fence_value = fence.GetCompletedValue()
-        fence_value += 1
-
-        allocator = device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY)
-        command_list = device.CreateCommandList(
-            0, D3D12_COMMAND_LIST_TYPE_COPY, allocator)
-        command_list.CopyResource(self.vertex_resource, resource)
-        command_list.Close()
-
-        queue.ExecuteCommandLists([command_list])
-        queue.Signal(fence, fence_value)
-        if fence.GetCompletedValue() < fence_value:
-            fence.SetEventOnCompletion(fence_value, fence_event)
-            fence_event.wait()
+def create_buffer(device, size, heap_type, state, flags=D3D12_RESOURCE_FLAG_NONE):
+    return device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(Type=heap_type), D3D12_HEAP_FLAG_NONE,
+                                          buffer_desc(size, flags), state)
 
 
-class Mesh:
+def write_resource(resource, data, offset=0):
+    """Copy bytes (or any buffer: numpy arrays, ctypes objects...) into a mappable resource."""
+    view = memoryview(data).cast('B')
+    address = resource.Map(0, D3D12_RANGE(0, 0))  # we won't read from it
+    ctypes.memmove(address + offset, (ctypes.c_ubyte * len(view)).from_buffer_copy(view), len(view))
+    resource.Unmap(0)
+
+
+def read_resource(resource, size):
+    address = resource.Map(0, D3D12_RANGE(0, size))
+    data = ctypes.string_at(address, size)
+    resource.Unmap(0, D3D12_RANGE(0, 0))
+    return data
+
+
+def upload_buffer(device, data):
+    """An upload-heap buffer filled with data (fine for small/dynamic data)."""
+    size = memoryview(data).nbytes
+    resource = create_buffer(device, size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ)
+    write_resource(resource, data)
+    return resource
+
+
+def transition(resource, before, after):
+    barrier = D3D12_RESOURCE_BARRIER(Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
+    barrier.Transition = D3D12_RESOURCE_TRANSITION_BARRIER(
+        pResource=resource, StateBefore=before, StateAfter=after,
+        Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+    return barrier
+
+
+def uav_barrier(resource):
+    barrier = D3D12_RESOURCE_BARRIER(Type=D3D12_RESOURCE_BARRIER_TYPE_UAV)
+    barrier.UAV.pResource = resource
+    return barrier
+
+
+def cpu_handles(device, heap, heap_type, count):
+    """CPU descriptor handles for the first `count` slots of a descriptor heap."""
+    start = heap.GetCPUDescriptorHandleForHeapStart().ptr
+    step = device.GetDescriptorHandleIncrementSize(heap_type)
+    return [D3D12_CPU_DESCRIPTOR_HANDLE(start + i * step) for i in range(count)]
+
+
+class Fence:
+    """A fence plus a counter: signal() and wait until the GPU caught up."""
+
     def __init__(self, device):
-        self.has_index_buffer = False
-        self.has_color_buffer = False
+        self.fence = device.CreateFence(0)
+        self.value = 0
+
+    def flush(self, queue):
+        self.value += 1
+        queue.Signal(self.fence, self.value)
+        if self.fence.GetCompletedValue() < self.value:
+            self.fence.SetEventOnCompletion(self.value, None)  # NULL event: blocks until reached
+
+
+def execute_and_wait(device, queue, record, list_type=D3D12_COMMAND_LIST_TYPE_DIRECT):
+    """Record a one-shot command list with record(command_list), run it and wait."""
+    allocator = device.CreateCommandAllocator(list_type)
+    command_list = device.CreateCommandList(0, list_type, allocator)
+    record(command_list)
+    command_list.Close()
+    queue.ExecuteCommandLists([command_list])
+    Fence(device).flush(queue)
+
+
+def default_buffer(device, queue, data, final_state):
+    """A default-heap (GPU only) buffer initialized through a temporary upload buffer."""
+    size = memoryview(data).nbytes
+    staging = upload_buffer(device, data)
+    resource = create_buffer(device, size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON)
+
+    def record(command_list):
+        command_list.CopyResource(resource, staging)
+        command_list.ResourceBarrier([transition(resource, D3D12_RESOURCE_STATE_COPY_DEST, final_state)])
+    execute_and_wait(device, queue, record)
+    return resource
+
+
+# ---------------------------------------------------------------------------
+# window and swapchain
+# ---------------------------------------------------------------------------
+
+class App:
+    """A tkinter window whose client area hosts a DXGI swapchain."""
+
+    def __init__(self, title, width, height):
+        self.title = title
+        self.root = tkinter.Tk()
+        self.root.title(title)
+        self.frame = tkinter.Frame(self.root, width=width, height=height, bg='')
+        self.frame.pack(fill=tkinter.BOTH, expand=True)
+        self.root.update()
+        self.hwnd = self.frame.winfo_id()
+        self.width, self.height = width, height
+        self.resized = False
+        self.running = True
+        self.fullscreen = False
+        self.root.protocol('WM_DELETE_WINDOW', self.close)
+        self.frame.bind('<Configure>', self._on_configure)
+        self.root.bind('<Escape>', lambda e: self.close())
+        self._frames = 0
+        self._last = time.perf_counter()
+
+    def _on_configure(self, event):
+        if event.width > 0 and event.height > 0 and (event.width, event.height) != (self.width, self.height):
+            self.width, self.height = event.width, event.height
+            self.resized = True
+
+    def toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+        self.root.attributes('-fullscreen', self.fullscreen)
+
+    def close(self):
+        self.running = False
+
+    def pump(self):
+        """Process window events; returns False once the window has been closed."""
+        self.root.update()
+        self._frames += 1
+        now = time.perf_counter()
+        if now - self._last >= 1:
+            self.fps = self._frames / (now - self._last)
+            self.root.title('%s - %.0f fps' % (self.title, self.fps))
+            self._frames, self._last = 0, now
+        return self.running
+
+    def destroy(self):
+        self.root.destroy()
+
+
+class SwapChain:
+    """Flip-model swapchain + one RTV per back buffer."""
+
+    def __init__(self, device, queue, app, format=DXGI_FORMAT_R8G8B8A8_UNORM):
         self.device = device
-        self.nvertices = 0
-        self.matrix = None
+        self.queue = queue
+        self.format = format
+        desc = DXGI_SWAP_CHAIN_DESC1(Width=app.width, Height=app.height, Format=format,
+                                     BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT, BufferCount=FRAME_COUNT,
+                                     Scaling=DXGI_SCALING_STRETCH, SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD)
+        desc.SampleDesc.Count = 1
+        self.swapchain = IDXGISwapChain3(CreateDXGIFactory2().CreateSwapChainForHwnd(queue, app.hwnd, desc))
+        self.rtv_heap = device.CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_DESC(
+            Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NumDescriptors=FRAME_COUNT))
+        self.rtvs = cpu_handles(device, self.rtv_heap, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, FRAME_COUNT)
+        self.fence = Fence(device)
+        self.width, self.height = app.width, app.height
+        self._create_views()
 
-    def set_vertex_buffer(self, buffer):
-        self.vertex_buffer = ResourceBuffer(self.device, buffer)
-        self.vertex_buffer_view = D3D12_VERTEX_BUFFER_VIEW(
-            BufferLocation=self.vertex_buffer.vertex_resource.GetGPUVirtualAddress())
-        self.vertex_buffer_view.SizeInBytes = buffer.nbytes
-        self.vertex_buffer_view.StrideInBytes = 4 * 3
+    def _create_views(self):
+        self.buffers = [self.swapchain.GetBuffer(i) for i in range(FRAME_COUNT)]
+        for buffer, rtv in zip(self.buffers, self.rtvs):
+            self.device.CreateRenderTargetView(buffer, None, rtv)
 
-    def set_color_buffer(self, buffer):
-        self.color_buffer = ResourceBuffer(self.device, buffer)
-        self.color_buffer_view = D3D12_VERTEX_BUFFER_VIEW(
-            BufferLocation=self.color_buffer.vertex_resource.GetGPUVirtualAddress())
-        self.color_buffer_view.SizeInBytes = buffer.nbytes
-        self.color_buffer_view.StrideInBytes = 4 * 3
-        self.has_color_buffer = True
+    def resize(self, width, height):
+        self.fence.flush(self.queue)  # the GPU must not use the old buffers anymore
+        self.buffers = []  # release every reference before ResizeBuffers
+        self.swapchain.ResizeBuffers(FRAME_COUNT, width, height)
+        self.width, self.height = width, height
+        self._create_views()
 
-    def set_index_buffer(self, buffer):
-        self.index_buffer = ResourceBuffer(self.device, buffer)
-        self.index_buffer_view = D3D12_INDEX_BUFFER_VIEW(
-            BufferLocation=self.index_buffer.vertex_resource.GetGPUVirtualAddress())
-        self.index_buffer_view.SizeInBytes = buffer.nbytes
-        self.index_buffer_view.Format = DXGI_FORMAT_R32_UINT
-        self.has_index_buffer = True
+    def current(self):
+        """(back buffer resource, its RTV) for this frame.
 
-    def set_nvertices(self, n):
-        self.nvertices = n
-
-
-class Texture:
-
-    def __init__(self, device, width, height, uav=False, name=None):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D
-        buffer_desc.Width = width
-        buffer_desc.Height = height
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-        if uav:
-            buffer_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-        self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COMMON, None)
-        if name:
-            self.resource.SetName(name)
-
-
-class ReadbackBuffer:
-
-    def __init__(self, device, size):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
-        buffer_desc.Width = size
-        buffer_desc.Height = 1
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_UNKNOWN
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-
-        self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_READBACK), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, None)
-
-
-class Barrier:
-
-    def __init__(self, resource, before, after):
-        self.barrier_desc = D3D12_RESOURCE_BARRIER(
-            Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
-        self.barrier_desc.Transition.pResource = resource
-        self.barrier_desc.Transition.StateBefore = before
-        self.barrier_desc.Transition.StateAfter = after
-
-
-class Raytracer:
-
-    def __init__(self, device):
-        idxc_library = DxcCreateInstance(IDxcLibrary)
-        idxc_compiler = DxcCreateInstance(IDxcCompiler)
-        raygen_shader_code = """
-struct HitInfo
-{
-	float4 ShadedColorAndHitT;
-};
-
-RWTexture2D<float4> RTOutput				: register(u0);
-RaytracingAccelerationStructure SceneBVH : register(t0);
-
-[shader("raygeneration")]
-void RayGen()
-{
-	uint2 offset = DispatchRaysIndex().xy;
-	float2 d = (((offset + 0.5f) / DispatchRaysDimensions().xy) * 2.f - 1.f);
-
-	RayDesc ray;
-	ray.Origin = float3(d.x, -d.y, -1);
-	ray.Direction = float3(0, 0, 1);
-	ray.TMin = 0.1f;
-	ray.TMax = 1000.f;
-
-	HitInfo payload;
-	payload.ShadedColorAndHitT = float4(0.f, 0.f, 0.f, 0.f);
-
-	TraceRay(
-		SceneBVH,
-		RAY_FLAG_NONE,
-		0xFF,
-		0,
-		0,
-		0,
-		ray,
-		payload);
-
-	RTOutput[offset] = float4(payload.ShadedColorAndHitT.rgb, 1.f);
-}
+        The returned wrapper does not hold a COM reference (addref=False and not owned):
+        ResizeBuffers() fails while anybody still references the old buffers, and a
+        `back_buffer` variable surviving from the previous frame would be enough.
         """
-        raygen_shader = idxc_compiler.Compile(idxc_library.CreateBlobWithEncodingOnHeapCopy(
-            raygen_shader_code.encode('utf8')), 'shaders\\RayGen.hlsl', '', 'lib_6_3')
-        print(raygen_shader)
-        raygen_lib_desc = D3D12_DXIL_LIBRARY_DESC()
-        raygen_lib_desc.DXILLibrary.pShaderBytecode = raygen_shader
-        raygen_lib_desc.DXILLibrary.BytecodeLength = raygen_shader.GetBufferSize()
-        raygen_lib_desc.NumExports = 1
-        print(raygen_lib_desc.NumExports)
-        raygen_lib_desc.pExports = [D3D12_EXPORT_DESC(
-            Name='Raygen001', ExportToRename='RayGen')]
-        print(raygen_lib_desc)
+        index = self.swapchain.GetCurrentBackBufferIndex()
+        return ID3D12Resource.from_address(self.buffers[index].value, addref=False), self.rtvs[index]
 
-        raygen_subobject = D3D12_STATE_SUBOBJECT(
-            Type=D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, pDesc=raygen_lib_desc)
-
-        print(bytearray(raygen_lib_desc))
-        print(raygen_subobject, len(bytearray(raygen_lib_desc)))
-
-        shader_config = D3D12_RAYTRACING_SHADER_CONFIG(
-            MaxPayloadSizeInBytes=16, MaxAttributeSizeInBytes=D3D12_RAYTRACING_MAX_ATTRIBUTE_SIZE_IN_BYTES)
-        shader_config_subobject = D3D12_STATE_SUBOBJECT(
-            Type=D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, pDesc=shader_config)
-
-        raytracing_pipeline_config_subobject = D3D12_STATE_SUBOBJECT(
-            Type=D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, pDesc=D3D12_RAYTRACING_PIPELINE_CONFIG(MaxTraceRecursionDepth=1))
-
-        versioned_root_signature = D3D12_VERSIONED_ROOT_SIGNATURE_DESC(
-            Version=D3D_ROOT_SIGNATURE_VERSION_1_1)
-        versioned_root_signature.Version = D3D_ROOT_SIGNATURE_VERSION_1_1
-        param0 = D3D12_ROOT_PARAMETER1(
-            ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV)
-        param1 = D3D12_ROOT_PARAMETER1(
-            ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV)
-        versioned_root_signature.Desc_1_1 = D3D12_ROOT_SIGNATURE_DESC1(
-            NumParameters=1,
-            pParameters=(param0, param1),
-            Flags=D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE)
-
-        print('DONE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-
-        serialized_root_signature = D3D12SerializeVersionedRootSignature(
-            versioned_root_signature)
-        root_signature = device.CreateRootSignature(
-            0, serialized_root_signature)
+    def present(self, sync_interval=1):
+        self.swapchain.Present(sync_interval, 0)
+        self.fence.flush(self.queue)  # keep it simple: one frame in flight
 
 
-        print('root signature', root_signature)
-        root_signature_subobject = D3D12_STATE_SUBOBJECT(
-            Type=D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, pDesc=root_signature)
+# ---------------------------------------------------------------------------
+# shaders, root signatures, vertex buffers
+# ---------------------------------------------------------------------------
 
-        """
-        export_association = D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION(NumExports=1, pExports=[
-            'RayGen001'], pSubobjectToAssociate=root_signature_subobject.get_ptr())
+def compile_shader(source, entry, target, defines=None):
+    """D3DCompile (FXC, shader model 5.x); defines is a dict of macros."""
+    macros = None
+    if defines:
+        macros = [D3D_SHADER_MACRO(Name=k, Definition=str(v)) for k, v in defines.items()]
+        macros.append(D3D_SHADER_MACRO())  # the array is NULL terminated
+    return D3DCompile(source, None, macros, None, entry, target)
 
-        print('READY...', hex(root_signature_subobject.get_ptr()), export_association.to_dict())
-        association_subobject = D3D12_STATE_SUBOBJECT(Type=D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, pDesc=export_association)
 
-        print('subobject', association_subobject.to_dict())
-        """
-        #subobjects = (raygen_subobject, shader_config_subobject,
-        #              raytracing_pipeline_config_subobject, root_signature_subobject)
+def create_root_signature(device, parameters=(), flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT):
+    """Serialize and create a version 1.1 root signature from D3D12_ROOT_PARAMETER1 objects."""
+    desc = D3D12_VERSIONED_ROOT_SIGNATURE_DESC(Version=D3D_ROOT_SIGNATURE_VERSION_1_1)
+    desc.Desc_1_1 = D3D12_ROOT_SIGNATURE_DESC1(pParameters=list(parameters) or None, Flags=flags)
+    return device.CreateRootSignature(0, D3D12SerializeVersionedRootSignature(desc))
 
-        subobjects = [root_signature_subobject]
-        pipeline_desc = D3D12_STATE_OBJECT_DESC(
-            Type=D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE)
-        pipeline_desc.NumSubobjects = len(subobjects)
-        pipeline_desc.pSubobjects = subobjects
 
-        print(pipeline_desc.to_dict())
-        print('root signature', root_signature_subobject.to_dict())
-        pipeline = device.CreateStateObject(pipeline_desc)
-        print(pipeline)
+def root_constants(register, count, visibility=D3D12_SHADER_VISIBILITY_ALL):
+    """A root parameter holding `count` 32 bit constants visible as cbuffer b<register>."""
+    param = D3D12_ROOT_PARAMETER1(ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+                                  ShaderVisibility=visibility)
+    param.Constants.ShaderRegister = register
+    param.Constants.Num32BitValues = count
+    return param
 
-        pipeline_state_desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC()
-        pipeline_state_desc.pRootSignature = self.root_signature
-        pipeline_state_desc.VS = D3D12_SHADER_BYTECODE(
-            pShaderBytecode=vertex_shader, BytecodeLength=vertex_shader.GetBufferSize())
-        pipeline_state_desc.PS = D3D12_SHADER_BYTECODE(
-            pShaderBytecode=pixel_shader, BytecodeLength=pixel_shader.GetBufferSize())
-        pipeline_state_desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID
-        pipeline_state_desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE
-        pipeline_state_desc.InputLayout.pInputElementDescs = [
-            D3D12_INPUT_ELEMENT_DESC(
-                SemanticName='POSITION', Format=DXGI_FORMAT_R32G32B32_FLOAT),
-            D3D12_INPUT_ELEMENT_DESC(
-                SemanticName='COLOR', InputSlot=1, Format=DXGI_FORMAT_R32G32B32_FLOAT)
-        ]
-        pipeline_state_desc.InputLayout.NumElements = 2
-        pipeline_state_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
-        pipeline_state_desc.NumRenderTargets = 1
-        pipeline_state_desc.RTVFormats = (DXGI_FORMAT_R8G8B8A8_UNORM, )
-        pipeline_state_desc.SampleDesc.Count = 1
-        pipeline_state_desc.SampleMask = 0xFFFFFFFF
-        pipeline_state_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
-        self.pipeline_state = device.CreateGraphicsPipelineState(
-            pipeline_state_desc)
 
-        self.allocator = device.CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT)
-        self.command_list = device.CreateCommandList(
-            0, D3D12_COMMAND_LIST_TYPE_DIRECT, self.allocator)
-        self.command_list.Close()
+def vertex_buffer_view(device, queue, data, stride):
+    """Upload data into a default-heap vertex buffer; returns (resource, D3D12_VERTEX_BUFFER_VIEW)."""
+    resource = default_buffer(device, queue, data, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)
+    view = D3D12_VERTEX_BUFFER_VIEW(BufferLocation=resource.GetGPUVirtualAddress(),
+                                    SizeInBytes=memoryview(data).nbytes, StrideInBytes=stride)
+    return resource, view
 
-    def execute(self, queue, back_buffer, rtv, width, height, meshes):
-        self.command_list.Reset(self.allocator, self.pipeline_state)
 
-        self.command_list.SetGraphicsRootSignature(self.root_signature)
-        self.command_list.IASetPrimitiveTopology(
-            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
-        self.command_list.OMSetRenderTargets([rtv])
-        self.command_list.RSSetViewports(
-            [D3D12_VIEWPORT(Width=width, Height=height, MinDepth=0, MaxDepth=1)])
-        self.command_list.RSSetScissorRects(
+def graphics_pipeline_desc(root_signature, vs, ps, input_elements, rtv_format=DXGI_FORMAT_R8G8B8A8_UNORM):
+    """A D3D12_GRAPHICS_PIPELINE_STATE_DESC with sensible defaults (no blending, no culling, no depth)."""
+    desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC(
+        pRootSignature=root_signature,
+        VS=D3D12_SHADER_BYTECODE(pShaderBytecode=vs), PS=D3D12_SHADER_BYTECODE(pShaderBytecode=ps),
+        SampleMask=0xFFFFFFFF, PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        NumRenderTargets=1, RTVFormats=(rtv_format,))
+    desc.InputLayout.pInputElementDescs = input_elements
+    desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID
+    desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE
+    desc.RasterizerState.DepthClipEnable = True
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+    desc.SampleDesc.Count = 1
+    return desc
+
+
+def viewport_and_scissor(width, height):
+    return ([D3D12_VIEWPORT(Width=width, Height=height, MinDepth=0, MaxDepth=1)],
             [D3D12_RECT(left=0, top=0, right=width, bottom=height)])
 
-        self.command_list.ResourceBarrier([Barrier(
-            back_buffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET).barrier_desc])
 
-        self.command_list.ClearRenderTargetView(
-            rtv, (0, 0, 0, 1))
+# ---------------------------------------------------------------------------
+# meshes and matrices
+# ---------------------------------------------------------------------------
 
-        for mesh in meshes:
-            self.command_list.IASetVertexBuffers(0, [mesh.vertex_buffer_view])
-            if mesh.has_color_buffer:
-                self.command_list.IASetVertexBuffers(
-                    1, [mesh.color_buffer_view])
-            if mesh.matrix is not None:
-                self.command_list.SetGraphicsRoot32BitConstants(0, mesh.matrix)
-            if mesh.has_index_buffer:
-                self.command_list.IASetIndexBuffer(mesh.index_buffer_view)
-                self.command_list.DrawIndexedInstanced(
-                    mesh.nvertices, 1, 0, 0, 0)
-            else:
-                self.command_list.DrawInstanced(mesh.nvertices, 1, 0, 0)
+class Mesh:
+    """Indexed geometry: one vertex buffer per attribute (slot 0, 1, ...) plus an index buffer.
 
-        self.command_list.ResourceBarrier([Barrier(
-            back_buffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT).barrier_desc])
+    attributes is a list of float32 numpy arrays shaped (nvertices, ncomponents);
+    matrix is the per-mesh 4x4 float32 matrix the renderer passes as root constants.
+    """
 
-        self.command_list.Close()
+    def __init__(self, device, queue, attributes, indices):
+        self.buffers = []
+        self.views = []
+        for data in attributes:
+            data = numpy.ascontiguousarray(data, dtype=numpy.float32)
+            resource, view = vertex_buffer_view(device, queue, data, stride=data.shape[1] * 4)
+            self.buffers.append(resource)
+            self.views.append(view)
+        indices = numpy.ascontiguousarray(indices)
+        self.index_buffer = default_buffer(device, queue, indices, D3D12_RESOURCE_STATE_INDEX_BUFFER)
+        self.index_buffer_view = D3D12_INDEX_BUFFER_VIEW(
+            BufferLocation=self.index_buffer.GetGPUVirtualAddress(), SizeInBytes=indices.nbytes,
+            Format=DXGI_FORMAT_R16_UINT if indices.dtype == numpy.uint16 else DXGI_FORMAT_R32_UINT)
+        self.nindices = len(indices)
+        self.matrix = numpy.identity(4, dtype=numpy.float32)
 
-        queue.ExecuteCommandLists([self.command_list])
+    def draw(self, command_list, matrix_parameter=0):
+        command_list.SetGraphicsRoot32BitConstants(matrix_parameter, 16, self.matrix.astype(numpy.float32), 0)
+        command_list.IASetVertexBuffers(0, self.views)
+        command_list.IASetIndexBuffer(self.index_buffer_view)
+        command_list.DrawIndexedInstanced(self.nindices, 1, 0, 0, 0)
+
+
+def cube(size=1.0):
+    """Positions, per-face colors and indices of a cube (counter clockwise faces seen from outside)."""
+    positions, colors, indices = [], [], []
+    faces = [((1, 0, 0), (0, 0, -1), (0, 1, 0)), ((-1, 0, 0), (0, 0, 1), (0, 1, 0)),
+             ((0, 1, 0), (1, 0, 0), (0, 0, -1)), ((0, -1, 0), (1, 0, 0), (0, 0, 1)),
+             ((0, 0, 1), (1, 0, 0), (0, 1, 0)), ((0, 0, -1), (-1, 0, 0), (0, 1, 0))]
+    palette = [(1, 0, 0), (0, 1, 1), (0, 1, 0), (1, 0, 1), (0, 0, 1), (1, 1, 0)]
+    for (normal, u, v), color in zip(faces, palette):
+        n, u, v = numpy.array(normal), numpy.array(u), numpy.array(v)
+        base = len(positions)
+        for su, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            positions.append((n + su * u + sv * v) * size / 2)
+            colors.append(color)
+        indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+    return (numpy.array(positions, dtype=numpy.float32), numpy.array(colors, dtype=numpy.float32),
+            numpy.array(indices, dtype=numpy.uint16))
+
+
+# Row-vector matrices (like pyrr and DirectXMath): v' = v @ M, so M = model @ view @ projection.
+# Right handed (the camera looks down -z) with depth mapped to [0, 1] as Direct3D expects.
+
+def orthographic(width, height, near, far):
+    m = numpy.zeros((4, 4), dtype=numpy.float32)
+    m[0, 0], m[1, 1] = 2 / width, 2 / height
+    m[2, 2], m[3, 2], m[3, 3] = 1 / (near - far), near / (near - far), 1
+    return m
+
+
+def perspective(fovy_degrees, aspect, near, far):
+    """Right handed perspective projection with depth in [0, 1] (XMMatrixPerspectiveFovRH)."""
+    f = 1 / numpy.tan(numpy.radians(fovy_degrees) / 2)
+    m = numpy.zeros((4, 4), dtype=numpy.float32)
+    m[0, 0], m[1, 1] = f / aspect, f
+    m[2, 2], m[2, 3] = far / (near - far), -1
+    m[3, 2] = near * far / (near - far)
+    return m
+
+
+# ---------------------------------------------------------------------------
+# raytracing helpers
+# ---------------------------------------------------------------------------
+
+def compile_library(source, target='lib_6_3'):
+    """Compile an HLSL library with DXC (shader model 6.x is required for raytracing)."""
+    compiler = DxcCreateInstance(CLSID_DxcCompiler, IDxcCompiler3)
+    source = source.encode('utf-8')
+    result = compiler.Compile(DxcBuffer(Ptr=source), ['-T', target], None, IDxcResult)
+    if result.GetStatus() < 0:
+        errors = result.GetOutput(DXC_OUT_ERRORS, IDxcBlobUtf8)[0]
+        raise RuntimeError(bytes(errors).decode('utf-8', 'replace'))
+    return result.GetOutput(DXC_OUT_OBJECT, IDxcBlob)[0]
+
+
+def build_acceleration_structure(device, command_list, inputs):
+    """Allocate the result and scratch buffers for `inputs` and record the build.
+
+    Returns (result, scratch): keep both alive until the GPU executed the command list.
+    """
+    info = device.GetRaytracingAccelerationStructurePrebuildInfo(inputs)
+    # acceleration structures live in buffers created in this special state
+    result = create_buffer(device, info.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT,
+                           D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+                           D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+    # buffers in COMMON are implicitly promoted to UNORDERED_ACCESS by the build
+    scratch = create_buffer(device, info.ScratchDataSizeInBytes, D3D12_HEAP_TYPE_DEFAULT,
+                            D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+    command_list.BuildRaytracingAccelerationStructure(D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC(
+        DestAccelerationStructureData=result.GetGPUVirtualAddress(), Inputs=inputs,
+        ScratchAccelerationStructureData=scratch.GetGPUVirtualAddress()))
+    # the next build/trace must wait for this one
+    command_list.ResourceBarrier([uav_barrier(result)])
+    return result, scratch
+
+
+def instance_desc(matrix, blas, instance_id=0, mask=0xFF):
+    """A TLAS instance. `matrix` is a row-vector 4x4 world matrix; DXR wants the top 3 rows of its transpose."""
+    desc = D3D12_RAYTRACING_INSTANCE_DESC(InstanceID=instance_id, InstanceMask=mask,
+                                          AccelerationStructure=blas.GetGPUVirtualAddress())
+    transform = numpy.ascontiguousarray(matrix.T[:3, :], dtype=numpy.float32)
+    ctypes.memmove(ctypes.addressof(desc.Transform), transform.ctypes.data, 48)
+    return desc

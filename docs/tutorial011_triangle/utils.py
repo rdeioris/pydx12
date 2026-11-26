@@ -1,236 +1,317 @@
-from numpy import pi
-from pydx12 import *
-import sys
-import atexit
-import random
+"""Helpers shared by the windowed tutorials (009-017).
 
+Everything here is plain tutorial code written against the raw pydx12 API:
+pydx12 itself only exposes DirectX, so windows come from tkinter, timing
+from time.perf_counter and so on.
+"""
+import argparse
+import atexit
+import ctypes
+import time
+import tkinter
+
+import numpy
+
+from pydx12 import *
+
+FRAME_COUNT = 2  # swapchain back buffers
+
+
+def parse_args(description):
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument('--frames', type=int, default=0,
+                        help='exit after N frames (default: run until the window is closed)')
+    return parser.parse_args()
+
+
+# ---------------------------------------------------------------------------
+# device and debug layer
+# ---------------------------------------------------------------------------
 
 def enable_debug():
     D3D12GetDebugInterface().EnableDebugLayer()
 
 
 def get_best_adapter():
-    factory = CreateDXGIFactory2()
-    return sorted(factory.EnumAdapters(), key=lambda a: a.GetDesc().DedicatedVideoMemory)[0]
+    return CreateDXGIFactory2().EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE)
 
 
-def print_debug(info):
-    for index in range(0, info.GetNumStoredMessages()):
-        print(info.GetMessage(index).pDescription)
+def get_messages(info):
+    """Yield (severity, text) for every message stored in an ID3D12InfoQueue."""
+    for index in range(info.GetNumStoredMessages()):
+        size = ctypes.c_size_t()
+        info.GetMessage(index, None, ctypes.byref(size))  # first call: size of the message
+        buf = ctypes.create_string_buffer(size.value)
+        message = ctypes.cast(buf, ctypes.POINTER(D3D12_MESSAGE))
+        info.GetMessage(index, message, ctypes.byref(size))
+        yield message.contents.Severity, message.contents.pDescription
+
+
+def count_errors(info):
+    return sum(1 for severity, _ in get_messages(info) if severity <= D3D12_MESSAGE_SEVERITY_ERROR)
 
 
 def setup_debug(device):
+    """Print the debug layer messages at exit; returns the ID3D12InfoQueue."""
     info = ID3D12InfoQueue(device)
 
-    def d3d12_debug_hook(*exc):
-        print_debug(info)
-        print(exc)
-
-    def d3d12_debug_exit_hook():
-        print_debug(info)
-
-    sys.excepthook = d3d12_debug_hook
-    atexit.register(d3d12_debug_exit_hook)
+    def dump():
+        for severity, text in get_messages(info):
+            print('[D3D12]', text)
+        print('debug layer errors:', count_errors(info))
+    atexit.register(dump)
+    return info
 
 
-class UploadBuffer:
+# ---------------------------------------------------------------------------
+# resources
+# ---------------------------------------------------------------------------
 
-    def __init__(self, device, size):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
-        buffer_desc.Width = size
-        buffer_desc.Height = 1
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_UNKNOWN
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-
-        self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, None)
-
-    def upload(self, data):
-        self.resource.upload(data)
+def buffer_desc(size, flags=D3D12_RESOURCE_FLAG_NONE):
+    desc = D3D12_RESOURCE_DESC(Dimension=D3D12_RESOURCE_DIMENSION_BUFFER, Width=size, Height=1,
+                               DepthOrArraySize=1, MipLevels=1, Format=DXGI_FORMAT_UNKNOWN,
+                               Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR, Flags=flags)
+    desc.SampleDesc.Count = 1
+    return desc
 
 
-class VertexBuffer:
-    def __init__(self, device, data, nvertices):
-        self.nvertices = nvertices
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
-        buffer_desc.Width = data.nbytes
-        buffer_desc.Height = 1
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_UNKNOWN
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-
-        resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, None)
-
-        resource.upload(data)
-
-        self.vertex_resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, None)
-
-        command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
-            Type=D3D12_COMMAND_LIST_TYPE_COPY)
-        queue = device.CreateCommandQueue(command_queue_desc)
-
-        fence = device.CreateFence()
-        fence_event = Event()
-        fence_value = fence.GetCompletedValue()
-        fence_value += 1
-
-        self.buffer_view = D3D12_VERTEX_BUFFER_VIEW(
-            BufferLocation=self.vertex_resource.GetGPUVirtualAddress())
-        self.buffer_view.SizeInBytes = buffer_desc.Width
-        self.buffer_view.StrideInBytes = self.buffer_view.SizeInBytes // nvertices
-
-        allocator = device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY)
-        command_list = device.CreateCommandList(
-            0, D3D12_COMMAND_LIST_TYPE_COPY, allocator)
-        command_list.CopyResource(self.vertex_resource, resource)
-        command_list.Close()
-
-        queue.ExecuteCommandLists([command_list])
-        queue.Signal(fence, fence_value)
-        if fence.GetCompletedValue() < fence_value:
-            fence.SetEventOnCompletion(fence_value, fence_event)
-            fence_event.wait()
+def create_buffer(device, size, heap_type, state, flags=D3D12_RESOURCE_FLAG_NONE):
+    return device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(Type=heap_type), D3D12_HEAP_FLAG_NONE,
+                                          buffer_desc(size, flags), state)
 
 
-class Texture:
-
-    def __init__(self, device, width, height, uav=False, name=None):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D
-        buffer_desc.Width = width
-        buffer_desc.Height = height
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-        if uav:
-            buffer_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-        self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COMMON, None)
-        if name:
-            self.resource.SetName(name)
+def write_resource(resource, data, offset=0):
+    """Copy bytes (or any buffer: numpy arrays, ctypes objects...) into a mappable resource."""
+    view = memoryview(data).cast('B')
+    address = resource.Map(0, D3D12_RANGE(0, 0))  # we won't read from it
+    ctypes.memmove(address + offset, (ctypes.c_ubyte * len(view)).from_buffer_copy(view), len(view))
+    resource.Unmap(0)
 
 
-class ReadbackBuffer:
-
-    def __init__(self, device, size):
-        buffer_desc = D3D12_RESOURCE_DESC()
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER
-        buffer_desc.Width = size
-        buffer_desc.Height = 1
-        buffer_desc.DepthOrArraySize = 1
-        buffer_desc.Format = DXGI_FORMAT_UNKNOWN
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-        buffer_desc.MipLevels = 1
-        buffer_desc.SampleDesc.Count = 1
-
-        self.resource = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-            Type=D3D12_HEAP_TYPE_READBACK), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, None)
+def read_resource(resource, size):
+    address = resource.Map(0, D3D12_RANGE(0, size))
+    data = ctypes.string_at(address, size)
+    resource.Unmap(0, D3D12_RANGE(0, 0))
+    return data
 
 
-class Barrier:
-
-    def __init__(self, resource, before, after):
-        self.barrier_desc = D3D12_RESOURCE_BARRIER(
-            Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
-        self.barrier_desc.Transition.pResource = resource
-        self.barrier_desc.Transition.StateBefore = before
-        self.barrier_desc.Transition.StateAfter = after
+def upload_buffer(device, data):
+    """An upload-heap buffer filled with data (fine for small/dynamic data)."""
+    size = memoryview(data).nbytes
+    resource = create_buffer(device, size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ)
+    write_resource(resource, data)
+    return resource
 
 
-class Rasterizer:
+def transition(resource, before, after):
+    barrier = D3D12_RESOURCE_BARRIER(Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
+    barrier.Transition = D3D12_RESOURCE_TRANSITION_BARRIER(
+        pResource=resource, StateBefore=before, StateAfter=after,
+        Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+    return barrier
+
+
+def uav_barrier(resource):
+    barrier = D3D12_RESOURCE_BARRIER(Type=D3D12_RESOURCE_BARRIER_TYPE_UAV)
+    barrier.UAV.pResource = resource
+    return barrier
+
+
+def cpu_handles(device, heap, heap_type, count):
+    """CPU descriptor handles for the first `count` slots of a descriptor heap."""
+    start = heap.GetCPUDescriptorHandleForHeapStart().ptr
+    step = device.GetDescriptorHandleIncrementSize(heap_type)
+    return [D3D12_CPU_DESCRIPTOR_HANDLE(start + i * step) for i in range(count)]
+
+
+class Fence:
+    """A fence plus a counter: signal() and wait until the GPU caught up."""
 
     def __init__(self, device):
-        vs_code = """
-float4 main(float2 v : POSITION) : SV_Position
-{
-    return float4(v.xy, 0, 1);
-}
-"""
-        vertex_shader = D3DCompile(
-            vs_code, None, None, None, 'main', 'vs_5_0', 0, 0)
+        self.fence = device.CreateFence(0)
+        self.value = 0
 
-        ps_code = """
-float4 main() : SV_Target
-{
-    return float4(0, 0, 1, 1);
-}
-"""
-        pixel_shader = D3DCompile(
-            ps_code, None, None, None, 'main', 'ps_5_0', 0, 0)
+    def flush(self, queue):
+        self.value += 1
+        queue.Signal(self.fence, self.value)
+        if self.fence.GetCompletedValue() < self.value:
+            self.fence.SetEventOnCompletion(self.value, None)  # NULL event: blocks until reached
 
-        versioned_root_signature = D3D12_VERSIONED_ROOT_SIGNATURE_DESC(
-            Version=D3D_ROOT_SIGNATURE_VERSION_1_1)
-        versioned_root_signature.Version = D3D_ROOT_SIGNATURE_VERSION_1_1
-        versioned_root_signature.Desc_1_1 = D3D12_ROOT_SIGNATURE_DESC1(
-            Flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)
 
-        serialized_root_signature = D3D12SerializeVersionedRootSignature(
-            versioned_root_signature)
-        self.root_signature = device.CreateRootSignature(
-            0, serialized_root_signature)
+def execute_and_wait(device, queue, record, list_type=D3D12_COMMAND_LIST_TYPE_DIRECT):
+    """Record a one-shot command list with record(command_list), run it and wait."""
+    allocator = device.CreateCommandAllocator(list_type)
+    command_list = device.CreateCommandList(0, list_type, allocator)
+    record(command_list)
+    command_list.Close()
+    queue.ExecuteCommandLists([command_list])
+    Fence(device).flush(queue)
 
-        pipeline_state_desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC()
-        pipeline_state_desc.pRootSignature = self.root_signature
-        pipeline_state_desc.VS = D3D12_SHADER_BYTECODE(
-            pShaderBytecode=vertex_shader, BytecodeLength=vertex_shader.GetBufferSize())
-        pipeline_state_desc.PS = D3D12_SHADER_BYTECODE(
-            pShaderBytecode=pixel_shader, BytecodeLength=pixel_shader.GetBufferSize())
-        pipeline_state_desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID
-        pipeline_state_desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE
-        pipeline_state_desc.InputLayout.pInputElementDescs = [D3D12_INPUT_ELEMENT_DESC(
-            SemanticName='POSITION', Format=DXGI_FORMAT_R32G32_FLOAT)]
-        pipeline_state_desc.InputLayout.NumElements = 1
-        pipeline_state_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
-        pipeline_state_desc.NumRenderTargets = 1
-        pipeline_state_desc.RTVFormats = (DXGI_FORMAT_R8G8B8A8_UNORM, )
-        pipeline_state_desc.SampleDesc.Count = 1
-        pipeline_state_desc.SampleMask = 0xFFFFFFFF
-        pipeline_state_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
-        self.pipeline_state = device.CreateGraphicsPipelineState(
-            pipeline_state_desc)
 
-        self.allocator = device.CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT)
-        self.command_list = device.CreateCommandList(
-            0, D3D12_COMMAND_LIST_TYPE_DIRECT, self.allocator)
-        self.command_list.Close()
+def default_buffer(device, queue, data, final_state):
+    """A default-heap (GPU only) buffer initialized through a temporary upload buffer."""
+    size = memoryview(data).nbytes
+    staging = upload_buffer(device, data)
+    resource = create_buffer(device, size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON)
 
-    def execute(self, queue, back_buffer, rtv, meshes):
-        self.command_list.Reset(self.allocator, self.pipeline_state)
+    def record(command_list):
+        command_list.CopyResource(resource, staging)
+        command_list.ResourceBarrier([transition(resource, D3D12_RESOURCE_STATE_COPY_DEST, final_state)])
+    execute_and_wait(device, queue, record)
+    return resource
 
-        self.command_list.SetGraphicsRootSignature(self.root_signature)
-        self.command_list.IASetPrimitiveTopology(
-            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
-        self.command_list.OMSetRenderTargets([rtv])
-        self.command_list.RSSetViewports(
-            [D3D12_VIEWPORT(Width=1024, Height=1024, MinDepth=0.1, MaxDepth=1000)])
-        self.command_list.RSSetScissorRects(
-            [D3D12_RECT(left=0, top=0, right=1024, bottom=1024)])
 
-        self.command_list.ResourceBarrier([Barrier(
-            back_buffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET).barrier_desc])
+# ---------------------------------------------------------------------------
+# window and swapchain
+# ---------------------------------------------------------------------------
 
-        self.command_list.ClearRenderTargetView(
-            rtv, (random.uniform(0, 1), 0, random.uniform(0, 1), 1))
+class App:
+    """A tkinter window whose client area hosts a DXGI swapchain."""
 
-        for mesh in meshes:
-            self.command_list.IASetVertexBuffers(0, [mesh.buffer_view])
-            self.command_list.DrawInstanced(mesh.nvertices, 1, 0, 0)
+    def __init__(self, title, width, height):
+        self.title = title
+        self.root = tkinter.Tk()
+        self.root.title(title)
+        self.frame = tkinter.Frame(self.root, width=width, height=height, bg='')
+        self.frame.pack(fill=tkinter.BOTH, expand=True)
+        self.root.update()
+        self.hwnd = self.frame.winfo_id()
+        self.width, self.height = width, height
+        self.resized = False
+        self.running = True
+        self.fullscreen = False
+        self.root.protocol('WM_DELETE_WINDOW', self.close)
+        self.frame.bind('<Configure>', self._on_configure)
+        self.root.bind('<Escape>', lambda e: self.close())
+        self._frames = 0
+        self._last = time.perf_counter()
 
-        self.command_list.ResourceBarrier([Barrier(
-            back_buffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT).barrier_desc])
+    def _on_configure(self, event):
+        if event.width > 0 and event.height > 0 and (event.width, event.height) != (self.width, self.height):
+            self.width, self.height = event.width, event.height
+            self.resized = True
 
-        self.command_list.Close()
+    def toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+        self.root.attributes('-fullscreen', self.fullscreen)
 
-        queue.ExecuteCommandLists([self.command_list])
+    def close(self):
+        self.running = False
+
+    def pump(self):
+        """Process window events; returns False once the window has been closed."""
+        self.root.update()
+        self._frames += 1
+        now = time.perf_counter()
+        if now - self._last >= 1:
+            self.fps = self._frames / (now - self._last)
+            self.root.title('%s - %.0f fps' % (self.title, self.fps))
+            self._frames, self._last = 0, now
+        return self.running
+
+    def destroy(self):
+        self.root.destroy()
+
+
+class SwapChain:
+    """Flip-model swapchain + one RTV per back buffer."""
+
+    def __init__(self, device, queue, app, format=DXGI_FORMAT_R8G8B8A8_UNORM):
+        self.device = device
+        self.queue = queue
+        self.format = format
+        desc = DXGI_SWAP_CHAIN_DESC1(Width=app.width, Height=app.height, Format=format,
+                                     BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT, BufferCount=FRAME_COUNT,
+                                     Scaling=DXGI_SCALING_STRETCH, SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD)
+        desc.SampleDesc.Count = 1
+        self.swapchain = IDXGISwapChain3(CreateDXGIFactory2().CreateSwapChainForHwnd(queue, app.hwnd, desc))
+        self.rtv_heap = device.CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_DESC(
+            Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NumDescriptors=FRAME_COUNT))
+        self.rtvs = cpu_handles(device, self.rtv_heap, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, FRAME_COUNT)
+        self.fence = Fence(device)
+        self.width, self.height = app.width, app.height
+        self._create_views()
+
+    def _create_views(self):
+        self.buffers = [self.swapchain.GetBuffer(i) for i in range(FRAME_COUNT)]
+        for buffer, rtv in zip(self.buffers, self.rtvs):
+            self.device.CreateRenderTargetView(buffer, None, rtv)
+
+    def resize(self, width, height):
+        self.fence.flush(self.queue)  # the GPU must not use the old buffers anymore
+        self.buffers = []  # release every reference before ResizeBuffers
+        self.swapchain.ResizeBuffers(FRAME_COUNT, width, height)
+        self.width, self.height = width, height
+        self._create_views()
+
+    def current(self):
+        """(back buffer resource, its RTV) for this frame.
+
+        The returned wrapper does not hold a COM reference (addref=False and not owned):
+        ResizeBuffers() fails while anybody still references the old buffers, and a
+        `back_buffer` variable surviving from the previous frame would be enough.
+        """
+        index = self.swapchain.GetCurrentBackBufferIndex()
+        return ID3D12Resource.from_address(self.buffers[index].value, addref=False), self.rtvs[index]
+
+    def present(self, sync_interval=1):
+        self.swapchain.Present(sync_interval, 0)
+        self.fence.flush(self.queue)  # keep it simple: one frame in flight
+
+
+# ---------------------------------------------------------------------------
+# shaders, root signatures, vertex buffers
+# ---------------------------------------------------------------------------
+
+def compile_shader(source, entry, target, defines=None):
+    """D3DCompile (FXC, shader model 5.x); defines is a dict of macros."""
+    macros = None
+    if defines:
+        macros = [D3D_SHADER_MACRO(Name=k, Definition=str(v)) for k, v in defines.items()]
+        macros.append(D3D_SHADER_MACRO())  # the array is NULL terminated
+    return D3DCompile(source, None, macros, None, entry, target)
+
+
+def create_root_signature(device, parameters=(), flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT):
+    """Serialize and create a version 1.1 root signature from D3D12_ROOT_PARAMETER1 objects."""
+    desc = D3D12_VERSIONED_ROOT_SIGNATURE_DESC(Version=D3D_ROOT_SIGNATURE_VERSION_1_1)
+    desc.Desc_1_1 = D3D12_ROOT_SIGNATURE_DESC1(pParameters=list(parameters) or None, Flags=flags)
+    return device.CreateRootSignature(0, D3D12SerializeVersionedRootSignature(desc))
+
+
+def root_constants(register, count, visibility=D3D12_SHADER_VISIBILITY_ALL):
+    """A root parameter holding `count` 32 bit constants visible as cbuffer b<register>."""
+    param = D3D12_ROOT_PARAMETER1(ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+                                  ShaderVisibility=visibility)
+    param.Constants.ShaderRegister = register
+    param.Constants.Num32BitValues = count
+    return param
+
+
+def vertex_buffer_view(device, queue, data, stride):
+    """Upload data into a default-heap vertex buffer; returns (resource, D3D12_VERTEX_BUFFER_VIEW)."""
+    resource = default_buffer(device, queue, data, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)
+    view = D3D12_VERTEX_BUFFER_VIEW(BufferLocation=resource.GetGPUVirtualAddress(),
+                                    SizeInBytes=memoryview(data).nbytes, StrideInBytes=stride)
+    return resource, view
+
+
+def graphics_pipeline_desc(root_signature, vs, ps, input_elements, rtv_format=DXGI_FORMAT_R8G8B8A8_UNORM):
+    """A D3D12_GRAPHICS_PIPELINE_STATE_DESC with sensible defaults (no blending, no culling, no depth)."""
+    desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC(
+        pRootSignature=root_signature,
+        VS=D3D12_SHADER_BYTECODE(pShaderBytecode=vs), PS=D3D12_SHADER_BYTECODE(pShaderBytecode=ps),
+        SampleMask=0xFFFFFFFF, PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        NumRenderTargets=1, RTVFormats=(rtv_format,))
+    desc.InputLayout.pInputElementDescs = input_elements
+    desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID
+    desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE
+    desc.RasterizerState.DepthClipEnable = True
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+    desc.SampleDesc.Count = 1
+    return desc
+
+
+def viewport_and_scissor(width, height):
+    return ([D3D12_VIEWPORT(Width=width, Height=height, MinDepth=0, MaxDepth=1)],
+            [D3D12_RECT(left=0, top=0, right=width, bottom=height)])

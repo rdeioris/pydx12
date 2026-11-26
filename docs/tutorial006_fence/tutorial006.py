@@ -1,9 +1,8 @@
-import time
-from pydx12 import *
-from utils import get_best_adapter, enable_debug, print_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer
 from PIL import Image
-import gc
-import sys
+
+from pydx12 import *
+from utils import (get_best_adapter, enable_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer,
+                   get_footprint, pad_rows, kernel32, INFINITE)
 
 enable_debug()
 
@@ -11,31 +10,18 @@ device = D3D12CreateDevice(get_best_adapter())
 
 setup_debug(device)
 
-image = Image.open('python-logo.png')
+image = Image.open('python-logo.png').convert('RGBA')
 width, height = image.size
 print(width, height)
 texture = Texture(device, width, height)
-footprint, num_rows, row_size_in_bytes, total_bytes = device.GetCopyableFootprints(
-    texture.resource.GetDesc(), 0, 1, 0)
-
+footprint, num_rows, row_size_in_bytes, total_bytes = get_footprint(device, texture.resource)
 print(footprint.Footprint.to_dict(), num_rows, row_size_in_bytes, total_bytes)
 
-original_bytes = image.tobytes()
-bitmap_size = footprint.Footprint.RowPitch * footprint.Footprint.Height
-fixed_bytes = bytearray(bitmap_size)
-
 row_pitch = footprint.Footprint.RowPitch
-
-for y in range(0, footprint.Footprint.Height):
-    destination_offset = row_pitch * y
-    source_offset = width * 4 * y
-    fixed_bytes[destination_offset:destination_offset +
-                (width * 4)] = original_bytes[source_offset:source_offset + (width * 4)]
-
-print(len(fixed_bytes))
-
+# the last row is not padded (total_bytes is smaller), but a full grid of rows is easier to read back
+bitmap_size = row_pitch * num_rows
 upload_buffer = UploadBuffer(device, bitmap_size)
-upload_buffer.upload(fixed_bytes)
+upload_buffer.upload(pad_rows(image.tobytes(), width * 4, row_pitch, num_rows))
 
 readback_buffer = ReadbackBuffer(device, bitmap_size)
 
@@ -43,15 +29,17 @@ command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
     Type=D3D12_COMMAND_LIST_TYPE_COPY)
 queue = device.CreateCommandQueue(command_queue_desc)
 
-fence = device.CreateFence()
-fence_event = Event()
+# a fence is a 64 bit counter the GPU sets (via queue.Signal) when it reaches that point of the queue;
+# the CPU can wait for a value through a Win32 event (created with ctypes, no wrapper needed)
+fence = device.CreateFence(0, D3D12_FENCE_FLAG_NONE)
+fence_event = kernel32.CreateEventW(None, False, False, None)
 
 allocator = device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY)
 command_list = device.CreateCommandList(
     0, D3D12_COMMAND_LIST_TYPE_COPY, allocator, None)
 
 texture_copy_location = D3D12_TEXTURE_COPY_LOCATION(
-    Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, pResource=texture.resource)
+    Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, pResource=texture.resource, SubresourceIndex=0)
 
 upload_buffer_copy_location = D3D12_TEXTURE_COPY_LOCATION(
     Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, pResource=upload_buffer.resource, PlacedFootprint=footprint)
@@ -69,8 +57,9 @@ queue.ExecuteCommandLists([command_list])
 queue.Signal(fence, 1)
 if fence.GetCompletedValue() < 1:
     fence.SetEventOnCompletion(1, fence_event)
-    fence_event.wait()
+    kernel32.WaitForSingleObject(fence_event, INFINITE)
+# (passing None instead of an event makes SetEventOnCompletion itself block until completion)
 
-destination = Image.frombytes(
-    'RGBA', (footprint.Footprint.RowPitch // 4, height), readback_buffer.resource.download())
-destination.save('foo.png')
+destination = Image.frombytes('RGBA', (row_pitch // 4, height), readback_buffer.download())
+destination.crop((0, 0, width, height)).save('foo.png')
+print('saved foo.png')

@@ -1,101 +1,99 @@
-import time
-from pydx12 import *
-from utils import get_best_adapter, enable_debug, print_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer, Barrier, VertexBuffer, Rasterizer
-from PIL import Image
-import gc
-import sys
-import time
-import random
+"""Tutorial 011: Triangle
+
+The first real draw call: a vertex buffer with three vertices, a root
+signature, vertex and pixel shaders and a graphics pipeline state object
+(PSO). The command list sets the viewport, binds the render target and the
+vertex buffer and draws.
+
+Run: python tutorial011.py [--frames N]
+"""
+import math
+
 import numpy
-import threading
-from queue import Queue
+
+from pydx12 import *
+from utils import (App, SwapChain, compile_shader, create_root_signature, enable_debug, get_best_adapter,
+                   graphics_pipeline_desc, parse_args, setup_debug, transition, vertex_buffer_view,
+                   viewport_and_scissor)
+
+args = parse_args(__doc__)
 
 enable_debug()
-
 device = D3D12CreateDevice(get_best_adapter())
+info = setup_debug(device)
+queue = device.CreateCommandQueue(D3D12_COMMAND_QUEUE_DESC(Type=D3D12_COMMAND_LIST_TYPE_DIRECT))
 
-setup_debug(device)
+app = App('pydx12: Tutorial 011 (Triangle)', 1024, 1024)
+swap_chain = SwapChain(device, queue, app)
 
-window = Window('pydx12: Tutorial 011 (SwapChain)', 1024, 1024)
+# x, y, r, g, b for each vertex
+vertices = numpy.array([
+    0.0, 0.8, 1, 0, 0,
+    0.8, -0.8, 0, 1, 0,
+    -0.8, -0.8, 0, 0, 1,
+], dtype=numpy.float32)
+vertex_buffer, vertex_buffer_view = vertex_buffer_view(device, queue, vertices, stride=5 * 4)
 
-command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
-    Type=D3D12_COMMAND_LIST_TYPE_DIRECT)
-queue = device.CreateCommandQueue(command_queue_desc)
+shader = """
+struct vsout { float4 position : SV_Position; float3 color : COLOR; };
 
-swap_chain_desc1 = DXGI_SWAP_CHAIN_DESC1(Format=DXGI_FORMAT_R8G8B8A8_UNORM, BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                                         BufferCount=2, Scaling=DXGI_SCALING_STRETCH, SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD)
-swap_chain_desc1.SampleDesc.Count = 1
-swap_chain = CreateDXGIFactory2().CreateSwapChainForHwnd(
-    queue, window, swap_chain_desc1)
+vsout vs(float2 position : POSITION, float3 color : COLOR)
+{
+    vsout OUT;
+    OUT.position = float4(position, 0, 1);
+    OUT.color = color;
+    return OUT;
+}
 
-descriptor_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC(
-    Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-    NumDescriptors=2)
-descriptor_heap = device.CreateDescriptorHeap(descriptor_heap_desc)
-rtvs = descriptor_heap.cpu((0, 1))
+float4 ps(vsout IN) : SV_Target
+{
+    return float4(IN.color, 1);
+}
+"""
+vertex_shader = compile_shader(shader, 'vs', 'vs_5_0')
+pixel_shader = compile_shader(shader, 'ps', 'ps_5_0')
 
-device.CreateRenderTargetView(swap_chain.GetBuffer(0), None, rtvs[0])
-device.CreateRenderTargetView(swap_chain.GetBuffer(1), None, rtvs[1])
+# no parameters: this pipeline only reads the input assembler
+root_signature = create_root_signature(device)
 
-vertex_buffer = VertexBuffer(device, numpy.array(
-    [0, 1, -1, -1, 1, -1], dtype=numpy.float32), 3)
+pipeline_state = device.CreateGraphicsPipelineState(graphics_pipeline_desc(
+    root_signature, vertex_shader, pixel_shader, [
+        D3D12_INPUT_ELEMENT_DESC(SemanticName='POSITION', Format=DXGI_FORMAT_R32G32_FLOAT),
+        D3D12_INPUT_ELEMENT_DESC(SemanticName='COLOR', Format=DXGI_FORMAT_R32G32B32_FLOAT,
+                                 AlignedByteOffset=D3D12_APPEND_ALIGNED_ELEMENT),
+    ]))
 
-print(vertex_buffer)
+allocator = device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
+command_list = device.CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator)
+command_list.Close()
 
-rasterizer = Rasterizer(device)
+frame = 0
+while app.pump() and (not args.frames or frame < args.frames):
+    if app.resized:
+        app.resized = False
+        swap_chain.resize(app.width, app.height)
+    back_buffer, rtv = swap_chain.current()
+    viewports, scissors = viewport_and_scissor(swap_chain.width, swap_chain.height)
 
-running = True
-fps = 0
+    allocator.Reset()
+    command_list.Reset(allocator, pipeline_state)
+    command_list.SetGraphicsRootSignature(root_signature)
+    command_list.RSSetViewports(viewports)
+    command_list.RSSetScissorRects(scissors)
+    command_list.ResourceBarrier([transition(back_buffer, D3D12_RESOURCE_STATE_PRESENT,
+                                             D3D12_RESOURCE_STATE_RENDER_TARGET)])
+    command_list.OMSetRenderTargets(1, [rtv], False)
+    pulse = 0.1 + 0.05 * math.sin(frame * 0.05)
+    command_list.ClearRenderTargetView(rtv, (pulse, pulse, pulse * 1.5, 1))
+    command_list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
+    command_list.IASetVertexBuffers(0, [vertex_buffer_view])
+    command_list.DrawInstanced(3, 1, 0, 0)
+    command_list.ResourceBarrier([transition(back_buffer, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                             D3D12_RESOURCE_STATE_PRESENT)])
+    command_list.Close()
+    queue.ExecuteCommandLists([command_list])
+    swap_chain.present()
+    frame += 1
 
-message_queue = Queue()
-
-def render_loop():
-    fence = device.CreateFence()
-    fence_event = Event()
-    fence_value = fence.GetCompletedValue()
-    fence_value += 1
-
-    frame_counter = 0
-    counter = 0
-    frequency = QueryPerformanceFrequency()
-
-    now = QueryPerformanceCounter()
-    while running:
-        back_buffer_index = swap_chain.GetCurrentBackBufferIndex()
-        back_buffer = swap_chain.GetBuffer(back_buffer_index)
-
-        rasterizer.execute(queue, back_buffer,
-                           rtvs[back_buffer_index], [vertex_buffer])
-
-        queue.Signal(fence, fence_value)
-        if fence.GetCompletedValue() < fence_value:
-            fence.SetEventOnCompletion(fence_value, fence_event)
-            fence_event.wait()
-        fence_value += 1
-
-        swap_chain.Present(1)
-        new_now = QueryPerformanceCounter()
-        counter += new_now - now
-        now = new_now
-        if counter >= frequency:
-            counter -= frequency
-            fps = frame_counter
-            message_queue.put(str(fps))
-            frame_counter = 1
-        else:
-            frame_counter += 1
-
-
-t = threading.Thread(target=render_loop)
-t.start()
-
-while not window.is_closed():
-    window.dequeue()
-    if not message_queue.empty():
-        new_title = message_queue.get_nowait()
-        window.set_title(new_title)
-
-running = False
-t.join()
-
+app.destroy()
 print('END')

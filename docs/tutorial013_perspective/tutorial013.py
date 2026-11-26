@@ -1,183 +1,113 @@
-import time
-from pydx12 import *
-from utils import App, get_best_adapter, enable_debug, print_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer, Barrier, Rasterizer, Mesh
-from PIL import Image
-import gc
-import sys
-import time
-import random
+"""Tutorial 013: Perspective
+
+Replaces the orthographic projection with a perspective one: a grid of cubes
+spreads away from a camera that slowly moves forward, so far cubes look
+smaller. The window can be resized (the swapchain buffers are resized to
+match and the aspect ratio follows), F toggles fullscreen and Escape quits.
+
+Note there is still no depth buffer: cubes are drawn far to near, which is
+enough here (tutorial 014 adds depth testing).
+
+Run: python tutorial013.py [--frames N]
+"""
 import numpy
-import threading
-from queue import Queue
 from pyrr import matrix44
 
-camera = matrix44.create_from_translation((0, 0, -3), dtype='float32')
-perspective = matrix44.create_perspective_projection(
-    60., 1., 0.1, 1000., dtype='float32')
-print(perspective * camera)
+from pydx12 import *
+from utils import (App, Mesh, SwapChain, compile_shader, create_root_signature, cube, enable_debug,
+                   get_best_adapter, graphics_pipeline_desc, parse_args, perspective, root_constants, setup_debug,
+                   transition, viewport_and_scissor)
+
+args = parse_args(__doc__)
 
 enable_debug()
-
 device = D3D12CreateDevice(get_best_adapter())
+info = setup_debug(device)
+queue = device.CreateCommandQueue(D3D12_COMMAND_QUEUE_DESC(Type=D3D12_COMMAND_LIST_TYPE_DIRECT))
 
-setup_debug(device)
+app = App('pydx12: Tutorial 013 (Perspective)', 1280, 720)
+app.root.bind('<KeyPress-f>', lambda event: app.toggle_fullscreen())
+swap_chain = SwapChain(device, queue, app)
 
-window = Window('pydx12: Tutorial 013 (SwapChain)', 1920, 1080)
-window.set_fullscreen(True)
+positions, colors, indices = cube()
+mesh = Mesh(device, queue, [positions, colors], indices)
 
-command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
-    Type=D3D12_COMMAND_LIST_TYPE_DIRECT)
-queue = device.CreateCommandQueue(command_queue_desc)
+shader = """
+cbuffer Transform : register(b0)
+{
+    row_major float4x4 matrix_mvp;
+};
 
-swap_chain_desc1 = DXGI_SWAP_CHAIN_DESC1(Format=DXGI_FORMAT_R8G8B8A8_UNORM, BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                                         BufferCount=2, Scaling=DXGI_SCALING_STRETCH, SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD)
-swap_chain_desc1.SampleDesc.Count = 1
-swap_chain = CreateDXGIFactory2().CreateSwapChainForHwnd(
-    queue, window, swap_chain_desc1)
+struct vsout { float4 position : SV_Position; float3 color : COLOR; };
 
-descriptor_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC(
-    Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-    NumDescriptors=2)
-descriptor_heap = device.CreateDescriptorHeap(descriptor_heap_desc)
-rtvs = descriptor_heap.cpu((0, 1))
+vsout vs(float3 position : POSITION, float3 color : COLOR)
+{
+    vsout OUT;
+    OUT.position = mul(float4(position, 1), matrix_mvp);
+    OUT.color = color;
+    return OUT;
+}
 
-device.CreateRenderTargetView(swap_chain.GetBuffer(0), None, rtvs[0])
-device.CreateRenderTargetView(swap_chain.GetBuffer(1), None, rtvs[1])
+float4 ps(vsout IN) : SV_Target
+{
+    return float4(IN.color, 1);
+}
+"""
+root_signature = create_root_signature(device, [root_constants(0, 16)])
+pipeline_desc = graphics_pipeline_desc(
+    root_signature, compile_shader(shader, 'vs', 'vs_5_0'), compile_shader(shader, 'ps', 'ps_5_0'), [
+        D3D12_INPUT_ELEMENT_DESC(SemanticName='POSITION', Format=DXGI_FORMAT_R32G32B32_FLOAT, InputSlot=0),
+        D3D12_INPUT_ELEMENT_DESC(SemanticName='COLOR', Format=DXGI_FORMAT_R32G32B32_FLOAT, InputSlot=1),
+    ])
+pipeline_desc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK
+pipeline_desc.RasterizerState.FrontCounterClockwise = True
+pipeline_state = device.CreateGraphicsPipelineState(pipeline_desc)
 
-mesh = Mesh(device)
-mesh.set_vertex_buffer(numpy.array(
-    [
-        -1, 1, -10,  # A0
-        1, 1, -10,  # B0
-        -1, -1, -10,  # C0
-        1, -1, -10,  # D0
-        - 1, 1, 1,  # A1
-        1, 1, 1,  # B1
-        -1, -1, 1,  # C1
-        1, -1, 1  # D1
-    ], dtype=numpy.float32))
-mesh.set_color_buffer(numpy.array(
-    [
-        1, 0, 0,
-        1, 1, 0,
-        1, 0, 1,
-        0, 1, 1,
-        1, 1, 1,
-        1, 1, 1
-    ], dtype=numpy.float32))
-mesh.set_index_buffer(numpy.array(
-    [
-        0, 1, 2, 1, 2, 3,  # front face
-    ], dtype=numpy.uint32))
-mesh.set_nvertices(6)
-scale = matrix44.create_from_scale((0.5, 0.5, 0.5), dtype='float32')
-rasterizer = Rasterizer(device)
+allocator = device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
+command_list = device.CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator)
+command_list.Close()
 
-fps = 0
+# a 5x3 grid of cubes, from z=-4 to z=-40, sorted far to near
+grid = sorted(((x * 2.5, y * 2.5, -4.0 - z * 4) for x in range(-2, 3) for y in range(-1, 2) for z in range(10)),
+              key=lambda p: p[2])
 
-message_queue = Queue()
+theta = 0
+forward = 0
+frame = 0
+while app.pump() and (not args.frames or frame < args.frames):
+    if app.resized:
+        app.resized = False
+        swap_chain.resize(app.width, app.height)
+    back_buffer, rtv = swap_chain.current()
+    viewports, scissors = viewport_and_scissor(swap_chain.width, swap_chain.height)
 
-left, top, right, bottom = window.get_client_rect()
-swap_chain_resized = (False, right - left, bottom - top)
+    theta += 0.03
+    forward = (forward + 0.05) % 8
+    view = matrix44.create_from_translation((0, 0, forward), dtype=numpy.float32)
+    projection = perspective(60, swap_chain.width / swap_chain.height, 0.1, 100)
+    rotation = matrix44.create_from_y_rotation(theta, dtype=numpy.float32) @ \
+        matrix44.create_from_x_rotation(theta * 0.5, dtype=numpy.float32)
 
+    allocator.Reset()
+    command_list.Reset(allocator, pipeline_state)
+    command_list.SetGraphicsRootSignature(root_signature)
+    command_list.RSSetViewports(viewports)
+    command_list.RSSetScissorRects(scissors)
+    command_list.ResourceBarrier([transition(back_buffer, D3D12_RESOURCE_STATE_PRESENT,
+                                             D3D12_RESOURCE_STATE_RENDER_TARGET)])
+    command_list.OMSetRenderTargets(1, [rtv], False)
+    command_list.ClearRenderTargetView(rtv, (0.1, 0.1, 0.15, 1))
+    command_list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
+    for position in grid:
+        model = rotation @ matrix44.create_from_translation(position, dtype=numpy.float32)
+        mesh.matrix = model @ view @ projection
+        mesh.draw(command_list)
+    command_list.ResourceBarrier([transition(back_buffer, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                             D3D12_RESOURCE_STATE_PRESENT)])
+    command_list.Close()
+    queue.ExecuteCommandLists([command_list])
+    swap_chain.present()
+    frame += 1
 
-def render_loop():
-    global swap_chain_resized
-
-    theta = 0
-    forward = 0
-    fence = device.CreateFence()
-    fence_event = Event()
-    fence_value = fence.GetCompletedValue()
-    fence_value += 1
-
-    frame_counter = 0
-    counter = 0
-    frequency = QueryPerformanceFrequency()
-
-    now = QueryPerformanceCounter()
-    while App.running:
-        resize, width, height = swap_chain_resized
-        if resize:
-            queue.Signal(fence, fence_value)
-            if fence.GetCompletedValue() < fence_value:
-                fence.SetEventOnCompletion(fence_value, fence_event)
-                fence_event.wait()
-            fence_value += 1
-            back_buffer = None
-            swap_chain.ResizeBuffers(0, width, height)
-            print(width, height)
-            device.CreateRenderTargetView(
-                swap_chain.GetBuffer(0), None, rtvs[0])
-            device.CreateRenderTargetView(
-                swap_chain.GetBuffer(1), None, rtvs[1])
-            swap_chain_resized = (False, width, height)
-        theta += 0.05
-        forward += 0.01
-        scale = matrix44.create_from_scale((0.5, 0.5, 0.5), dtype='float32')
-        rotation = matrix44.create_from_z_rotation(theta, dtype='float32')
-        translation = matrix44.create_from_translation(
-            (0, 0, forward), dtype='float32')
-        perspective = matrix44.create_perspective_projection(
-            60., 1., 0.1, 1000., dtype='float32')
-        #mesh.matrix = scale @ rotation @ translation @ perspective
-        mesh.matrix = translation @ rotation @ scale @ perspective
-
-        back_buffer_index = swap_chain.GetCurrentBackBufferIndex()
-        back_buffer = swap_chain.GetBuffer(back_buffer_index)
-
-        rasterizer.execute(queue, back_buffer,
-                           rtvs[back_buffer_index], width, height, [mesh])
-
-        queue.Signal(fence, fence_value)
-        if fence.GetCompletedValue() < fence_value:
-            fence.SetEventOnCompletion(fence_value, fence_event)
-            fence_event.wait()
-        fence_value += 1
-
-        swap_chain.Present(0)
-        new_now = QueryPerformanceCounter()
-        counter += new_now - now
-        now = new_now
-        if counter >= frequency:
-            counter -= frequency
-            fps = frame_counter
-            message_queue.put(str(fps))
-            frame_counter = 1
-        else:
-            frame_counter += 1
-
-
-t = threading.Thread(target=render_loop)
-t.start()
-
-
-def window_proc(win, message, wparam, lparam):
-    global swap_chain_resized, swap_chain
-    if message in (WM_QUIT, WM_CLOSE):
-        App.running = False
-    elif message == WM_SIZE:
-        width, height = (lparam >> 16), lparam & 0xFFFF
-        swap_chain_resized = (True, width, height)
-    elif message == WM_KEYUP:
-        if wparam == ord('F'):
-            print('fullscreen')
-            win.set_fullscreen(not win.get_fullscreen())
-            left, top, right, bottom = win.get_client_rect()
-            swap_chain_resized = (True, right-left, bottom - top)
-        if wparam == VK_ESCAPE:
-            App.running = False
-
-
-window.set_proc(window_proc)
-
-while App.running:
-    window.dequeue()
-    if not message_queue.empty():
-        new_title = message_queue.get_nowait()
-        window.set_title(new_title)
-
-App.running = False
-t.join()
-
+app.destroy()
 print('END')

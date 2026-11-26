@@ -1,148 +1,106 @@
-import time
-from pydx12 import *
-from utils import get_best_adapter, enable_debug, print_debug, setup_debug, UploadBuffer, Texture, ReadbackBuffer, Barrier
-from PIL import Image
-import gc
-import sys
-import time
+"""Tutorial 009: SwapChain
+
+Creates a DXGI flip-model swapchain on a tkinter window and, every frame,
+copies a texture (the Python logo, uploaded once) into the back buffer at a
+random position before presenting it.
+
+Run: python tutorial009.py [--frames N]
+"""
+import ctypes
 import random
 
+from PIL import Image
+
+from pydx12 import *
+from utils import (App, Fence, create_buffer, enable_debug, execute_and_wait, get_best_adapter, parse_args,
+                   setup_debug, transition)
+
+args = parse_args(__doc__)
+
 enable_debug()
-
 device = D3D12CreateDevice(get_best_adapter())
+info = setup_debug(device)
 
-setup_debug(device)
+queue = device.CreateCommandQueue(D3D12_COMMAND_QUEUE_DESC(Type=D3D12_COMMAND_LIST_TYPE_DIRECT))
 
-image = Image.open('python-logo.png')
+# --- upload the logo into a texture -------------------------------------------------
+image = Image.open('python-logo.png').convert('RGBA')
 width, height = image.size
-print(width, height)
-texture = Texture(device, width, height, name='Python Logo')
-footprint, num_rows, row_size_in_bytes, total_bytes = device.GetCopyableFootprints(
-    texture.resource.GetDesc(), 0, 1, 0)
 
-print(footprint.Footprint.to_dict(), num_rows, row_size_in_bytes, total_bytes)
+texture_desc = D3D12_RESOURCE_DESC(Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D, Width=width, Height=height,
+                                   DepthOrArraySize=1, MipLevels=1, Format=DXGI_FORMAT_R8G8B8A8_UNORM)
+texture_desc.SampleDesc.Count = 1
+texture = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(Type=D3D12_HEAP_TYPE_DEFAULT),
+                                         D3D12_HEAP_FLAG_NONE, texture_desc, D3D12_RESOURCE_STATE_COPY_DEST)
+texture.SetName('Python Logo')
 
-original_bytes = image.tobytes()
-bitmap_size = footprint.Footprint.RowPitch * footprint.Footprint.Height
-fixed_bytes = bytearray(bitmap_size)
-
+# textures rows in an upload buffer must be aligned to D3D12_TEXTURE_DATA_PITCH_ALIGNMENT:
+# GetCopyableFootprints tells us the exact layout
+# (one entry per requested subresource, here just the first one)
+footprints, num_rows, row_sizes, total_bytes = device.GetCopyableFootprints(texture_desc, 0, 1, 0)
+footprint = footprints[0]
 row_pitch = footprint.Footprint.RowPitch
+print('footprint', footprint.Footprint, 'rows', num_rows[0], 'row size', row_sizes[0], 'total', total_bytes)
 
-for y in range(0, footprint.Footprint.Height):
-    destination_offset = row_pitch * y
-    source_offset = width * 4 * y
-    fixed_bytes[destination_offset:destination_offset +
-                (width * 4)] = original_bytes[source_offset:source_offset + (width * 4)]
+upload = create_buffer(device, total_bytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ)
+pixels = image.tobytes()
+address = upload.Map(0)
+for y in range(height):
+    ctypes.memmove(address + y * row_pitch, pixels[y * width * 4:(y + 1) * width * 4], width * 4)
+upload.Unmap(0)
 
-print(len(fixed_bytes))
+texture_location = D3D12_TEXTURE_COPY_LOCATION(Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, pResource=texture)
+upload_location = D3D12_TEXTURE_COPY_LOCATION(Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, pResource=upload,
+                                              PlacedFootprint=footprint)
 
-upload_buffer = UploadBuffer(device, bitmap_size)
-upload_buffer.upload(fixed_bytes)
 
-command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
-    Type=D3D12_COMMAND_LIST_TYPE_DIRECT)
-queue = device.CreateCommandQueue(command_queue_desc)
+def record_upload(command_list):
+    command_list.CopyTextureRegion(texture_location, 0, 0, 0, upload_location)
+    command_list.ResourceBarrier([transition(texture, D3D12_RESOURCE_STATE_COPY_DEST,
+                                             D3D12_RESOURCE_STATE_COPY_SOURCE)])
 
-fence = device.CreateFence()
-fence_event = Event()
-fence_value = fence.GetCompletedValue()
+
+execute_and_wait(device, queue, record_upload)
+
+# --- the swapchain ---------------------------------------------------------------------
+app = App('pydx12: Tutorial 009 (SwapChain)', 1024, 1024)
+
+swap_chain_desc = DXGI_SWAP_CHAIN_DESC1(Width=app.width, Height=app.height, Format=DXGI_FORMAT_R8G8B8A8_UNORM,
+                                        BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT, BufferCount=2,
+                                        Scaling=DXGI_SCALING_STRETCH, SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD)
+swap_chain_desc.SampleDesc.Count = 1
+# IDXGISwapChain3 adds GetCurrentBackBufferIndex()
+swap_chain = IDXGISwapChain3(CreateDXGIFactory2().CreateSwapChainForHwnd(queue, app.hwnd, swap_chain_desc))
+back_buffers = [swap_chain.GetBuffer(0), swap_chain.GetBuffer(1)]  # ID3D12Resource by default
 
 allocator = device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
-print(allocator)
-command_list = device.CreateCommandList(
-    0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator)
-print(command_list)
-
-texture_copy_location = D3D12_TEXTURE_COPY_LOCATION(
-    Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, pResource=texture.resource)
-upload_buffer_copy_location = D3D12_TEXTURE_COPY_LOCATION(
-    Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, pResource=upload_buffer.resource, PlacedFootprint=footprint)
-command_list.CopyTextureRegion(
-    texture_copy_location, 0, 0, 0, upload_buffer_copy_location, None)
-
-command_list.ResourceBarrier([Barrier(
-    texture.resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE).barrier_desc])
+command_list = device.CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator)
 command_list.Close()
+fence = Fence(device)
 
-queue.ExecuteCommandLists([command_list])
-queue.Signal(fence, fence_value)
-if fence.GetCompletedValue() < fence_value:
-    fence.SetEventOnCompletion(fence_value, fence_event)
-    fence_event.wait()
-fence_value += 1
+frame = 0
+while app.pump() and (not args.frames or frame < args.frames):
+    back_buffer = back_buffers[swap_chain.GetCurrentBackBufferIndex()]
 
-window = Window('pydx12: Tutorial 009 (SwapChain)', 1024, 1024)
-
-swap_chain_desc1 = DXGI_SWAP_CHAIN_DESC1(Format=DXGI_FORMAT_R8G8B8A8_UNORM, BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                                         BufferCount=2, Scaling=DXGI_SCALING_STRETCH, SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD)
-swap_chain_desc1.SampleDesc.Count = 1
-swap_chain = CreateDXGIFactory2().CreateSwapChainForHwnd(
-    queue, window, swap_chain_desc1)
-
-print(swap_chain)
-
-
-print('ok')
-
-descriptor_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC(
-    Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-    NumDescriptors=2)
-descriptor_heap = device.CreateDescriptorHeap(descriptor_heap_desc)
-rtvs = descriptor_heap.cpu((0, 1))
-
-device.CreateRenderTargetView(swap_chain.GetBuffer(0), None, rtvs[0])
-device.CreateRenderTargetView(swap_chain.GetBuffer(1), None, rtvs[1])
-
-running = True
-fps = 0
-counter = 0
-frequency = QueryPerformanceFrequency()
-
-now = QueryPerformanceCounter()
-
-while not window.is_closed():
-    window.dequeue()
-
-    back_buffer_index = swap_chain.GetCurrentBackBufferIndex()
-    back_buffer = swap_chain.GetBuffer(back_buffer_index)
-
+    allocator.Reset()
     command_list.Reset(allocator)
-
-    command_list.ResourceBarrier([Barrier(
-        back_buffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET).barrier_desc])
-
-    command_list.ClearRenderTargetView(rtvs[back_buffer_index], (1, 0, 0, 1))
-
-    back_buffer_copy_location = D3D12_TEXTURE_COPY_LOCATION(
-        Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, pResource=back_buffer)
-
-    command_list.ResourceBarrier([Barrier(
-        back_buffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_DEST).barrier_desc])
-
-    command_list.CopyTextureRegion(
-        back_buffer_copy_location, random.randint(0, 512), random.randint(0, 512), 0, texture_copy_location, None)
-
-    command_list.ResourceBarrier([Barrier(
-        back_buffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT).barrier_desc])
-
+    command_list.ResourceBarrier([transition(back_buffer, D3D12_RESOURCE_STATE_PRESENT,
+                                             D3D12_RESOURCE_STATE_COPY_DEST)])
+    back_buffer_location = D3D12_TEXTURE_COPY_LOCATION(Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+                                                       pResource=back_buffer)
+    # the source box keeps the copy inside the back buffer
+    x, y = random.randint(0, app.width - 1), random.randint(0, app.height - 1)
+    box = D3D12_BOX(right=min(width, swap_chain_desc.Width - x), bottom=min(height, swap_chain_desc.Height - y),
+                    back=1)
+    command_list.CopyTextureRegion(back_buffer_location, x, y, 0, texture_location, box)
+    command_list.ResourceBarrier([transition(back_buffer, D3D12_RESOURCE_STATE_COPY_DEST,
+                                             D3D12_RESOURCE_STATE_PRESENT)])
     command_list.Close()
-
     queue.ExecuteCommandLists([command_list])
-    queue.Signal(fence, fence_value)
-    if fence.GetCompletedValue() < fence_value:
-        fence.SetEventOnCompletion(fence_value, fence_event)
-        fence_event.wait()
-    fence_value += 1
 
-    swap_chain.Present(1)
-    new_now = QueryPerformanceCounter()
-    counter += new_now - now
-    now = new_now
-    if counter >= frequency:
-        window.set_title(str(fps))
-        counter -= frequency
-        fps = 1
-    else:
-        fps += 1
+    swap_chain.Present(1, 0)
+    fence.flush(queue)  # wait for the GPU before reusing the allocator
+    frame += 1
 
+app.destroy()
 print('END')

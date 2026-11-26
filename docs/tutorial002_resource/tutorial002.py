@@ -1,7 +1,5 @@
-from pydx12 import D3D12CreateDevice, D3D12_RESOURCE_DESC
-from pydx12.api import (D3D12_CLEAR_VALUE, D3D12_HEAP_FLAG_NONE, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_DESC, D3D12_RESOURCE_DIMENSION_BUFFER,
-                        D3D12_RESOURCE_DIMENSION_TEXTURE2D, D3D12_RESOURCE_STATE_GENERIC_READ, DXGI_FORMAT_UNKNOWN, D3D12_HEAP_PROPERTIES, D3D12GetDebugInterface, ID3D12InfoQueue, D3D12_TEXTURE_LAYOUT_ROW_MAJOR)
-from utils import get_best_adapter
+from pydx12 import *
+from utils import get_best_adapter, buffer_desc
 
 D3D12GetDebugInterface().EnableDebugLayer()
 
@@ -9,31 +7,36 @@ device = D3D12CreateDevice(get_best_adapter())
 
 info = ID3D12InfoQueue(device)
 
-buffer_desc = D3D12_RESOURCE_DESC(Dimension=D3D12_RESOURCE_DIMENSION_BUFFER)
-buffer_desc.Width = 64
-buffer_desc.Height = 1
-buffer_desc.DepthOrArraySize = 1
-buffer_desc.Format = DXGI_FORMAT_UNKNOWN
-buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-buffer_desc.MipLevels = 1
-buffer_desc.SampleDesc.Count = 1
+# a 64 bytes buffer living in an UPLOAD heap (CPU writable, GPU readable)
+desc = D3D12_RESOURCE_DESC(Dimension=D3D12_RESOURCE_DIMENSION_BUFFER)
+desc.Width = 64
+desc.Height = 1
+desc.DepthOrArraySize = 1
+desc.Format = DXGI_FORMAT_UNKNOWN
+desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
+desc.MipLevels = 1
+desc.SampleDesc.Count = 1
 
-try:
-    buffer = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
-        Type=D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, None)
-except:
-    for index in range(0, info.GetNumStoredMessages()):
-        print(info.GetMessage(index).pDescription)
+buffer = device.CreateCommittedResource(D3D12_HEAP_PROPERTIES(
+    Type=D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, desc, D3D12_RESOURCE_STATE_GENERIC_READ, None)
 
-print(buffer.GetDesc().get_fields())
-print(buffer.GetDesc().to_dict())
+# descriptions are plain ctypes structures: print them, convert them to dicts or to raw bytes
 data = buffer.GetDesc()
-print(data.to_bytes())
-print(data.to_bytearray())
+print(data)
+print(data.to_dict())
+print(bytes(data))
 
-d = buffer.GetDesc()
-d2 = d.to_dict()
-d = None
-print(d2['SampleDesc'].to_dict())
+d2 = buffer.GetDesc().to_dict()
+print(d2['SampleDesc'])
 
-buffer.upload(bytearray(64))
+# the same buffer description built by the helper in utils.py
+# (GetDesc() also reports the Alignment chosen by the driver)
+print(buffer_desc(64).to_dict())
+
+# writing to an upload buffer: map it, copy the bytes, unmap it
+import ctypes
+address = buffer.Map(0, D3D12_RANGE(0, 0))
+ctypes.memmove(address, bytes(range(64)), 64)
+buffer.Unmap(0)
+
+print('debug layer messages:', info.GetNumStoredMessages())

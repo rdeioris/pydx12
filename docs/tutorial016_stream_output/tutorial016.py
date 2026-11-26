@@ -1,139 +1,198 @@
-import time
-from pydx12 import *
-from utils import get_best_adapter, enable_debug, print_debug, setup_debug, Barrier, Rasterizer, Mesh, GLTF, ResourceBuffer
-from PIL import Image
-import gc
-import sys
-import time
-import random
-import numpy
-import threading
-from queue import Queue
-from pyrr import matrix44
-import struct
+"""Tutorial 016: Stream output
+
+Same tessellated patches as tutorial 015, but the stream output stage also
+writes every vertex produced by the domain shader (its SV_Position) into a
+GPU buffer before rasterization. The GPU keeps the number of bytes written
+in a "filled size" counter, which we reset every frame and copy to a
+readback buffer: the window title shows how many triangles the tessellator
+generated for the current factor (keys 1-9).
+
+Run: python tutorial016.py [--frames N]
+"""
 import math
+import struct
+
+import numpy
+from pyrr import matrix44
+
+from pydx12 import *
+from utils import (App, DepthBuffer, Mesh, SwapChain, compile_shader, create_buffer, create_root_signature,
+                   enable_debug, execute_and_wait, get_best_adapter, graphics_pipeline_desc, parse_args, perspective, read_resource,
+                   root_constants, setup_debug, transition, upload_buffer, viewport_and_scissor, write_resource)
+
+args = parse_args(__doc__)
 
 enable_debug()
-
 device = D3D12CreateDevice(get_best_adapter())
+info = setup_debug(device)
+queue = device.CreateCommandQueue(D3D12_COMMAND_QUEUE_DESC(Type=D3D12_COMMAND_LIST_TYPE_DIRECT))
 
-print(device)
+app = App('pydx12: Tutorial 016 (Stream Output) - press 1-9', 1024, 1024)
+swap_chain = SwapChain(device, queue, app)
+depth_buffer = DepthBuffer(device, app.width, app.height)
 
-setup_debug(device)
+# four patches with one control point each: (x, y, rotation angle)
+control_points = numpy.array([(0, 0, a) for a in (0, math.pi / 2, math.pi, math.pi * 1.5)], dtype=numpy.float32)
+patches = Mesh(device, queue, [control_points], numpy.array([0, 1, 2, 3], dtype=numpy.uint16))
 
-print('DEBUG SET')
-
-window = Window('pydx12: Tutorial 015 (Tessellation)', 1024, 1024)
-
-print(window)
-
-command_queue_desc = D3D12_COMMAND_QUEUE_DESC(
-    Type=D3D12_COMMAND_LIST_TYPE_DIRECT)
-queue = device.CreateCommandQueue(command_queue_desc)
-
-swap_chain_desc1 = DXGI_SWAP_CHAIN_DESC1(Format=DXGI_FORMAT_R8G8B8A8_UNORM, BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                                         BufferCount=2, Scaling=DXGI_SCALING_STRETCH, SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD)
-swap_chain_desc1.SampleDesc.Count = 1
-swap_chain = CreateDXGIFactory2().CreateSwapChainForHwnd(
-    queue, window, swap_chain_desc1)
-
-descriptor_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC(
-    Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-    NumDescriptors=2)
-descriptor_heap = device.CreateDescriptorHeap(descriptor_heap_desc)
-rtvs = descriptor_heap.cpu((0, 1))
-
-device.CreateRenderTargetView(swap_chain.GetBuffer(0), None, rtvs[0])
-device.CreateRenderTargetView(swap_chain.GetBuffer(1), None, rtvs[1])
-
-mesh = Mesh(device)
-mesh.set_index_buffer(bytearray(numpy.array(
-    [
-        0, 1, 2, 3
-    ], dtype=numpy.uint16)))
-mesh.set_vertex_buffer(bytearray(numpy.array(
-    [
-        0, 0, 0,
-        0, 0, math.pi/2,
-        0, 0, math.pi,
-        0, 0, math.pi * 1.5
-    ], dtype=numpy.float32)))
-mesh.set_nvertices(4)
-rasterizer = Rasterizer(device)
-
-running = True
-fps = 0
-
-message_queue = Queue()
-
-tessellation_config = ResourceBuffer(
-    device, struct.pack('I', 1))  # default to 1
-
-def render_loop():
-    theta = 0
-    forward = 0
-    fence = device.CreateFence()
-    fence_event = Event()
-    fence_value = fence.GetCompletedValue()
-    fence_value += 1
-
-    frame_counter = 0
-    counter = 0
-    frequency = QueryPerformanceFrequency()
-
-    now = QueryPerformanceCounter()
-    while running:
-        theta += 0.05
-        forward = -2  # 10.01
-        scale = matrix44.create_from_scale((1, 1, 1), dtype='float32')
-        rotation = matrix44.create_from_y_rotation(theta, dtype='float32')
-        translation = matrix44.create_from_translation(
-            (0, 0, forward), dtype='float32')
-        perspective = matrix44.create_perspective_projection(
-            60., 1., 0.1, 1000., dtype='float32')
-        #mesh.matrix = scale @ rotation @ translation @ perspective
-        mesh.matrix = scale @ rotation @ translation @ perspective
-
-        back_buffer_index = swap_chain.GetCurrentBackBufferIndex()
-        back_buffer = swap_chain.GetBuffer(back_buffer_index)
-
-        rasterizer.execute(queue, back_buffer,
-                           rtvs[back_buffer_index], [mesh], tessellation_config)
-
-        queue.Signal(fence, fence_value)
-        if fence.GetCompletedValue() < fence_value:
-            fence.SetEventOnCompletion(fence_value, fence_event)
-            fence_event.wait()
-        fence_value += 1
-
-        swap_chain.Present(1)
-        new_now = QueryPerformanceCounter()
-        counter += new_now - now
-        now = new_now
-        if counter >= frequency:
-            counter -= frequency
-            fps = frame_counter
-            message_queue.put(str(fps))
-            frame_counter = 1
-        else:
-            frame_counter += 1
+# the tessellation factor lives in a constant buffer (CBVs must be 256 bytes aligned); start at 5
+tessellation_config = create_buffer(device, 256, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ)
+write_resource(tessellation_config, struct.pack("I", 5))
 
 
-t = threading.Thread(target=render_loop)
-t.start()
+def set_factor(event):
+    if event.char.isdigit() and event.char != '0':
+        write_resource(tessellation_config, struct.pack('I', int(event.char)))
 
-while running:
-    for message, wparam, lparam in window.dequeue():
-        if message in (WM_QUIT, WM_CLOSE):
-            running = False
-        elif message == WM_KEYUP:
-            if ord('1') <= wparam <= ord('9'):
-                tessellation_config.resource.upload(struct.pack('I', wparam - ord('0')))
-    if not message_queue.empty():
-        new_title = message_queue.get_nowait()
-        window.set_title(new_title)
 
-running = False
-t.join()
+app.root.bind('<Key>', set_factor)
 
+shader = """
+cbuffer Transform : register(b0) { row_major float4x4 matrix_mvp; };
+cbuffer TessellationConfig : register(b1) { uint factor; };
+
+struct controlpoint { float3 data : CONTROLPOINT; };
+struct patch_constants { float edges[3] : SV_TessFactor; float inside : SV_InsideTessFactor; };
+struct psin { float4 position : SV_Position; float shade : SHADE; };
+
+controlpoint vs(float3 data : POSITION)
+{
+    controlpoint OUT;
+    OUT.data = data;
+    return OUT;
+}
+
+// called once per patch: how much to subdivide it
+patch_constants constants(InputPatch<controlpoint, 1> patch, uint patch_id : SV_PrimitiveID)
+{
+    patch_constants OUT;
+    OUT.edges[0] = OUT.edges[1] = OUT.edges[2] = factor;
+    OUT.inside = factor;
+    return OUT;
+}
+
+// called once per output control point: here it just forwards the input
+[domain("tri")]
+[partitioning("integer")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(1)]
+[patchconstantfunc("constants")]
+controlpoint hs(InputPatch<controlpoint, 1> patch, uint id : SV_OutputControlPointID)
+{
+    return patch[0];
+}
+
+// called for every vertex generated by the tessellator (uvw = barycentric coordinates)
+[domain("tri")]
+psin ds(patch_constants IN, float3 uvw : SV_DomainLocation, const OutputPatch<controlpoint, 1> patch)
+{
+    float angle = patch[0].data.z;
+    float2 xy = patch[0].data.xy + uvw.xy;
+    float2 rotated = float2(xy.x * cos(angle) - xy.y * sin(angle), xy.x * sin(angle) + xy.y * cos(angle));
+    psin OUT;
+    OUT.position = mul(float4(rotated, 0, 1), matrix_mvp);
+    OUT.shade = angle / (PI * 2);
+    return OUT;
+}
+
+float4 ps(psin IN) : SV_Target
+{
+    return float4(0.3 + IN.shade, 0.6, 1, 1);
+}
+"""
+defines = {'PI': math.pi}
+root_signature = create_root_signature(device, [
+    root_constants(0, 16),
+    D3D12_ROOT_PARAMETER1(ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV,
+                          Descriptor=D3D12_ROOT_DESCRIPTOR1(ShaderRegister=1)),
+], flags=D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_ALLOW_STREAM_OUTPUT)
+pipeline_desc = graphics_pipeline_desc(
+    root_signature, compile_shader(shader, 'vs', 'vs_5_0', defines), compile_shader(shader, 'ps', 'ps_5_0', defines),
+    [D3D12_INPUT_ELEMENT_DESC(SemanticName='POSITION', Format=DXGI_FORMAT_R32G32B32_FLOAT)])
+pipeline_desc.HS = D3D12_SHADER_BYTECODE(pShaderBytecode=compile_shader(shader, 'hs', 'hs_5_0', defines))
+pipeline_desc.DS = D3D12_SHADER_BYTECODE(pShaderBytecode=compile_shader(shader, 'ds', 'ds_5_0', defines))
+pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH
+pipeline_desc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME
+pipeline_desc.DSVFormat = depth_buffer.format
+pipeline_desc.DepthStencilState.DepthEnable = True
+pipeline_desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL
+pipeline_desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS
+# stream output: capture the 4 components of SV_Position from stream 0 into buffer slot 0
+pipeline_desc.StreamOutput = D3D12_STREAM_OUTPUT_DESC(
+    pSODeclaration=[D3D12_SO_DECLARATION_ENTRY(Stream=0, SemanticName='SV_Position', SemanticIndex=0,
+                                               StartComponent=0, ComponentCount=4, OutputSlot=0)],
+    pBufferStrides=[16], RasterizedStream=0)
+pipeline_state = device.CreateGraphicsPipelineState(pipeline_desc)
+
+# the stream output buffer, its filled-size counter (a UINT64 the GPU increments) and where we read it back
+SO_SIZE = 4 * 1024 * 1024
+so_buffer = create_buffer(device, SO_SIZE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON)
+so_counter = create_buffer(device, 8, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON)
+# buffers are always created in the COMMON state: move both to STREAM_OUT once
+execute_and_wait(device, queue, lambda command_list: command_list.ResourceBarrier([
+    transition(so_buffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_STREAM_OUT),
+    transition(so_counter, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_STREAM_OUT)]))
+zero = upload_buffer(device, bytes(8))
+counter_readback = create_buffer(device, 8, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST)
+so_view = D3D12_STREAM_OUTPUT_BUFFER_VIEW(BufferLocation=so_buffer.GetGPUVirtualAddress(), SizeInBytes=SO_SIZE,
+                                          BufferFilledSizeLocation=so_counter.GetGPUVirtualAddress())
+
+allocator = device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
+command_list = device.CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator)
+command_list.Close()
+
+theta = 0
+frame = 0
+while app.pump() and (not args.frames or frame < args.frames):
+    if app.resized:
+        app.resized = False
+        swap_chain.resize(app.width, app.height)
+        depth_buffer.resize(app.width, app.height)
+    back_buffer, rtv = swap_chain.current()
+    viewports, scissors = viewport_and_scissor(swap_chain.width, swap_chain.height)
+
+    theta += 0.02
+    patches.matrix = matrix44.create_from_z_rotation(theta * 0.5, dtype=numpy.float32) @         matrix44.create_from_y_rotation(math.sin(theta) * 0.8, dtype=numpy.float32) @ \
+        matrix44.create_from_translation((0, 0, -3), dtype=numpy.float32) @ \
+        perspective(60, swap_chain.width / swap_chain.height, 0.1, 100)
+
+    allocator.Reset()
+    command_list.Reset(allocator, pipeline_state)
+    command_list.SetGraphicsRootSignature(root_signature)
+    command_list.SetGraphicsRootConstantBufferView(1, tessellation_config.GetGPUVirtualAddress())
+    command_list.RSSetViewports(viewports)
+    command_list.RSSetScissorRects(scissors)
+    command_list.ResourceBarrier([transition(back_buffer, D3D12_RESOURCE_STATE_PRESENT,
+                                             D3D12_RESOURCE_STATE_RENDER_TARGET)])
+    command_list.OMSetRenderTargets(1, [rtv], False, depth_buffer.dsv)
+    command_list.ClearRenderTargetView(rtv, (0, 0, 0, 1))
+    command_list.ClearDepthStencilView(depth_buffer.dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0, 0)
+    # reset the filled size: the stream output stage appends after it
+    command_list.ResourceBarrier([transition(so_counter, D3D12_RESOURCE_STATE_STREAM_OUT,
+                                             D3D12_RESOURCE_STATE_COPY_DEST)])
+    command_list.CopyBufferRegion(so_counter, 0, zero, 0, 8)
+    command_list.ResourceBarrier([transition(so_counter, D3D12_RESOURCE_STATE_COPY_DEST,
+                                             D3D12_RESOURCE_STATE_STREAM_OUT)])
+    command_list.SOSetTargets(0, [so_view])
+    command_list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST)
+    patches.draw(command_list)
+    command_list.SOSetTargets(0, None)
+    # copy the counter where the CPU can read it
+    command_list.ResourceBarrier([transition(so_counter, D3D12_RESOURCE_STATE_STREAM_OUT,
+                                             D3D12_RESOURCE_STATE_COPY_SOURCE)])
+    command_list.CopyBufferRegion(counter_readback, 0, so_counter, 0, 8)
+    command_list.ResourceBarrier([transition(so_counter, D3D12_RESOURCE_STATE_COPY_SOURCE,
+                                             D3D12_RESOURCE_STATE_STREAM_OUT)])
+    command_list.ResourceBarrier([transition(back_buffer, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                             D3D12_RESOURCE_STATE_PRESENT)])
+    command_list.Close()
+    queue.ExecuteCommandLists([command_list])
+    swap_chain.present()  # waits for the GPU, so the readback is ready
+    written = struct.unpack('<Q', read_resource(counter_readback, 8))[0]
+    triangles = written // 16 // 3
+    app.title = 'pydx12: Tutorial 016 (Stream Output) - press 1-9 - %d triangles captured' % triangles
+    frame += 1
+
+app.destroy()
+print('triangles captured in the last frame:', triangles)
 print('END')
