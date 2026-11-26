@@ -72,7 +72,22 @@ HEADERS = [
     ('dstorageerr.h', None),                                # DirectStorage
     ('dstorage.h', 'dstorage.dll'),
     ('GameInput.h', 'GameInputRedist.dll'),                 # GameInput
+    ('pix3.h', 'WinPixEventRuntime.dll'),                   # PIX
+    ('pix3_win.h', 'WinPixEventRuntime.dll'),
+    ('pix_exports.h', 'WinPixEventRuntime.dll'),            # tools/headers
+    # D3D11 and D3D9, needed to use what D3D11On12 / D3D9On12 return
+    ('d3d11.h', 'd3d11.dll'),
+    ('d3d11_1.h', 'd3d11.dll'),
+    ('d3d11_2.h', 'd3d11.dll'),
+    ('d3d11_3.h', 'd3d11.dll'),
+    ('d3d11_4.h', 'd3d11.dll'),
+    ('d3d11on12.h', 'd3d11.dll'),
+    ('d3d9types.h', None),
+    ('d3d9caps.h', None),
+    ('d3d9.h', 'd3d9.dll'),
+    ('d3d9on12.h', 'd3d9.dll'),
 ]
+HEADERS_DIR = os.path.join(HERE, 'headers')
 
 # NuGet packages under .deps/<name>-<version>/pkg: name -> include dir inside the package.
 # Earlier entries shadow later ones and the Windows SDK.
@@ -81,6 +96,7 @@ PACKAGES = [
     ('dxc', os.path.join('build', 'native', 'include')),
     ('directstorage', os.path.join('native', 'include')),
     ('gameinput', os.path.join('native', 'include')),
+    ('winpixeventruntime', os.path.join('Include', 'WinPixEventRuntime')),
 ]
 
 
@@ -107,6 +123,16 @@ WINERROR_PREFIXES = ('DXGI_ERROR_', 'DXGI_STATUS_', 'DXGI_DDI_ERR_', 'D3D12_ERRO
 
 # functions exported by a different DLL than the rest of their header
 FUNCTION_DLL = {'D3D12SDKLayersGetInterface': 'd3d12SDKLayers.dll'}
+
+# declared name -> (dll, export name, python name): PIX helpers that pix3_win.h implements inline
+# by calling an export of WinPixGpuCapturer.dll (see tools/headers/pix_exports.h)
+FUNCTION_EXPORTS = {
+    'PIXGpuCaptureNextFrames': ('WinPixGpuCapturer.dll', 'CaptureNextFrame', 'PIXGpuCaptureNextFrames'),
+    'PIXForceD3D11On12': ('WinPixGpuCapturer.dll', 'ForceD3D11On12', 'PIXForceD3D11On12'),
+    'PIXSetHUDOptions': ('WinPixGpuCapturer.dll', 'SetHUDOptions', 'PIXSetHUDOptions'),
+    'PIXIsAttachedForGpuCapture': ('WinPixGpuCapturer.dll', 'GetIsAttachedToPix', 'PIXIsAttachedForGpuCapture'),
+    'PIXSetTargetWindow_Export': ('WinPixGpuCapturer.dll', 'SetGlobalTargetWindow', 'PIXSetTargetWindow'),
+}
 
 # macros from non-DirectX headers that the DirectX APIs need: header -> name prefixes
 EXTERNAL_MACROS = {
@@ -319,13 +345,44 @@ def strip_comments(s):
     return s
 
 
+_spelling_fn = None
+
+
+def spelling_location(loc):
+    """(file name, offset) where the token was written. For declarations produced by a macro
+    (e.g. xaudio2.h's Declare_IXAudio2Voice_Methods) this is inside the #define body, while
+    SourceLocation.file/offset give the place the macro was expanded."""
+    global _spelling_fn
+    if _spelling_fn is None:
+        fn = ci.conf.lib.clang_getSpellingLocation
+        fn.argtypes = [ci.SourceLocation, ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_uint),
+                       ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint)]
+        fn.restype = None
+        name = ci.conf.lib.clang_getFileName
+        name.argtypes = [ctypes.c_void_p]
+        name.restype = ci._CXString
+        _spelling_fn = (fn, name)
+    fn, name = _spelling_fn
+    f, line, col, off = ctypes.c_void_p(), ctypes.c_uint(), ctypes.c_uint(), ctypes.c_uint()
+    fn(loc, ctypes.byref(f), ctypes.byref(line), ctypes.byref(col), ctypes.byref(off))
+    if not f.value:
+        return None, 0
+    result = name(f)  # cindex's errcheck already converts the CXString
+    return (result if isinstance(result, str) else ci._CXString.from_result(result)), off.value
+
+
 def prefix_text(cursor, stops):
     """Text immediately preceding ``cursor`` back to a stop char at paren depth 0."""
-    loc = cursor.extent.start
-    if loc.file is None:
+    fname, offset = spelling_location(cursor.extent.start)
+    name_file, _ = spelling_location(cursor.location)
+    if fname != name_file:
+        # the declaration starts with a macro token (e.g. CONST): read where it was used
+        start = cursor.extent.start
+        fname, offset = (start.file.name if start.file else None), start.offset
+    if fname is None:
         return ''
-    text = file_text(loc.file.name)
-    i = loc.offset - 1
+    text = file_text(fname)
+    i = offset - 1
     depth = 0
     while i >= 0:
         ch = text[i]
@@ -343,7 +400,7 @@ def prefix_text(cursor, stops):
             if j >= 0:
                 i = j
         i -= 1
-    return strip_comments(text[i + 1:loc.offset])
+    return strip_comments(text[i + 1:offset].replace('\\\n', '\n'))
 
 
 def parse_sal(s):
@@ -430,6 +487,7 @@ class Generator:
             self.packages['agility'] = (self.packages.get('agility', ('?', None))[0], agility)
         agility = self.packages.get('agility', (None, None))[1]
         self.package_dirs = [inc for name, _ in PACKAGES for v, inc in [self.packages.get(name, (None, None))] if inc]
+        self.package_dirs.append(HEADERS_DIR)
         self.agility = agility
         self.agility_version = None
         if agility:
@@ -441,7 +499,7 @@ class Generator:
         res = glob.glob(os.path.join(llvm_root, 'lib', 'clang', '*', 'include'))
         self.args = ['-x', 'c++', '-std=c++17', '--target=x86_64-pc-windows-msvc', '-fms-extensions',
                      '-fms-compatibility', '-fms-compatibility-version=19.44', '-DWIN32_LEAN_AND_MEAN',
-                     '-DINITGUID', '-DDML_TARGET_VERSION_USE_LATEST', '-Wno-everything', '-ferror-limit=0',
+                     '-DINITGUID', '-DDML_TARGET_VERSION_USE_LATEST', '-DUSE_PIX', '-Wno-everything', '-ferror-limit=0',
                      '-I' + os.path.join(self.sdk, 'um'), '-I' + os.path.join(self.sdk, 'shared'),
                      '-I' + os.path.join(self.sdk, 'ucrt'), '-I' + self.msvc]
         if res:
@@ -537,7 +595,7 @@ class Generator:
             if k in (CK.STRUCT_DECL, CK.UNION_DECL, CK.CLASS_DECL) and c.is_definition():
                 if self.is_interface(c):
                     self.add_interface(c)
-                else:
+                elif not self.is_cpp_helper(c):
                     self.add_record(c)
             elif k == CK.ENUM_DECL and c.is_definition():
                 self.add_enum(c)
@@ -567,6 +625,23 @@ class Generator:
             for p in c.get_children():
                 if p.kind == CK.PARM_DECL:
                     self.ctype(p.type, param=True)
+        # interfaces only reachable through IFoo** parameters (e.g. ID3D11Module**)
+        def touch_iface(t):
+            for _ in range(3):
+                t = t.get_canonical()
+                if t.kind not in (TK.POINTER, TK.LVALUEREFERENCE):
+                    break
+                t = t.get_pointee()
+                self.interface_of(t)
+        for iface in list(self.interfaces.values()):
+            for m in iface.methods:
+                for p in m.get_children():
+                    if p.kind == CK.PARM_DECL:
+                        touch_iface(p.type)
+        for c, _ in list(self.functions.values()):
+            for p in c.get_children():
+                if p.kind == CK.PARM_DECL:
+                    touch_iface(p.type)
         # resolve fields of target records (pulls in external records as needed)
         for r in list(self.records.values()):
             self.fill_record(r)
@@ -654,13 +729,24 @@ class Generator:
                 self.iids.setdefault(c.spelling[4:], '%08x-%04x-%04x-%02x%02x-%s' % (
                     nums[0], nums[1], nums[2], nums[3], nums[4], ''.join('%02x' % b for b in nums[5:])))
 
-    def is_interface(self, c):
+    def is_interface(self, c, depth=0):
+        """A record with virtual methods, directly or through a base (COM-style vtable)."""
         for ch in c.get_children():
-            if ch.kind == CK.CXX_BASE_SPECIFIER:
-                return True
             if ch.kind == CK.CXX_METHOD and ch.is_virtual_method():
                 return True
+            if ch.kind == CK.CXX_BASE_SPECIFIER and depth < 16:
+                base = ch.type.get_canonical().get_declaration()
+                if base.spelling == 'IUnknown':
+                    return True
+                bdef = base.get_definition()
+                if bdef is not None and self.is_interface(bdef, depth + 1):
+                    return True
         return False
+
+    def is_cpp_helper(self, c):
+        """C++-only helper structs deriving from a C struct (CD3D11_VIEWPORT, CD3DX12_...)."""
+        return (c.spelling.startswith('CD3D') or
+                any(ch.kind == CK.CXX_BASE_SPECIFIER for ch in c.get_children()))
 
     def record_name(self, c):
         name = c.spelling
@@ -780,8 +866,32 @@ class Generator:
                 r.offsets[fname] = off // 8 if not bits else off
             max_align = max(max_align, max(1, ft.get_align()))
             self.field_smarts(r, ch, ft, children)
+        self.unannotated_array(r, children)
         if r.align and r.align > 0 and r.align < max_align:
             r.pack = r.align
+
+    def unannotated_array(self, r, children):
+        """Legacy headers (xaudio2.h, x3daudio.h) don't annotate pointer + count pairs such as
+        XAUDIO2_EFFECT_CHAIN { EffectCount; pEffectDescriptors; }. Pair them only when the struct has
+        exactly one candidate pointer and exactly one count field, so there is no ambiguity."""
+        fields = [c for c in children if c.kind == CK.FIELD_DECL]
+        counts = [f.spelling for f in fields if f.type.get_canonical().kind in (TK.UINT, TK.INT, TK.ULONG, TK.USHORT)
+                  and (f.spelling.endswith('Count') or f.spelling.startswith('Num'))]
+        pointers = []
+        for f in fields:
+            t = f.type.get_canonical()
+            if t.kind != TK.POINTER or f.spelling in r.smart_arrays or f.spelling in r.smart_buffers \
+                    or f.spelling in r.smart_iface or f.spelling in r.smart_strings:
+                continue
+            pc = t.get_pointee().get_canonical()
+            if pc.kind in (TK.VOID, TK.CHAR_S, TK.SCHAR, TK.WCHAR, TK.FUNCTIONPROTO, TK.POINTER) or \
+                    self.interface_of(t.get_pointee()):
+                continue
+            pointers.append((f, t.get_pointee()))
+        if len(counts) == 1 and len(pointers) == 1 and not r.smart_arrays:
+            f, pointee = pointers[0]
+            if f.spelling.endswith('s'):  # plural names only: pEffectDescriptors, pSends, pPoints
+                r.smart_arrays[f.spelling] = (self.ctype(pointee, owner=r, byvalue=False), counts[0])
 
     def anon_offset(self, parent, anon):
         # offset of first field of anonymous member
@@ -983,6 +1093,9 @@ class Generator:
                     return 'c_void_p'
                 if name in self.interfaces:
                     return 'c_void_p'
+                if param and t.get_canonical().kind == TK.CONSTANTARRAY:
+                    # array typedefs (X3DAUDIO_HANDLE) decay to a pointer when passed
+                    return self.ctype(t.get_canonical(), owner, byvalue, param)
                 return name
             return self.ctype(t.get_canonical(), owner, byvalue, param)
         c = t.get_canonical()
@@ -1118,6 +1231,8 @@ class Generator:
         return order
 
     def emit(self):
+        self.stub = []
+        self.stub_class_start = 0
         out = []
         w = out.append
         w('# Generated by tools/generate.py from Windows SDK %s - DO NOT EDIT' % self.sdk_version)
@@ -1241,7 +1356,10 @@ class Generator:
             if dll is None:
                 continue
             dll = FUNCTION_DLL.get(name, dll)
-            self.emit_function(name, c, dll, w)
+            export = pyname = name
+            if name in FUNCTION_EXPORTS:
+                dll, export, pyname = FUNCTION_EXPORTS[name]
+            self.emit_function(pyname, c, dll, w, export)
         w('')
         w('# ---- callback prototypes ----')
         for name, ft in self.fnptrs.items():
@@ -1266,6 +1384,7 @@ class Generator:
             f.write(src)
         print('wrote %s (%d lines, %d protos)' % (OUT, len(out), len(self.protos)))
         self.emit_layout_data(records)
+        self.write_stub(records)
 
     def merge_anonymous_smarts(self, r):
         for fname, expr, bits in r.fields:
@@ -1315,6 +1434,9 @@ class Generator:
             mixins = 'BlobMixin, '
         w('')
         w('class %s(%s%s):' % (i.name, mixins, base))
+        self.stub.append('')
+        self.stub.append('class %s(%s%s):' % (i.name, mixins, base))
+        self.stub_class_start = len(self.stub)
         if i.cursor is not None and i.cursor.brief_comment:
             pass
         w('    __slots__ = ()')
@@ -1336,6 +1458,8 @@ class Generator:
             idx += 1
         w('    _vt_ = %r' % (tuple(vt),))
         w('    _vtbl_size_ = %d' % idx)
+        if len(self.stub) == self.stub_class_start:
+            self.stub.append('    ...')
 
     def source_name(self, cursor):
         """Name as written in the header: windows.h maps e.g. GetMessage -> GetMessageA."""
@@ -1388,6 +1512,10 @@ class Generator:
                         continue
             if info['kind'] == 'ppv':
                 continue
+            if (is_ptr and not sal and not pointee.is_const_qualified() and pointee.kind == TK.POINTER
+                    and info['cname'].startswith('pp') and self.interface_of(pointee.get_pointee())):
+                # unannotated legacy headers (d3d9.h): IFoo **ppFoo is an output
+                out_ann = True
             if (is_ptr and not sal and not pointee.is_const_qualified() and pointee.kind == TK.RECORD
                     and n == len(infos) - 1 and cursor.spelling.startswith('Get')
                     and not self.interface_of(t.get_pointee())):
@@ -1476,11 +1604,15 @@ class Generator:
             expr = ' '.join(toks[toks.index('=') + 1:])
         else:
             # X2DEFAULT(value) style defaults live after the parameter name in the source
-            end = p.extent.end
-            if end.file is None:
+            # anchored on the parameter name: the extent may end inside the X2DEFAULT macro body
+            fname, offset = spelling_location(p.location)
+            if fname is None or not p.spelling:
                 return None
-            text = file_text(end.file.name)
-            m = re.match(r'\s*(?:X2DEFAULT\s*\(\s*([^()]*?)\s*\)|=\s*([^,()]+?))\s*[,)]', text[end.offset:end.offset + 200])
+            text = file_text(fname).replace('\\\n', '  ')  # same length: offsets stay valid
+            if text[offset:offset + len(p.spelling)] != p.spelling:
+                return None
+            offset += len(p.spelling)
+            m = re.match(r'\s*(?:X2DEFAULT\s*\(\s*([^()]*?)\s*\)|=\s*([^,()]+?))\s*[,)]', text[offset:offset + 200])
             if not m:
                 return None
             expr = (m.group(1) or m.group(2)).strip()
@@ -1655,7 +1787,249 @@ class Generator:
         if kwonly:
             params.append('*')
             params.extend(kwonly)
+        self._last_sig = (sig, [k.split('=')[0] for k in kwonly], error_blob)
         return params, pre, call, outs, error_blob
+
+    # -- type stubs (.pyi) ----------------------------------------------
+    def pytype(self, expr, mode='in', depth=0):
+        """Python type for a ctypes type expression; mode is 'in' (argument), 'out' (result) or 'field'."""
+        e = expr.strip()
+        if depth > 8:
+            return 'Any'
+        if e in ('c_float', 'c_double'):
+            return 'float'
+        if e == 'c_bool':
+            return 'bool'
+        if e == 'c_char':
+            return 'bytes'
+        if e == 'c_wchar':
+            return 'str'
+        if e in INTEGER_TYPES or e in ('BOOL', 'HRESULT') or e in self.enums:
+            return 'int'
+        if e == 'c_char_p':
+            return 'str | bytes | None' if mode == 'in' else 'bytes | None'
+        if e == 'c_wchar_p':
+            return 'str | None'
+        if e == 'c_void_p':
+            return 'Any' if mode == 'in' else 'int | None'
+        if e == 'GUID':
+            return 'GUID'
+        if e in self.records:
+            return e
+        if e in self.interfaces or e == 'IUnknown':
+            return e
+        if e in self.alias_exprs:
+            return self.pytype(self.alias_exprs[e], mode, depth + 1)
+        m = re.match(r'^\((.*) \* (\d+)\)$', e)
+        if m:
+            inner = m.group(1).strip()
+            if inner == 'c_wchar':
+                return 'str'
+            if inner == 'c_char':
+                return 'bytes'
+            return 'Array[Any]'  # a ctypes array: indexable, assignable, works with addressof()
+        m = re.match(r'^POINTER\((.*)\)$', e)
+        if m:
+            inner = m.group(1).strip()
+            if mode == 'in' and (inner in self.records or inner == 'GUID'):
+                return '%s | Sequence[%s] | _CPointer | None' % (inner, inner)
+            return 'Any'
+        return 'Any'
+
+    def stub_callable(self, name, infos, rkind, rtype, cursor, method):
+        sig, kwonly, error_blob = self._last_sig
+        byname = {i['name']: i for i in infos}
+        riid_info = next((i for i in infos if i['kind'] == 'riid'), None)
+
+        def ptype(info):
+            k = info['kind']
+            if k == 'in_iface':
+                return '%s | ComImplementation | None' % info['aux']
+            if k == 'in_str':
+                return 'str | bytes | None'
+            if k == 'in_array':
+                elem = info.get('elem', 'c_void_p')
+                if elem.startswith("'"):
+                    return 'Sequence[%s] | None' % elem.strip("'")
+                return 'Sequence[%s] | Any' % self.pytype(elem, 'out')
+            if k == 'in_bytes':
+                return '_Buffer | None'
+            if k == 'riid':
+                return 'type[ComInterface] | GUID | str'
+            return self.pytype(info['argtype'], 'in')
+
+        # results, in the order the generated code returns them
+        results = []
+        if rkind == 'struct':
+            results.append(rtype)
+        elif rkind == 'iface':
+            results.append(self.interface_of(cursor.result_type.get_canonical().get_pointee()))
+        elif rkind == 'cstr':
+            results.append('str | None')
+        elif rkind == 'value':
+            results.append(self.pytype(rtype, 'out'))
+        for info in infos:
+            k = info['kind']
+            # outputs may be NULL on success only when the header says so (..._result_maybenull_);
+            # _COM_Outptr_opt_ just lets C callers pass NULL, which the bindings never do
+            maybe = ' | None' if any('maybenull' in x[0] for x in info['sal']) else ''
+            if k == 'ppv':
+                results.append('_T' + maybe)
+            elif k == 'out_iface':
+                if info['name'] == error_blob:
+                    continue
+                results.append(info['aux'] + maybe)
+            elif k == 'out_array':
+                results.append('Sequence[%s]' % self.pytype(info['elem'], 'out'))
+            elif k == 'out_ptr':
+                results.append('int')
+            elif k == 'out':
+                results.append(self.pytype(info['aux'], 'out'))
+        hresult_value = (rkind == 'hresult' and not results and cursor.spelling.startswith('Get') and not any(
+            p.type.get_canonical().kind in (TK.POINTER, TK.LVALUEREFERENCE)
+            for p in cursor.get_children() if p.kind == CK.PARM_DECL))
+        if not results:
+            ret = 'int' if hresult_value else ('int | None' if rkind == 'hresult' else 'None')
+        elif len(results) == 1:
+            ret = results[0]
+        else:
+            ret = 'tuple[%s]' % ', '.join(results)
+
+        def render(params_sig, ret_type, riid_type=None):
+            parts = ['self'] if method else []
+            for pname, default in params_sig:
+                info = byname[pname]
+                t = riid_type if (riid_type and info['kind'] == 'riid') else ptype(info)
+                parts.append('%s: %s%s' % (pname, t, '' if default is None else ' = ...'))
+            if kwonly:
+                parts.append('*')
+                parts.extend('%s: int | None = ...' % k for k in kwonly)
+            return 'def %s(%s) -> %s:' % (name, ', '.join(parts), ret_type)
+
+        ind = '    ' if method else ''
+        doc = ind + '    ' + repr(self.c_signature(cursor))
+        last_is_riid = riid_info is not None and sig and sig[-1][0] == riid_info['name']
+        if last_is_riid and riid_info.get('default'):
+            # riid omitted -> the default interface; riid given -> that interface
+            self.stub.append(ind + '@overload')
+            self.stub.append(ind + render(sig[:-1], re.sub(r'\b_T\b', riid_info['default'], ret)))
+            self.stub.append(doc)
+            self.stub.append(ind + '@overload')
+            # (positional riid: the parameters before it must be given too)
+            self.stub.append(ind + render([[n, None] for n, _ in sig], ret, 'type[_T]') + ' ...')
+        elif last_is_riid:
+            self.stub.append(ind + render([[n, None] for n, _ in sig[:-1]] + [sig[-1]], ret, 'type[_T]'))
+            self.stub.append(doc)
+        else:
+            self.stub.append(ind + render(sig, re.sub(r'\b_T\b', 'Any', ret)))
+            self.stub.append(doc)
+
+    def stub_record(self, r):
+        lines = ['', 'class %s(%s):' % (r.name, 'Union_' if r.is_union else 'Struct')]
+        fields = []
+
+        def collect(rec):
+            for fname, expr, bits in rec.fields:
+                if fname in rec.anonymous and expr in self.records:
+                    collect(self.records[expr])
+                    continue
+                fields.append((fname, self.field_pytype(r, rec, fname, expr)))
+        collect(r)
+        # a field named like its own type would shadow it inside the class body
+        fields = [(f, 'Any' if re.search(r'\b%s\b' % re.escape(f), t) else t) for f, t in fields]
+        for fname, t in fields:
+            st = self.field_settype(t)
+            if st == t:
+                lines.append('    %s: %s' % (fname, t))
+            else:  # what you assign is wider than what you read back
+                lines.append('    @property')
+                lines.append('    def %s(self) -> %s: ...' % (fname, t))
+                lines.append('    @%s.setter' % fname)
+                lines.append('    def %s(self, value: %s) -> None: ...' % (fname, st))
+        kw = ', '.join('%s: %s = ...' % (f, self.field_settype(t)) for f, t in fields)
+        lines.append('    def __init__(self, *args: Any%s) -> None: ...' % ((', ' + kw) if kw else ''))
+        self.stub_records.extend(lines)
+
+    def field_pytype(self, owner, rec, fname, expr):
+        for holder in (owner, rec):
+            if fname in holder.smart_iface:
+                return '%s | None' % holder.smart_iface[fname]
+            if fname in holder.smart_strings:
+                return 'str | None'
+            if fname in holder.smart_arrays:
+                elem = holder.smart_arrays[fname][0]
+                return 'Sequence[%s]' % (elem.strip("'") if elem.startswith("'") else self.pytype(elem, 'out'))
+            if fname in holder.smart_buffers:
+                return 'Any'
+        return self.pytype(expr, 'field')
+
+    def field_settype(self, t):
+        if t == 'str | None':  # char* string fields take bytes too
+            return 'str | bytes | None'
+        if t.endswith(' | None') and t[:-7] in self.interfaces:
+            return t[:-7] + ' | ComImplementation | None'
+        if t in self.records:
+            return '%s | dict[str, Any]' % t
+        if t.startswith('Sequence['):  # pointer + count fields
+            return t + ' | Array[Any] | None'
+        if t == 'Array[Any]':  # fixed size arrays also take (shorter) sequences
+            return 'Array[Any] | Sequence[Any]'
+        return t
+
+    def write_stub(self, records):
+        out = ['# Generated by tools/generate.py - type information for pydx12._api - DO NOT EDIT',
+               'from ctypes import (c_void_p, c_int, c_uint, c_long, c_ulong, c_short, c_ushort, c_byte, c_ubyte,',
+               '                    c_char, c_wchar, c_bool, c_float, c_double, c_int64, c_uint64, c_uint32, c_size_t,',
+               '                    c_ssize_t, c_char_p, c_wchar_p)',
+               'from ctypes import Array, _Pointer',
+               'from _ctypes import _CArgObject',
+               'from typing import Any, MutableSequence, Sequence, TypeVar, overload',
+               'from ._core import GUID, Struct, Union_, ComInterface, IUnknown, DXError, BlobMixin, ComImplementation',
+               '',
+               "_T = TypeVar('_T', bound=ComInterface)",
+               '_Buffer = Any  # bytes, bytearray, memoryview, numpy arrays, ctypes objects, blobs',
+               '_CPointer = _Pointer[Any] | Array[Any] | _CArgObject  # pointer(x), ctypes arrays, byref(x)',
+               '',
+               'HRESULT = c_long',
+               'BOOL = c_int',
+               'WINDOWS_SDK_VERSION: str',
+               'AGILITY_SDK_VERSION: %s' % ('int' if self.agility_version else 'None'),
+               'PACKAGE_VERSIONS: dict[str, str]',
+               '']
+        for name, (under, values) in self.enums.items():
+            if not name.startswith('_anon'):
+                out.append('%s = %s' % (name, under))
+            for vn, _ in values:
+                out.append('%s: int' % vn)
+        for n, v in self.constants.items():
+            if n in self.aliases or n in self.records or n in self.interfaces:
+                continue
+            out.append('%s: %s' % (n, type(v).__name__))
+        for n in self.guids:
+            out.append('%s: GUID' % n)
+        for name, expr in self.alias_exprs.items():
+            if name in self.records or name in self.enums or name in self.interfaces or name in ('GUID', 'IID', 'CLSID'):
+                continue
+            iname = self.interface_of(self.aliases[name])
+            if iname:
+                if iname != name:
+                    out.append('%s = %s' % (name, iname))
+            elif expr in self.records:
+                out.append('%s = %s' % (name, expr))
+            else:
+                out.append('%s: Any' % name)
+        for name in self.fnptrs:
+            out.append('%s: Any' % name)
+        self.stub_records = []
+        for r in records:
+            if r.name not in ('GUID', '_GUID'):
+                self.stub_record(r)
+        out.extend(self.stub_records)
+        out.extend(self.stub)
+        path = OUT[:-3] + '.pyi'
+        with open(path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write('\n'.join(out) + '\n')
+        print('wrote %s (%d lines)' % (path, len(out)))
 
     def alias_is_simple(self, name):
         u = self.aliases.get(name)
@@ -1700,6 +2074,7 @@ class Generator:
         else:
             k = self.proto(rtype, argtypes)
         params, pre, call, outs, error_blob = self.emit_signature(infos, qualname)
+        self.stub_callable(pyname, infos, rkind, rtype, m, method=True)
         w('    def %s(%s):' % (pyname, ', '.join(['self'] + params)))
         w('        %r' % self.c_signature(m).replace(' %s(' % m.spelling, ' %s(' % pyname, 1))
         for line in pre:
@@ -1734,7 +2109,9 @@ class Generator:
             w(ind + '_r = %s(%s)' % (fn, args))
             if rkind == 'iface':
                 iname = self.interface_of(cursor.result_type.get_canonical().get_pointee())
-                w(ind + '_r = _borrowed(%r, _r)' % iname)
+                # factories (Direct3DCreate9...) hand over a reference; getters return borrowed pointers
+                wrap = '_owned' if 'Create' in cursor.spelling else '_borrowed'
+                w(ind + '_r = %s(%r, _r)' % (wrap, iname))
             elif rkind == 'cstr':
                 w(ind + "_r = _r.decode('utf-8', 'replace') if _r is not None else None")
             outs = ['_r'] + outs
@@ -1745,7 +2122,7 @@ class Generator:
         else:
             w(ind + 'return (%s)' % ', '.join(outs))
 
-    def emit_function(self, name, c, dll, w):
+    def emit_function(self, name, c, dll, w, export=None):
         infos = self.analyze_params(c, name, False)
         for info in infos:
             if info['kind'] == 'riid':
@@ -1753,7 +2130,8 @@ class Generator:
         rkind, rtype = self.return_info(c)
         argtypes = [i['argtype'] for i in infos]
         params, pre, call, outs, error_blob = self.emit_signature(infos, name)
-        w('_f_%s = _Func(%r, %r, WINFUNCTYPE(%s))' % (name, dll, name, ', '.join([rtype] + argtypes)))
+        self.stub_callable(name, infos, rkind, rtype, c, method=False)
+        w('_f_%s = _Func(%r, %r, WINFUNCTYPE(%s))' % (name, dll, export or name, ', '.join([rtype] + argtypes)))
         w('def %s(%s):' % (name, ', '.join(params)))
         w('    %r' % self.c_signature(c))
         for line in pre:

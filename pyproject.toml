@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pydx12"
 version = "0.2.0"
-description = "Pure ctypes bindings for DirectX 12 (D3D12 + DX12 Ultimate, DXGI, DXC, DirectML, XAudio2, XInput)"
+description = "Pure ctypes bindings for DirectX 12 (D3D12 + DX12 Ultimate, DXGI, DXC, DirectML, DirectStorage, GameInput, PIX, XAudio2, XInput)"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -15,6 +15,7 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Topic :: Multimedia :: Graphics :: 3D Rendering",
+    "Typing :: Typed",
 ]
 
 [project.urls]
@@ -29,7 +30,7 @@ packages = ["pydx12"]
 # the bundled DXC DLLs are x64: build with  python -m build -C--build-option=--plat-name=win_amd64
 
 [tool.setuptools.package-data]
-pydx12 = ["dxcompiler.dll", "dxil.dll"]
+pydx12 = ["dxcompiler.dll", "dxil.dll", "_api.pyi", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -28,12 +28,17 @@ def gameinput():
     os.add_dll_directory(package_bin('gameinput', 'native', 'bin', 'x64'))
 
 
+@pytest.fixture(scope='module')
+def pix():
+    os.add_dll_directory(package_bin('winpixeventruntime', 'bin', 'x64'))
+
+
 # declared by the Agility SDK headers but only exported by newer runtimes than the in-box ones
 NEWER_THAN_OS = {'D3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary',
                  'D3D12SDKLayersGetInterface'}  # Agility's d3d12SDKLayers.dll only
 
 
-def test_all_functions_are_exported(directstorage, gameinput):
+def test_all_functions_are_exported(directstorage, gameinput, pix):
     """Every generated function must be a real export of its DLL (when the DLL is available)."""
     missing = []
     for name, f in vars(_api).items():
@@ -57,9 +62,9 @@ def test_dxc_shader_model_6_8_work_graph():
     compiler = dx.DxcCreateInstance(dx.CLSID_DxcCompiler, dx.IDxcCompiler3)
     result = compiler.Compile(dx.DxcBuffer(Ptr=src), ['-T', 'lib_6_8'], None, dx.IDxcResult)
     errors = result.GetOutput(dx.DXC_OUT_ERRORS, dx.IDxcBlobUtf8)[0]
-    assert result.GetStatus() == 0, bytes(errors)
+    assert result.GetStatus() == 0, errors and bytes(errors)
     obj = result.GetOutput(dx.DXC_OUT_OBJECT, dx.IDxcBlob)[0]
-    assert bytes(obj)[:4] == b'DXBC'
+    assert obj is not None and bytes(obj)[:4] == b'DXBC'
 
 
 def test_directstorage_read_file_to_memory(directstorage):
@@ -102,3 +107,27 @@ def test_gameinput(gameinput):
     else:
         state = reading.GetGamepadState()
         assert isinstance(state, dx.GameInputGamepadState)
+
+
+def test_pix_events_and_markers(pix, device):
+    queue = device.CreateCommandQueue(dx.D3D12_COMMAND_QUEUE_DESC(Type=dx.D3D12_COMMAND_LIST_TYPE_DIRECT))
+    allocator = device.CreateCommandAllocator(dx.D3D12_COMMAND_LIST_TYPE_DIRECT)
+    cl = device.CreateCommandList(0, dx.D3D12_COMMAND_LIST_TYPE_DIRECT, allocator)
+    dx.PIXBeginEventOnCommandList(cl, 0xFF00FF00, 'frame')
+    dx.PIXSetMarkerOnCommandList(cl, 0xFFFF0000, 'draw')
+    dx.PIXEndEventOnCommandList(cl)
+    cl.Close()
+    dx.PIXBeginEventOnCommandQueue(queue, 0xFF0000FF, 'submit')
+    queue.ExecuteCommandLists([cl])
+    dx.PIXSetMarkerOnCommandQueue(queue, 0xFFFFFFFF, 'submitted')
+    dx.PIXEndEventOnCommandQueue(queue)
+    dx.PIXReportCounter('pydx12 test counter', 42.0)
+    assert dx.PIXGetCaptureState() == 0  # not under a capture
+
+
+def test_pix_gpu_capturer_needs_pix(pix):
+    # WinPixGpuCapturer.dll comes with the PIX tool, not with the runtime package
+    try:
+        dx.PIXIsAttachedForGpuCapture()
+    except OSError:
+        pass  # PIX not installed

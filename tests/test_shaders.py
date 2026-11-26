@@ -40,4 +40,4 @@ def test_dxc_compile3():
     result = compiler.Compile(buf, ['-T', 'cs_6_0', '-E', 'main'], None, dx.IDxcResult)
     assert result.GetStatus() == 0
     obj = result.GetOutput(dx.DXC_OUT_OBJECT, dx.IDxcBlob)[0]
-    assert bytes(obj)[:4] == b'DXBC'
+    assert obj is not None and bytes(obj)[:4] == b'DXBC'

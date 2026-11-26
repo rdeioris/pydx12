@@ -318,10 +318,10 @@ def main():
         heat = numpy.maximum(heat * 0.92, cells)
         rgb = numpy.stack([numpy.clip(heat * 1.6, 0, 1), heat ** 2.2, numpy.clip(0.25 * heat + heat ** 6, 0, 1)], -1)
         image = Image.fromarray((rgb * 255).astype(numpy.uint8))
-        image = image.resize((args.size * args.scale,) * 2, Image.NEAREST)
+        image = image.resize((args.size * args.scale,) * 2, Image.Resampling.NEAREST)
         photo = ImageTk.PhotoImage(image)
         label.configure(image=photo)
-        label.image = photo
+        shown = photo  # tkinter does not keep a reference to the image itself
         root.update()
         frames += 1
         elapsed = time.perf_counter() - start

@@ -7,6 +7,7 @@ Everything here is pure ctypes; nothing is compiled.
 import ctypes
 import sys
 import uuid as _uuid
+from typing import Any
 from ctypes import (POINTER, Structure, Union, WINFUNCTYPE, Array, byref, c_void_p,
                     c_char_p, c_wchar_p, c_ubyte, c_char, c_long, c_ulong, c_int,
                     cast, sizeof, addressof, string_at, memmove)
@@ -93,7 +94,7 @@ CLSID = GUID
 # HRESULT -> exception
 # ---------------------------------------------------------------------------
 
-_hresult_names = {}  # filled by the generated module
+_hresult_names: dict = {}  # filled by the generated module
 
 
 def _register_hresults(names):
@@ -124,7 +125,7 @@ class DXError(OSError):
         super().__init__(text)
 
     @property
-    def winerror(self):
+    def winerror(self):  # type: ignore[override]
         return self.hresult
 
 
@@ -155,7 +156,7 @@ def _blob_text(blob):
 # COM interface wrappers
 # ---------------------------------------------------------------------------
 
-_registry = {}  # name -> interface class (for lazily resolved annotations)
+_registry: dict = {}  # name -> interface class (for lazily resolved annotations)
 _PVOID_P = POINTER(c_void_p)
 
 
@@ -182,14 +183,14 @@ class ComInterface(metaclass=_ComMeta):
     (e.g. ID3D12ShaderReflectionType or IXAudio2Voice).
     """
     __slots__ = ('_this', '_owned', '_vtbl', '_fns', '__weakref__', '_keep')
-    _iid_ = None
+    _iid_: 'GUID | None' = None
     _refcounted_ = False
 
     def __init__(self, this=None, owned=False):
         if isinstance(this, ComInterface):
             src = this
             if self._refcounted_ and src._refcounted_ and type(self)._iid_ is not None:
-                ptr = src._query(type(self)._iid_)
+                ptr = src._query(type(self)._iid_)  # type: ignore[attr-defined]
                 self._set(ptr, True)
             else:
                 if src._refcounted_:
@@ -251,7 +252,7 @@ class ComInterface(metaclass=_ComMeta):
         if fn is None:
             if not self._this:
                 raise ValueError('NULL %s pointer' % type(self).__name__)
-            fn = proto(self._vtbl[index])
+            fn = proto(self._vtbl[index])  # type: ignore[index]
             self._fns[index] = fn
         return fn
 
@@ -352,7 +353,7 @@ def _riid(riid):
     return g, _iid_lookup.get(g, IUnknown)
 
 
-_iid_lookup = {}
+_iid_lookup: dict = {}
 
 
 def _register_iids():
@@ -391,7 +392,7 @@ def as_buffer(data):
     if data is None:
         return None, 0, None
     if isinstance(data, ComInterface) and hasattr(data, 'GetBufferPointer'):
-        return data.GetBufferPointer(), data.GetBufferSize(), data
+        return data.GetBufferPointer(), data.GetBufferSize(), data  # type: ignore[attr-defined]
     if isinstance(data, ctypes._SimpleCData) or isinstance(data, (Structure, Union, Array)):
         return addressof(data), sizeof(data), data
     if isinstance(data, str):
@@ -468,6 +469,7 @@ class _SmartMixin:
     some raw ctypes field descriptors with properties that accept Python
     objects (lists, strings, buffers, COM objects) and keep them alive.
     """
+    _fields_: Any
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -529,7 +531,7 @@ class _SmartMixin:
 
     def copy(self):
         new = type(self)()
-        memmove(byref(new), byref(self), sizeof(self))
+        memmove(byref(new), byref(self), sizeof(self))  # type: ignore[arg-type]
         objs = getattr(self, '_objects', None)
         if objs:
             new.__dict__['_pydx12_keep'] = self
@@ -558,7 +560,7 @@ def pointer_keep(holder):
     return ctypes.pointer(holder)
 
 
-_raw_types = {}
+_raw_types: dict = {}
 
 
 def raw_field_ptrtype(raw_field):
@@ -764,7 +766,7 @@ class ComImplementation:
     the interface. Pass the instance wherever a pointer to the interface is
     expected. IUnknown methods are implemented automatically.
     """
-    _interfaces_ = ()
+    _interfaces_: tuple = ()
 
     def __init__(self):
         iface = _resolve_iface(self._interfaces_[0])
@@ -835,7 +837,7 @@ class ComImplementation:
         _live_impls.pop(self.pointer, None)
 
 
-_live_impls = {}
+_live_impls: dict = {}
 
 
 def _vtable_slots(iface):
@@ -851,10 +853,11 @@ def _vtable_slots(iface):
     return out
 
 
-_protos = []  # set by the generated module
+_protos: list = []  # set by the generated module
 
 
-IUnknown._vslots_ = staticmethod(lambda: [('QueryInterface', _QI), ('AddRef', _ADDREF), ('Release', _ADDREF)])
+IUnknown._vslots_ = staticmethod(  # type: ignore[attr-defined]
+    lambda: [('QueryInterface', _QI), ('AddRef', _ADDREF), ('Release', _ADDREF)])
 
 
 def implement(*interfaces):
@@ -867,6 +870,8 @@ def implement(*interfaces):
 
 class BlobMixin:
     """Buffer helpers added to ID3DBlob / IDxcBlob."""
+    GetBufferPointer: Any  # provided by the interface class
+    GetBufferSize: Any
 
     def __bytes__(self):
         return string_at(self.GetBufferPointer(), self.GetBufferSize())
@@ -903,7 +908,7 @@ class _BlobView:
 
 import os as _os
 
-_dll_cache = {}
+_dll_cache: dict = {}
 _pkg_dir = _os.path.dirname(_os.path.abspath(__file__))
 
 # DLLs that load a companion with a plain LoadLibrary (ignoring os.add_dll_directory):
