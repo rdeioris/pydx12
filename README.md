@@ -50,7 +50,9 @@ device = dx.D3D12CreateDevice(factory.EnumAdapterByGpuPreference(0, dx.DXGI_GPU_
 queue = device.CreateCommandQueue(dx.D3D12_COMMAND_QUEUE_DESC(Type=dx.D3D12_COMMAND_LIST_TYPE_DIRECT))
 ```
 
-Complete programs: [examples/triangle.py](https://github.com/rdeioris/pydx12/blob/main/examples/triangle.py) (a swapchain on a tkinter window) and the
+Complete programs: [examples/triangle.py](https://github.com/rdeioris/pydx12/blob/main/examples/triangle.py) (a swapchain on a tkinter window),
+[examples/directml_life.py](https://github.com/rdeioris/pydx12/blob/main/examples/directml_life.py) (Conway's Game of Life
+as a DirectML operator graph: wrap padding, a 3×3 convolution and two element-wise operators) and the
 tutorials in [docs/](https://github.com/rdeioris/pydx12/tree/main/docs), from enumerating adapters to DXR raytracing.
 
 ## How the C API maps to Python

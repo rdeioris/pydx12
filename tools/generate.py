@@ -1540,6 +1540,7 @@ class Generator:
         sig = []
         kwonly = []
         pre = []
+        counts = []
         call = []
         outs = []
         post = []
@@ -1550,9 +1551,8 @@ class Generator:
             if k == 'count':
                 kwonly.append('%s=None' % n)
                 arrs = info['arrays']
-                pre.append('if %s is None: %s = %s' % (n, n, ' or '.join(
-                    ('_seqlen(%s)' % a) if not next(i for i in infos if i['name'] == a).get('count_bytes') else
-                    ('_%s_n' % a) for a in arrs)))
+                # emitted after the loop: an array may come after its count in the C signature
+                counts.append('if %s is None: %s = %s' % (n, n, ' or '.join('(_%s_n or 0)' % a for a in arrs)))
                 call.append(n)
             elif k == 'riid':
                 ppv = next(i for i in infos if i.get('aux') == infos.index(info) and i['kind'] == 'ppv')
@@ -1608,6 +1608,7 @@ class Generator:
                     elem = info['argtype'][8:-1]
                     pre.append('if %s.__class__ in (list, tuple): %s = _arr(%s, %s)[0]' % (n, n, elem, n))
                 call.append(n)
+        pre.extend(counts)
         # defaults: C++ default arguments, then overrides
         for s in sig:
             info = next(i for i in infos if i['name'] == s[0])

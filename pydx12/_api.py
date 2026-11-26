@@ -8561,8 +8561,8 @@ class IDXGIObject(IUnknown):
     _iid_ = GUID('aec22fb8-76f3-4639-9be0-28eb43a67a2e')
     def SetPrivateData(self, Name, pData=None, *, DataSize=None):
         'HRESULT SetPrivateData(const GUID & Name, UINT DataSize, const void * pData)'
-        if DataSize is None: DataSize = _pData_n
         pData, _pData_n, _pData_k = _buf(pData)
+        if DataSize is None: DataSize = (_pData_n or 0)
         _hr = _check(self._fn(3, _P[0])(self._this, Name, DataSize, pData), 'IDXGIObject.SetPrivateData')
         return _hr or None
     def SetPrivateDataInterface(self, Name, pUnknown=None):
@@ -8857,7 +8857,7 @@ class IDXGIDevice(IDXGIObject):
         'HRESULT QueryResourceResidency(IUnknown *const * ppResources, DXGI_RESIDENCY * pResidencyStatus, UINT NumResources)'
         ppResources, _ppResources_n = _arr('IUnknown', ppResources)
         pResidencyStatus = (DXGI_RESIDENCY * NumResources)()
-        if NumResources is None: NumResources = _seqlen(ppResources)
+        if NumResources is None: NumResources = (_ppResources_n or 0)
         _hr = _check(self._fn(9, _P[34])(self._this, ppResources, pResidencyStatus, NumResources), 'IDXGIDevice.QueryResourceResidency')
         return pResidencyStatus
     def SetGPUThreadPriority(self, Priority):
@@ -9009,15 +9009,15 @@ class IDXGIDevice2(IDXGIDevice1):
     _iid_ = GUID('05008617-fbfd-4051-a790-144884b4f6a9')
     def OfferResources(self, ppResources, Priority, *, NumResources=None):
         'HRESULT OfferResources(UINT NumResources, IDXGIResource *const * ppResources, DXGI_OFFER_RESOURCE_PRIORITY Priority)'
-        if NumResources is None: NumResources = _seqlen(ppResources)
         ppResources, _ppResources_n = _arr('IDXGIResource', ppResources)
+        if NumResources is None: NumResources = (_ppResources_n or 0)
         _hr = _check(self._fn(14, _P[48])(self._this, NumResources, ppResources, Priority), 'IDXGIDevice2.OfferResources')
         return _hr or None
     def ReclaimResources(self, ppResources=None, pDiscarded=None, *, NumResources=None):
         'HRESULT ReclaimResources(UINT NumResources, IDXGIResource *const * ppResources, BOOL * pDiscarded)'
-        if NumResources is None: NumResources = _seqlen(ppResources)
         ppResources, _ppResources_n = _arr('IDXGIResource', ppResources)
         if pDiscarded.__class__ in (list, tuple): pDiscarded = _arr(c_int, pDiscarded)[0]
+        if NumResources is None: NumResources = (_ppResources_n or 0)
         _hr = _check(self._fn(15, _P[49])(self._this, NumResources, ppResources, pDiscarded), 'IDXGIDevice2.ReclaimResources')
         return _hr or None
     def EnqueueSetEvent(self, hEvent):
@@ -9369,9 +9369,9 @@ class IDXGISwapChain3(IDXGISwapChain2):
         return _hr or None
     def ResizeBuffers1(self, Width, Height, Format, SwapChainFlags, pCreationNodeMask, ppPresentQueue, *, BufferCount=None):
         'HRESULT ResizeBuffers1(UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT Format, UINT SwapChainFlags, const UINT * pCreationNodeMask, IUnknown *const * ppPresentQueue)'
-        if BufferCount is None: BufferCount = _seqlen(pCreationNodeMask)
         pCreationNodeMask, _pCreationNodeMask_n = _arr(c_uint, pCreationNodeMask)
         ppPresentQueue, _ppPresentQueue_n = _arr('IUnknown', ppPresentQueue)
+        if BufferCount is None: BufferCount = (_pCreationNodeMask_n or 0)
         _hr = _check(self._fn(39, _P[79])(self._this, BufferCount, Width, Height, Format, SwapChainFlags, pCreationNodeMask, ppPresentQueue), 'IDXGISwapChain3.ResizeBuffers1')
         return _hr or None
     _vt_ = (('GetCurrentBackBufferIndex', 69), ('CheckColorSpaceSupport', 77), ('SetColorSpace1', 78), ('ResizeBuffers1', 79))
@@ -9442,9 +9442,9 @@ class IDXGIOutput5(IDXGIOutput4):
     _iid_ = GUID('80A07424-AB52-42EB-833C-0C42FD282D98')
     def DuplicateOutput1(self, pDevice, Flags, pSupportedFormats=None, *, SupportedFormatsCount=None):
         'HRESULT DuplicateOutput1(IUnknown * pDevice, UINT Flags, UINT SupportedFormatsCount, const DXGI_FORMAT * pSupportedFormats, IDXGIOutputDuplication ** ppOutputDuplication)'
-        if SupportedFormatsCount is None: SupportedFormatsCount = _seqlen(pSupportedFormats)
         pSupportedFormats, _pSupportedFormats_n = _arr(DXGI_FORMAT, pSupportedFormats)
         ppOutputDuplication = c_void_p()
+        if SupportedFormatsCount is None: SupportedFormatsCount = (_pSupportedFormats_n or 0)
         _hr = _check(self._fn(26, _P[84])(self._this, _ptr(pDevice), Flags, SupportedFormatsCount, pSupportedFormats, byref(ppOutputDuplication)), 'IDXGIOutput5.DuplicateOutput1')
         return _owned('IDXGIOutputDuplication', ppOutputDuplication)
     _vt_ = (('DuplicateOutput1', 84),)
@@ -9455,8 +9455,8 @@ class IDXGISwapChain4(IDXGISwapChain3):
     _iid_ = GUID('3D585D5A-BD4A-489E-B1F4-3DBCB6452FFB')
     def SetHDRMetaData(self, Type, pMetaData=None, *, Size=None):
         'HRESULT SetHDRMetaData(DXGI_HDR_METADATA_TYPE Type, UINT Size, void * pMetaData)'
-        if Size is None: Size = _pMetaData_n
         pMetaData, _pMetaData_n, _pMetaData_k = _buf(pMetaData)
+        if Size is None: Size = (_pMetaData_n or 0)
         _hr = _check(self._fn(40, _P[85])(self._this, Type, Size, pMetaData), 'IDXGISwapChain4.SetHDRMetaData')
         return _hr or None
     _vt_ = (('SetHDRMetaData', 85),)
@@ -9467,15 +9467,15 @@ class IDXGIDevice4(IDXGIDevice3):
     _iid_ = GUID('95B4F95F-D8DA-4CA4-9EE6-3B76D5968A10')
     def OfferResources1(self, ppResources, Priority, Flags, *, NumResources=None):
         'HRESULT OfferResources1(UINT NumResources, IDXGIResource *const * ppResources, DXGI_OFFER_RESOURCE_PRIORITY Priority, UINT Flags)'
-        if NumResources is None: NumResources = _seqlen(ppResources)
         ppResources, _ppResources_n = _arr('IDXGIResource', ppResources)
+        if NumResources is None: NumResources = (_ppResources_n or 0)
         _hr = _check(self._fn(18, _P[86])(self._this, NumResources, ppResources, Priority, Flags), 'IDXGIDevice4.OfferResources1')
         return _hr or None
     def ReclaimResources1(self, ppResources, pResults, *, NumResources=None):
         'HRESULT ReclaimResources1(UINT NumResources, IDXGIResource *const * ppResources, DXGI_RECLAIM_RESOURCE_RESULTS * pResults)'
-        if NumResources is None: NumResources = _seqlen(ppResources)
         ppResources, _ppResources_n = _arr('IDXGIResource', ppResources)
         if pResults.__class__ in (list, tuple): pResults = _arr(_DXGI_RECLAIM_RESOURCE_RESULTS, pResults)[0]
+        if NumResources is None: NumResources = (_ppResources_n or 0)
         _hr = _check(self._fn(19, _P[87])(self._this, NumResources, ppResources, pResults), 'IDXGIDevice4.ReclaimResources1')
         return _hr or None
     _vt_ = (('OfferResources1', 86), ('ReclaimResources1', 87))
@@ -9783,8 +9783,8 @@ class ID3D12Object(IUnknown):
         return _hr or None
     def SetPrivateData(self, guid, pData=None, *, DataSize=None):
         'HRESULT SetPrivateData(const GUID & guid, UINT DataSize, const void * pData)'
-        if DataSize is None: DataSize = _pData_n
         pData, _pData_n, _pData_k = _buf(pData)
+        if DataSize is None: DataSize = (_pData_n or 0)
         _hr = _check(self._fn(4, _P[0])(self._this, guid, DataSize, pData), 'ID3D12Object.SetPrivateData')
         return _hr or None
     def SetPrivateDataInterface(self, guid, pData=None):
@@ -10065,13 +10065,13 @@ class ID3D12GraphicsCommandList(ID3D12CommandList):
         self._fn(20, _P[144])(self._this, PrimitiveTopology)
     def RSSetViewports(self, pViewports=None, *, NumViewports=None):
         'void RSSetViewports(UINT NumViewports, const D3D12_VIEWPORT * pViewports)'
-        if NumViewports is None: NumViewports = _seqlen(pViewports)
         pViewports, _pViewports_n = _arr(D3D12_VIEWPORT, pViewports)
+        if NumViewports is None: NumViewports = (_pViewports_n or 0)
         self._fn(21, _P[145])(self._this, NumViewports, pViewports)
     def RSSetScissorRects(self, pRects=None, *, NumRects=None):
         'void RSSetScissorRects(UINT NumRects, const D3D12_RECT * pRects)'
-        if NumRects is None: NumRects = _seqlen(pRects)
         pRects, _pRects_n = _arr(RECT, pRects)
+        if NumRects is None: NumRects = (_pRects_n or 0)
         self._fn(22, _P[146])(self._this, NumRects, pRects)
     def OMSetBlendFactor(self, BlendFactor=None):
         'void OMSetBlendFactor(const FLOAT[4] BlendFactor)'
@@ -10085,16 +10085,16 @@ class ID3D12GraphicsCommandList(ID3D12CommandList):
         self._fn(25, _P[135])(self._this, _ptr(pPipelineState))
     def ResourceBarrier(self, pBarriers=None, *, NumBarriers=None):
         'void ResourceBarrier(UINT NumBarriers, const D3D12_RESOURCE_BARRIER * pBarriers)'
-        if NumBarriers is None: NumBarriers = _seqlen(pBarriers)
         pBarriers, _pBarriers_n = _arr(D3D12_RESOURCE_BARRIER, pBarriers)
+        if NumBarriers is None: NumBarriers = (_pBarriers_n or 0)
         self._fn(26, _P[149])(self._this, NumBarriers, pBarriers)
     def ExecuteBundle(self, pCommandList):
         'void ExecuteBundle(ID3D12GraphicsCommandList * pCommandList)'
         self._fn(27, _P[135])(self._this, _ptr(pCommandList))
     def SetDescriptorHeaps(self, ppDescriptorHeaps=None, *, NumDescriptorHeaps=None):
         'void SetDescriptorHeaps(UINT NumDescriptorHeaps, ID3D12DescriptorHeap *const * ppDescriptorHeaps)'
-        if NumDescriptorHeaps is None: NumDescriptorHeaps = _seqlen(ppDescriptorHeaps)
         ppDescriptorHeaps, _ppDescriptorHeaps_n = _arr('ID3D12DescriptorHeap', ppDescriptorHeaps)
+        if NumDescriptorHeaps is None: NumDescriptorHeaps = (_ppDescriptorHeaps_n or 0)
         self._fn(28, _P[150])(self._this, NumDescriptorHeaps, ppDescriptorHeaps)
     def SetComputeRootSignature(self, pRootSignature=None):
         'void SetComputeRootSignature(ID3D12RootSignature * pRootSignature)'
@@ -10146,13 +10146,13 @@ class ID3D12GraphicsCommandList(ID3D12CommandList):
         self._fn(43, _P[154])(self._this, pView)
     def IASetVertexBuffers(self, StartSlot, pViews=None, *, NumViews=None):
         'void IASetVertexBuffers(UINT StartSlot, UINT NumViews, const D3D12_VERTEX_BUFFER_VIEW * pViews)'
-        if NumViews is None: NumViews = _seqlen(pViews)
         pViews, _pViews_n = _arr(D3D12_VERTEX_BUFFER_VIEW, pViews)
+        if NumViews is None: NumViews = (_pViews_n or 0)
         self._fn(44, _P[155])(self._this, StartSlot, NumViews, pViews)
     def SOSetTargets(self, StartSlot, pViews=None, *, NumViews=None):
         'void SOSetTargets(UINT StartSlot, UINT NumViews, const D3D12_STREAM_OUTPUT_BUFFER_VIEW * pViews)'
-        if NumViews is None: NumViews = _seqlen(pViews)
         pViews, _pViews_n = _arr(D3D12_STREAM_OUTPUT_BUFFER_VIEW, pViews)
+        if NumViews is None: NumViews = (_pViews_n or 0)
         self._fn(45, _P[156])(self._this, StartSlot, NumViews, pViews)
     def OMSetRenderTargets(self, NumRenderTargetDescriptors, pRenderTargetDescriptors, RTsSingleHandleToDescriptorRange, pDepthStencilDescriptor=None):
         'void OMSetRenderTargets(UINT NumRenderTargetDescriptors, const D3D12_CPU_DESCRIPTOR_HANDLE * pRenderTargetDescriptors, BOOL RTsSingleHandleToDescriptorRange, const D3D12_CPU_DESCRIPTOR_HANDLE * pDepthStencilDescriptor)'
@@ -10161,26 +10161,26 @@ class ID3D12GraphicsCommandList(ID3D12CommandList):
         self._fn(46, _P[157])(self._this, NumRenderTargetDescriptors, pRenderTargetDescriptors, RTsSingleHandleToDescriptorRange, pDepthStencilDescriptor)
     def ClearDepthStencilView(self, DepthStencilView, ClearFlags, Depth, Stencil, pRects=None, *, NumRects=None):
         'void ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView, D3D12_CLEAR_FLAGS ClearFlags, FLOAT Depth, UINT8 Stencil, UINT NumRects, const D3D12_RECT * pRects)'
-        if NumRects is None: NumRects = _seqlen(pRects)
         pRects, _pRects_n = _arr(RECT, pRects)
+        if NumRects is None: NumRects = (_pRects_n or 0)
         self._fn(47, _P[158])(self._this, DepthStencilView, ClearFlags, Depth, Stencil, NumRects, pRects)
     def ClearRenderTargetView(self, RenderTargetView, ColorRGBA, pRects=None, *, NumRects=None):
         'void ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetView, const FLOAT[4] ColorRGBA, UINT NumRects, const D3D12_RECT * pRects)'
         if ColorRGBA.__class__ in (list, tuple): ColorRGBA = _arr(c_float, ColorRGBA)[0]
-        if NumRects is None: NumRects = _seqlen(pRects)
         pRects, _pRects_n = _arr(RECT, pRects)
+        if NumRects is None: NumRects = (_pRects_n or 0)
         self._fn(48, _P[159])(self._this, RenderTargetView, ColorRGBA, NumRects, pRects)
     def ClearUnorderedAccessViewUint(self, ViewGPUHandleInCurrentHeap, ViewCPUHandle, pResource, Values, pRects=None, *, NumRects=None):
         'void ClearUnorderedAccessViewUint(D3D12_GPU_DESCRIPTOR_HANDLE ViewGPUHandleInCurrentHeap, D3D12_CPU_DESCRIPTOR_HANDLE ViewCPUHandle, ID3D12Resource * pResource, const UINT[4] Values, UINT NumRects, const D3D12_RECT * pRects)'
         if Values.__class__ in (list, tuple): Values = _arr(c_uint, Values)[0]
-        if NumRects is None: NumRects = _seqlen(pRects)
         pRects, _pRects_n = _arr(RECT, pRects)
+        if NumRects is None: NumRects = (_pRects_n or 0)
         self._fn(49, _P[160])(self._this, ViewGPUHandleInCurrentHeap, ViewCPUHandle, _ptr(pResource), Values, NumRects, pRects)
     def ClearUnorderedAccessViewFloat(self, ViewGPUHandleInCurrentHeap, ViewCPUHandle, pResource, Values, pRects=None, *, NumRects=None):
         'void ClearUnorderedAccessViewFloat(D3D12_GPU_DESCRIPTOR_HANDLE ViewGPUHandleInCurrentHeap, D3D12_CPU_DESCRIPTOR_HANDLE ViewCPUHandle, ID3D12Resource * pResource, const FLOAT[4] Values, UINT NumRects, const D3D12_RECT * pRects)'
         if Values.__class__ in (list, tuple): Values = _arr(c_float, Values)[0]
-        if NumRects is None: NumRects = _seqlen(pRects)
         pRects, _pRects_n = _arr(RECT, pRects)
+        if NumRects is None: NumRects = (_pRects_n or 0)
         self._fn(50, _P[161])(self._this, ViewGPUHandleInCurrentHeap, ViewCPUHandle, _ptr(pResource), Values, NumRects, pRects)
     def DiscardResource(self, pResource, pRegion=None):
         'void DiscardResource(ID3D12Resource * pResource, const D3D12_DISCARD_REGION * pRegion)'
@@ -10201,12 +10201,12 @@ class ID3D12GraphicsCommandList(ID3D12CommandList):
     def SetMarker(self, Metadata, pData=None, *, Size=None):
         'void SetMarker(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(56, _P[166])(self._this, Metadata, pData, Size)
     def BeginEvent(self, Metadata, pData=None, *, Size=None):
         'void BeginEvent(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(57, _P[166])(self._this, Metadata, pData, Size)
     def EndEvent(self):
         'void EndEvent()'
@@ -10222,15 +10222,15 @@ class ID3D12GraphicsCommandList1(ID3D12GraphicsCommandList):
     _iid_ = GUID('553103fb-1fe7-4557-bb38-946d7d0e7ca7')
     def AtomicCopyBufferUINT(self, pDstBuffer, DstOffset, pSrcBuffer, SrcOffset, ppDependentResources, pDependentSubresourceRanges, *, Dependencies=None):
         'void AtomicCopyBufferUINT(ID3D12Resource * pDstBuffer, UINT64 DstOffset, ID3D12Resource * pSrcBuffer, UINT64 SrcOffset, UINT Dependencies, ID3D12Resource *const * ppDependentResources, const D3D12_SUBRESOURCE_RANGE_UINT64 * pDependentSubresourceRanges)'
-        if Dependencies is None: Dependencies = _seqlen(ppDependentResources)
         ppDependentResources, _ppDependentResources_n = _arr('ID3D12Resource', ppDependentResources)
         pDependentSubresourceRanges, _pDependentSubresourceRanges_n = _arr(D3D12_SUBRESOURCE_RANGE_UINT64, pDependentSubresourceRanges)
+        if Dependencies is None: Dependencies = (_ppDependentResources_n or 0)
         self._fn(60, _P[168])(self._this, _ptr(pDstBuffer), DstOffset, _ptr(pSrcBuffer), SrcOffset, Dependencies, ppDependentResources, pDependentSubresourceRanges)
     def AtomicCopyBufferUINT64(self, pDstBuffer, DstOffset, pSrcBuffer, SrcOffset, ppDependentResources, pDependentSubresourceRanges, *, Dependencies=None):
         'void AtomicCopyBufferUINT64(ID3D12Resource * pDstBuffer, UINT64 DstOffset, ID3D12Resource * pSrcBuffer, UINT64 SrcOffset, UINT Dependencies, ID3D12Resource *const * ppDependentResources, const D3D12_SUBRESOURCE_RANGE_UINT64 * pDependentSubresourceRanges)'
-        if Dependencies is None: Dependencies = _seqlen(ppDependentResources)
         ppDependentResources, _ppDependentResources_n = _arr('ID3D12Resource', ppDependentResources)
         pDependentSubresourceRanges, _pDependentSubresourceRanges_n = _arr(D3D12_SUBRESOURCE_RANGE_UINT64, pDependentSubresourceRanges)
+        if Dependencies is None: Dependencies = (_ppDependentResources_n or 0)
         self._fn(61, _P[168])(self._this, _ptr(pDstBuffer), DstOffset, _ptr(pSrcBuffer), SrcOffset, Dependencies, ppDependentResources, pDependentSubresourceRanges)
     def OMSetDepthBounds(self, Min, Max):
         'void OMSetDepthBounds(FLOAT Min, FLOAT Max)'
@@ -10254,9 +10254,9 @@ class ID3D12GraphicsCommandList2(ID3D12GraphicsCommandList1):
     _iid_ = GUID('38C3E585-FF17-412C-9150-4FC6F9D72A28')
     def WriteBufferImmediate(self, pParams=None, pModes=None, *, Count=None):
         'void WriteBufferImmediate(UINT Count, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER * pParams, const D3D12_WRITEBUFFERIMMEDIATE_MODE * pModes)'
-        if Count is None: Count = _seqlen(pParams)
         pParams, _pParams_n = _arr(D3D12_WRITEBUFFERIMMEDIATE_PARAMETER, pParams)
         pModes, _pModes_n = _arr(D3D12_WRITEBUFFERIMMEDIATE_MODE, pModes)
+        if Count is None: Count = (_pParams_n or 0)
         self._fn(66, _P[172])(self._this, Count, pParams, pModes)
     _vt_ = (('WriteBufferImmediate', 172),)
     _vtbl_size_ = 67
@@ -10266,13 +10266,13 @@ class ID3D12CommandQueue(ID3D12Pageable):
     _iid_ = GUID('0ec870a6-5d7e-4c22-8cfc-5baae07616ed')
     def UpdateTileMappings(self, pResource, pResourceRegionStartCoordinates, pResourceRegionSizes, pHeap, pRangeFlags, pHeapRangeStartOffsets, pRangeTileCounts, Flags, *, NumResourceRegions=None, NumRanges=None):
         'void UpdateTileMappings(ID3D12Resource * pResource, UINT NumResourceRegions, const D3D12_TILED_RESOURCE_COORDINATE * pResourceRegionStartCoordinates, const D3D12_TILE_REGION_SIZE * pResourceRegionSizes, ID3D12Heap * pHeap, UINT NumRanges, const D3D12_TILE_RANGE_FLAGS * pRangeFlags, const UINT * pHeapRangeStartOffsets, const UINT * pRangeTileCounts, D3D12_TILE_MAPPING_FLAGS Flags)'
-        if NumResourceRegions is None: NumResourceRegions = _seqlen(pResourceRegionStartCoordinates)
         pResourceRegionStartCoordinates, _pResourceRegionStartCoordinates_n = _arr(D3D12_TILED_RESOURCE_COORDINATE, pResourceRegionStartCoordinates)
         pResourceRegionSizes, _pResourceRegionSizes_n = _arr(D3D12_TILE_REGION_SIZE, pResourceRegionSizes)
-        if NumRanges is None: NumRanges = _seqlen(pRangeFlags)
         pRangeFlags, _pRangeFlags_n = _arr(D3D12_TILE_RANGE_FLAGS, pRangeFlags)
         pHeapRangeStartOffsets, _pHeapRangeStartOffsets_n = _arr(c_uint, pHeapRangeStartOffsets)
         pRangeTileCounts, _pRangeTileCounts_n = _arr(c_uint, pRangeTileCounts)
+        if NumResourceRegions is None: NumResourceRegions = (_pResourceRegionStartCoordinates_n or 0)
+        if NumRanges is None: NumRanges = (_pRangeFlags_n or 0)
         self._fn(8, _P[173])(self._this, _ptr(pResource), NumResourceRegions, pResourceRegionStartCoordinates, pResourceRegionSizes, _ptr(pHeap), NumRanges, pRangeFlags, pHeapRangeStartOffsets, pRangeTileCounts, Flags)
     def CopyTileMappings(self, pDstResource, pDstRegionStartCoordinate, pSrcResource, pSrcRegionStartCoordinate, pRegionSize, Flags):
         'void CopyTileMappings(ID3D12Resource * pDstResource, const D3D12_TILED_RESOURCE_COORDINATE * pDstRegionStartCoordinate, ID3D12Resource * pSrcResource, const D3D12_TILED_RESOURCE_COORDINATE * pSrcRegionStartCoordinate, const D3D12_TILE_REGION_SIZE * pRegionSize, D3D12_TILE_MAPPING_FLAGS Flags)'
@@ -10282,18 +10282,18 @@ class ID3D12CommandQueue(ID3D12Pageable):
         self._fn(9, _P[174])(self._this, _ptr(pDstResource), pDstRegionStartCoordinate, _ptr(pSrcResource), pSrcRegionStartCoordinate, pRegionSize, Flags)
     def ExecuteCommandLists(self, ppCommandLists=None, *, NumCommandLists=None):
         'void ExecuteCommandLists(UINT NumCommandLists, ID3D12CommandList *const * ppCommandLists)'
-        if NumCommandLists is None: NumCommandLists = _seqlen(ppCommandLists)
         ppCommandLists, _ppCommandLists_n = _arr('ID3D12CommandList', ppCommandLists)
+        if NumCommandLists is None: NumCommandLists = (_ppCommandLists_n or 0)
         self._fn(10, _P[150])(self._this, NumCommandLists, ppCommandLists)
     def SetMarker(self, Metadata, pData=None, *, Size=None):
         'void SetMarker(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(11, _P[166])(self._this, Metadata, pData, Size)
     def BeginEvent(self, Metadata, pData=None, *, Size=None):
         'void BeginEvent(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(12, _P[166])(self._this, Metadata, pData, Size)
     def EndEvent(self):
         'void EndEvent()'
@@ -10407,9 +10407,9 @@ class ID3D12Device(ID3D12Object):
     def CreateRootSignature(self, nodeMask, pBlobWithRootSignature=None, riid='ID3D12RootSignature', *, blobLengthInBytes=None):
         'HRESULT CreateRootSignature(UINT nodeMask, const void * pBlobWithRootSignature, SIZE_T blobLengthInBytes, const IID & riid, void ** ppvRootSignature)'
         pBlobWithRootSignature, _pBlobWithRootSignature_n, _pBlobWithRootSignature_k = _buf(pBlobWithRootSignature)
-        if blobLengthInBytes is None: blobLengthInBytes = _pBlobWithRootSignature_n
         _riid_g, _riid_c = _riid(riid)
         ppvRootSignature = c_void_p()
+        if blobLengthInBytes is None: blobLengthInBytes = (_pBlobWithRootSignature_n or 0)
         _hr = _check(self._fn(16, _P[191])(self._this, nodeMask, pBlobWithRootSignature, blobLengthInBytes, byref(_riid_g), byref(ppvRootSignature)), 'ID3D12Device.CreateRootSignature')
         return _owned(_riid_c, ppvRootSignature)
     def CreateConstantBufferView(self, pDesc, DestDescriptor):
@@ -10438,20 +10438,20 @@ class ID3D12Device(ID3D12Object):
         self._fn(22, _P[197])(self._this, pDesc, DestDescriptor)
     def CopyDescriptors(self, pDestDescriptorRangeStarts, pDestDescriptorRangeSizes, pSrcDescriptorRangeStarts, pSrcDescriptorRangeSizes, DescriptorHeapsType, *, NumDestDescriptorRanges=None, NumSrcDescriptorRanges=None):
         'void CopyDescriptors(UINT NumDestDescriptorRanges, const D3D12_CPU_DESCRIPTOR_HANDLE * pDestDescriptorRangeStarts, const UINT * pDestDescriptorRangeSizes, UINT NumSrcDescriptorRanges, const D3D12_CPU_DESCRIPTOR_HANDLE * pSrcDescriptorRangeStarts, const UINT * pSrcDescriptorRangeSizes, D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapsType)'
-        if NumDestDescriptorRanges is None: NumDestDescriptorRanges = _seqlen(pDestDescriptorRangeStarts)
         pDestDescriptorRangeStarts, _pDestDescriptorRangeStarts_n = _arr(D3D12_CPU_DESCRIPTOR_HANDLE, pDestDescriptorRangeStarts)
         pDestDescriptorRangeSizes, _pDestDescriptorRangeSizes_n = _arr(c_uint, pDestDescriptorRangeSizes)
-        if NumSrcDescriptorRanges is None: NumSrcDescriptorRanges = _seqlen(pSrcDescriptorRangeStarts)
         pSrcDescriptorRangeStarts, _pSrcDescriptorRangeStarts_n = _arr(D3D12_CPU_DESCRIPTOR_HANDLE, pSrcDescriptorRangeStarts)
         pSrcDescriptorRangeSizes, _pSrcDescriptorRangeSizes_n = _arr(c_uint, pSrcDescriptorRangeSizes)
+        if NumDestDescriptorRanges is None: NumDestDescriptorRanges = (_pDestDescriptorRangeStarts_n or 0)
+        if NumSrcDescriptorRanges is None: NumSrcDescriptorRanges = (_pSrcDescriptorRangeStarts_n or 0)
         self._fn(23, _P[198])(self._this, NumDestDescriptorRanges, pDestDescriptorRangeStarts, pDestDescriptorRangeSizes, NumSrcDescriptorRanges, pSrcDescriptorRangeStarts, pSrcDescriptorRangeSizes, DescriptorHeapsType)
     def CopyDescriptorsSimple(self, NumDescriptors, DestDescriptorRangeStart, SrcDescriptorRangeStart, DescriptorHeapsType):
         'void CopyDescriptorsSimple(UINT NumDescriptors, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptorRangeStart, D3D12_CPU_DESCRIPTOR_HANDLE SrcDescriptorRangeStart, D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapsType)'
         self._fn(24, _P[199])(self._this, NumDescriptors, DestDescriptorRangeStart, SrcDescriptorRangeStart, DescriptorHeapsType)
     def GetResourceAllocationInfo(self, visibleMask, pResourceDescs=None, *, numResourceDescs=None):
         'D3D12_RESOURCE_ALLOCATION_INFO GetResourceAllocationInfo(UINT visibleMask, UINT numResourceDescs, const D3D12_RESOURCE_DESC * pResourceDescs)'
-        if numResourceDescs is None: numResourceDescs = _seqlen(pResourceDescs)
         pResourceDescs, _pResourceDescs_n = _arr(D3D12_RESOURCE_DESC, pResourceDescs)
+        if numResourceDescs is None: numResourceDescs = (_pResourceDescs_n or 0)
         _ret = D3D12_RESOURCE_ALLOCATION_INFO()
         self._fn(25, _P[200])(self._this, byref(_ret), visibleMask, numResourceDescs, pResourceDescs)
         return _ret
@@ -10511,14 +10511,14 @@ class ID3D12Device(ID3D12Object):
         return pNTHandle.value
     def MakeResident(self, ppObjects=None, *, NumObjects=None):
         'HRESULT MakeResident(UINT NumObjects, ID3D12Pageable *const * ppObjects)'
-        if NumObjects is None: NumObjects = _seqlen(ppObjects)
         ppObjects, _ppObjects_n = _arr('ID3D12Pageable', ppObjects)
+        if NumObjects is None: NumObjects = (_ppObjects_n or 0)
         _hr = _check(self._fn(34, _P[13])(self._this, NumObjects, ppObjects), 'ID3D12Device.MakeResident')
         return _hr or None
     def Evict(self, ppObjects=None, *, NumObjects=None):
         'HRESULT Evict(UINT NumObjects, ID3D12Pageable *const * ppObjects)'
-        if NumObjects is None: NumObjects = _seqlen(ppObjects)
         ppObjects, _ppObjects_n = _arr('ID3D12Pageable', ppObjects)
+        if NumObjects is None: NumObjects = (_ppObjects_n or 0)
         _hr = _check(self._fn(35, _P[13])(self._this, NumObjects, ppObjects), 'ID3D12Device.Evict')
         return _hr or None
     def CreateFence(self, InitialValue=0, Flags=D3D12_FENCE_FLAG_NONE, riid='ID3D12Fence'):
@@ -10626,23 +10626,23 @@ class ID3D12Device1(ID3D12Device):
     def CreatePipelineLibrary(self, pLibraryBlob=None, riid='ID3D12PipelineLibrary', *, BlobLength=None):
         'HRESULT CreatePipelineLibrary(const void * pLibraryBlob, SIZE_T BlobLength, const IID & riid, void ** ppPipelineLibrary)'
         pLibraryBlob, _pLibraryBlob_n, _pLibraryBlob_k = _buf(pLibraryBlob)
-        if BlobLength is None: BlobLength = _pLibraryBlob_n
         _riid_g, _riid_c = _riid(riid)
         ppPipelineLibrary = c_void_p()
+        if BlobLength is None: BlobLength = (_pLibraryBlob_n or 0)
         _hr = _check(self._fn(44, _P[220])(self._this, pLibraryBlob, BlobLength, byref(_riid_g), byref(ppPipelineLibrary)), 'ID3D12Device1.CreatePipelineLibrary')
         return _owned(_riid_c, ppPipelineLibrary)
     def SetEventOnMultipleFenceCompletion(self, ppFences, pFenceValues, Flags, hEvent, *, NumFences=None):
         'HRESULT SetEventOnMultipleFenceCompletion(ID3D12Fence *const * ppFences, const UINT64 * pFenceValues, UINT NumFences, D3D12_MULTIPLE_FENCE_WAIT_FLAGS Flags, HANDLE hEvent)'
         ppFences, _ppFences_n = _arr('ID3D12Fence', ppFences)
         pFenceValues, _pFenceValues_n = _arr(c_uint64, pFenceValues)
-        if NumFences is None: NumFences = _seqlen(ppFences)
+        if NumFences is None: NumFences = (_ppFences_n or 0)
         _hr = _check(self._fn(45, _P[221])(self._this, ppFences, pFenceValues, NumFences, Flags, hEvent), 'ID3D12Device1.SetEventOnMultipleFenceCompletion')
         return _hr or None
     def SetResidencyPriority(self, ppObjects, pPriorities, *, NumObjects=None):
         'HRESULT SetResidencyPriority(UINT NumObjects, ID3D12Pageable *const * ppObjects, const D3D12_RESIDENCY_PRIORITY * pPriorities)'
-        if NumObjects is None: NumObjects = _seqlen(ppObjects)
         ppObjects, _ppObjects_n = _arr('ID3D12Pageable', ppObjects)
         pPriorities, _pPriorities_n = _arr(D3D12_RESIDENCY_PRIORITY, pPriorities)
+        if NumObjects is None: NumObjects = (_ppObjects_n or 0)
         _hr = _check(self._fn(46, _P[222])(self._this, NumObjects, ppObjects, pPriorities), 'ID3D12Device1.SetResidencyPriority')
         return _hr or None
     _vt_ = (('CreatePipelineLibrary', 220), ('SetEventOnMultipleFenceCompletion', 221), ('SetResidencyPriority', 222))
@@ -10678,8 +10678,8 @@ class ID3D12Device3(ID3D12Device2):
         return _owned(_riid_c, ppvHeap)
     def EnqueueMakeResident(self, Flags, ppObjects, pFenceToSignal, FenceValueToSignal, *, NumObjects=None):
         'HRESULT EnqueueMakeResident(D3D12_RESIDENCY_FLAGS Flags, UINT NumObjects, ID3D12Pageable *const * ppObjects, ID3D12Fence * pFenceToSignal, UINT64 FenceValueToSignal)'
-        if NumObjects is None: NumObjects = _seqlen(ppObjects)
         ppObjects, _ppObjects_n = _arr('ID3D12Pageable', ppObjects)
+        if NumObjects is None: NumObjects = (_ppObjects_n or 0)
         _hr = _check(self._fn(50, _P[224])(self._this, Flags, NumObjects, ppObjects, _ptr(pFenceToSignal), FenceValueToSignal), 'ID3D12Device3.EnqueueMakeResident')
         return _hr or None
     _vt_ = (('OpenExistingHeapFromAddress', 207), ('OpenExistingHeapFromFileMapping', 207), ('EnqueueMakeResident', 224))
@@ -10754,9 +10754,9 @@ class ID3D12Device4(ID3D12Device3):
         return _owned(_riid_c, ppvResource)
     def GetResourceAllocationInfo1(self, visibleMask, pResourceDescs=None, *, numResourceDescs=None):
         'D3D12_RESOURCE_ALLOCATION_INFO GetResourceAllocationInfo1(UINT visibleMask, UINT numResourceDescs, const D3D12_RESOURCE_DESC * pResourceDescs, D3D12_RESOURCE_ALLOCATION_INFO1 * pResourceAllocationInfo1)'
-        if numResourceDescs is None: numResourceDescs = _seqlen(pResourceDescs)
         pResourceDescs, _pResourceDescs_n = _arr(D3D12_RESOURCE_DESC, pResourceDescs)
         pResourceAllocationInfo1 = (D3D12_RESOURCE_ALLOCATION_INFO1 * numResourceDescs)()
+        if numResourceDescs is None: numResourceDescs = (_pResourceDescs_n or 0)
         _ret = D3D12_RESOURCE_ALLOCATION_INFO()
         self._fn(56, _P[232])(self._this, byref(_ret), visibleMask, numResourceDescs, pResourceDescs, pResourceAllocationInfo1)
         return (_ret, pResourceAllocationInfo1)
@@ -10956,9 +10956,9 @@ class ID3D12Device5(ID3D12Device4):
     def CreateMetaCommand(self, CommandId, NodeMask, pCreationParametersData=None, riid='ID3D12MetaCommand', *, CreationParametersDataSizeInBytes=None):
         'HRESULT CreateMetaCommand(const GUID & CommandId, UINT NodeMask, const void * pCreationParametersData, SIZE_T CreationParametersDataSizeInBytes, const IID & riid, void ** ppMetaCommand)'
         pCreationParametersData, _pCreationParametersData_n, _pCreationParametersData_k = _buf(pCreationParametersData)
-        if CreationParametersDataSizeInBytes is None: CreationParametersDataSizeInBytes = _pCreationParametersData_n
         _riid_g, _riid_c = _riid(riid)
         ppMetaCommand = c_void_p()
+        if CreationParametersDataSizeInBytes is None: CreationParametersDataSizeInBytes = (_pCreationParametersData_n or 0)
         _hr = _check(self._fn(61, _P[249])(self._this, CommandId, NodeMask, pCreationParametersData, CreationParametersDataSizeInBytes, byref(_riid_g), byref(ppMetaCommand)), 'ID3D12Device5.CreateMetaCommand')
         return _owned(_riid_c, ppMetaCommand)
     def CreateStateObject(self, pDesc, riid='ID3D12StateObject'):
@@ -11109,9 +11109,9 @@ class ID3D12Device8(ID3D12Device7):
     _iid_ = GUID('9218E6BB-F944-4F7E-A75C-B1B2C7B701F3')
     def GetResourceAllocationInfo2(self, visibleMask, pResourceDescs=None, *, numResourceDescs=None):
         'D3D12_RESOURCE_ALLOCATION_INFO GetResourceAllocationInfo2(UINT visibleMask, UINT numResourceDescs, const D3D12_RESOURCE_DESC1 * pResourceDescs, D3D12_RESOURCE_ALLOCATION_INFO1 * pResourceAllocationInfo1)'
-        if numResourceDescs is None: numResourceDescs = _seqlen(pResourceDescs)
         pResourceDescs, _pResourceDescs_n = _arr(D3D12_RESOURCE_DESC1, pResourceDescs)
         pResourceAllocationInfo1 = (D3D12_RESOURCE_ALLOCATION_INFO1 * numResourceDescs)()
+        if numResourceDescs is None: numResourceDescs = (_pResourceDescs_n or 0)
         _ret = D3D12_RESOURCE_ALLOCATION_INFO()
         self._fn(68, _P[264])(self._this, byref(_ret), visibleMask, numResourceDescs, pResourceDescs, pResourceAllocationInfo1)
         return (_ret, pResourceAllocationInfo1)
@@ -11226,9 +11226,9 @@ class ID3D12GraphicsCommandList4(ID3D12GraphicsCommandList3):
     _iid_ = GUID('8754318e-d3a9-4541-98cf-645b50dc4874')
     def BeginRenderPass(self, pRenderTargets, pDepthStencil, Flags, *, NumRenderTargets=None):
         'void BeginRenderPass(UINT NumRenderTargets, const D3D12_RENDER_PASS_RENDER_TARGET_DESC * pRenderTargets, const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC * pDepthStencil, D3D12_RENDER_PASS_FLAGS Flags)'
-        if NumRenderTargets is None: NumRenderTargets = _seqlen(pRenderTargets)
         pRenderTargets, _pRenderTargets_n = _arr(D3D12_RENDER_PASS_RENDER_TARGET_DESC, pRenderTargets)
         if pDepthStencil.__class__ in (list, tuple): pDepthStencil = _arr(D3D12_RENDER_PASS_DEPTH_STENCIL_DESC, pDepthStencil)[0]
+        if NumRenderTargets is None: NumRenderTargets = (_pRenderTargets_n or 0)
         self._fn(68, _P[273])(self._this, NumRenderTargets, pRenderTargets, pDepthStencil, Flags)
     def EndRenderPass(self):
         'void EndRenderPass()'
@@ -11236,24 +11236,24 @@ class ID3D12GraphicsCommandList4(ID3D12GraphicsCommandList3):
     def InitializeMetaCommand(self, pMetaCommand, pInitializationParametersData=None, *, InitializationParametersDataSizeInBytes=None):
         'void InitializeMetaCommand(ID3D12MetaCommand * pMetaCommand, const void * pInitializationParametersData, SIZE_T InitializationParametersDataSizeInBytes)'
         pInitializationParametersData, _pInitializationParametersData_n, _pInitializationParametersData_k = _buf(pInitializationParametersData)
-        if InitializationParametersDataSizeInBytes is None: InitializationParametersDataSizeInBytes = _pInitializationParametersData_n
+        if InitializationParametersDataSizeInBytes is None: InitializationParametersDataSizeInBytes = (_pInitializationParametersData_n or 0)
         self._fn(70, _P[274])(self._this, _ptr(pMetaCommand), pInitializationParametersData, InitializationParametersDataSizeInBytes)
     def ExecuteMetaCommand(self, pMetaCommand, pExecutionParametersData=None, *, ExecutionParametersDataSizeInBytes=None):
         'void ExecuteMetaCommand(ID3D12MetaCommand * pMetaCommand, const void * pExecutionParametersData, SIZE_T ExecutionParametersDataSizeInBytes)'
         pExecutionParametersData, _pExecutionParametersData_n, _pExecutionParametersData_k = _buf(pExecutionParametersData)
-        if ExecutionParametersDataSizeInBytes is None: ExecutionParametersDataSizeInBytes = _pExecutionParametersData_n
+        if ExecutionParametersDataSizeInBytes is None: ExecutionParametersDataSizeInBytes = (_pExecutionParametersData_n or 0)
         self._fn(71, _P[274])(self._this, _ptr(pMetaCommand), pExecutionParametersData, ExecutionParametersDataSizeInBytes)
     def BuildRaytracingAccelerationStructure(self, pDesc, pPostbuildInfoDescs=None, *, NumPostbuildInfoDescs=None):
         'void BuildRaytracingAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC * pDesc, UINT NumPostbuildInfoDescs, const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC * pPostbuildInfoDescs)'
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC, pDesc)[0]
-        if NumPostbuildInfoDescs is None: NumPostbuildInfoDescs = _seqlen(pPostbuildInfoDescs)
         pPostbuildInfoDescs, _pPostbuildInfoDescs_n = _arr(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC, pPostbuildInfoDescs)
+        if NumPostbuildInfoDescs is None: NumPostbuildInfoDescs = (_pPostbuildInfoDescs_n or 0)
         self._fn(72, _P[275])(self._this, pDesc, NumPostbuildInfoDescs, pPostbuildInfoDescs)
     def EmitRaytracingAccelerationStructurePostbuildInfo(self, pDesc, pSourceAccelerationStructureData=None, *, NumSourceAccelerationStructures=None):
         'void EmitRaytracingAccelerationStructurePostbuildInfo(const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC * pDesc, UINT NumSourceAccelerationStructures, const D3D12_GPU_VIRTUAL_ADDRESS * pSourceAccelerationStructureData)'
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC, pDesc)[0]
-        if NumSourceAccelerationStructures is None: NumSourceAccelerationStructures = _seqlen(pSourceAccelerationStructureData)
         pSourceAccelerationStructureData, _pSourceAccelerationStructureData_n = _arr(c_uint64, pSourceAccelerationStructureData)
+        if NumSourceAccelerationStructures is None: NumSourceAccelerationStructures = (_pSourceAccelerationStructureData_n or 0)
         self._fn(73, _P[276])(self._this, pDesc, NumSourceAccelerationStructures, pSourceAccelerationStructureData)
     def CopyRaytracingAccelerationStructure(self, DestAccelerationStructureData, SourceAccelerationStructureData, Mode):
         'void CopyRaytracingAccelerationStructure(D3D12_GPU_VIRTUAL_ADDRESS DestAccelerationStructureData, D3D12_GPU_VIRTUAL_ADDRESS SourceAccelerationStructureData, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE Mode)'
@@ -11274,16 +11274,16 @@ class ID3D12ShaderCacheSession(ID3D12DeviceChild):
     def FindValue(self, pKey, pValue, pValueSize, *, KeySize=None):
         'HRESULT FindValue(const void * pKey, UINT KeySize, void * pValue, UINT * pValueSize)'
         pKey, _pKey_n, _pKey_k = _buf(pKey)
-        if KeySize is None: KeySize = _pKey_n
         if pValueSize.__class__ in (list, tuple): pValueSize = _arr(c_uint, pValueSize)[0]
+        if KeySize is None: KeySize = (_pKey_n or 0)
         _hr = _check(self._fn(8, _P[279])(self._this, pKey, KeySize, pValue, pValueSize), 'ID3D12ShaderCacheSession.FindValue')
         return _hr or None
     def StoreValue(self, pKey=None, pValue=None, *, KeySize=None, ValueSize=None):
         'HRESULT StoreValue(const void * pKey, UINT KeySize, const void * pValue, UINT ValueSize)'
         pKey, _pKey_n, _pKey_k = _buf(pKey)
-        if KeySize is None: KeySize = _pKey_n
         pValue, _pValue_n, _pValue_k = _buf(pValue)
-        if ValueSize is None: ValueSize = _pValue_n
+        if KeySize is None: KeySize = (_pKey_n or 0)
+        if ValueSize is None: ValueSize = (_pValue_n or 0)
         _hr = _check(self._fn(9, _P[280])(self._this, pKey, KeySize, pValue, ValueSize), 'ID3D12ShaderCacheSession.StoreValue')
         return _hr or None
     def SetDeleteOnDestroy(self):
@@ -11329,30 +11329,30 @@ class ID3D12Device10(ID3D12Device9):
         if pHeapProperties.__class__ in (list, tuple): pHeapProperties = _arr(D3D12_HEAP_PROPERTIES, pHeapProperties)[0]
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_RESOURCE_DESC1, pDesc)[0]
         if pOptimizedClearValue.__class__ in (list, tuple): pOptimizedClearValue = _arr(D3D12_CLEAR_VALUE, pOptimizedClearValue)[0]
-        if NumCastableFormats is None: NumCastableFormats = _seqlen(pCastableFormats)
         pCastableFormats, _pCastableFormats_n = _arr(DXGI_FORMAT, pCastableFormats)
         _riidResource_g, _riidResource_c = _riid(riidResource)
         ppvResource = c_void_p()
+        if NumCastableFormats is None: NumCastableFormats = (_pCastableFormats_n or 0)
         _hr = _check(self._fn(76, _P[285])(self._this, pHeapProperties, HeapFlags, pDesc, InitialLayout, pOptimizedClearValue, _ptr(pProtectedSession), NumCastableFormats, pCastableFormats, byref(_riidResource_g), byref(ppvResource)), 'ID3D12Device10.CreateCommittedResource3')
         return _owned(_riidResource_c, ppvResource)
     def CreatePlacedResource2(self, pHeap, HeapOffset, pDesc, InitialLayout, pOptimizedClearValue=None, pCastableFormats=None, riid='ID3D12Resource', *, NumCastableFormats=None):
         'HRESULT CreatePlacedResource2(ID3D12Heap * pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1 * pDesc, D3D12_BARRIER_LAYOUT InitialLayout, const D3D12_CLEAR_VALUE * pOptimizedClearValue, UINT32 NumCastableFormats, const DXGI_FORMAT * pCastableFormats, const IID & riid, void ** ppvResource)'
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_RESOURCE_DESC1, pDesc)[0]
         if pOptimizedClearValue.__class__ in (list, tuple): pOptimizedClearValue = _arr(D3D12_CLEAR_VALUE, pOptimizedClearValue)[0]
-        if NumCastableFormats is None: NumCastableFormats = _seqlen(pCastableFormats)
         pCastableFormats, _pCastableFormats_n = _arr(DXGI_FORMAT, pCastableFormats)
         _riid_g, _riid_c = _riid(riid)
         ppvResource = c_void_p()
+        if NumCastableFormats is None: NumCastableFormats = (_pCastableFormats_n or 0)
         _hr = _check(self._fn(77, _P[286])(self._this, _ptr(pHeap), HeapOffset, pDesc, InitialLayout, pOptimizedClearValue, NumCastableFormats, pCastableFormats, byref(_riid_g), byref(ppvResource)), 'ID3D12Device10.CreatePlacedResource2')
         return _owned(_riid_c, ppvResource)
     def CreateReservedResource2(self, pDesc, InitialLayout, pOptimizedClearValue=None, pProtectedSession=None, pCastableFormats=None, riid='ID3D12Resource', *, NumCastableFormats=None):
         'HRESULT CreateReservedResource2(const D3D12_RESOURCE_DESC * pDesc, D3D12_BARRIER_LAYOUT InitialLayout, const D3D12_CLEAR_VALUE * pOptimizedClearValue, ID3D12ProtectedResourceSession * pProtectedSession, UINT32 NumCastableFormats, const DXGI_FORMAT * pCastableFormats, const IID & riid, void ** ppvResource)'
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_RESOURCE_DESC, pDesc)[0]
         if pOptimizedClearValue.__class__ in (list, tuple): pOptimizedClearValue = _arr(D3D12_CLEAR_VALUE, pOptimizedClearValue)[0]
-        if NumCastableFormats is None: NumCastableFormats = _seqlen(pCastableFormats)
         pCastableFormats, _pCastableFormats_n = _arr(DXGI_FORMAT, pCastableFormats)
         _riid_g, _riid_c = _riid(riid)
         ppvResource = c_void_p()
+        if NumCastableFormats is None: NumCastableFormats = (_pCastableFormats_n or 0)
         _hr = _check(self._fn(78, _P[287])(self._this, pDesc, InitialLayout, pOptimizedClearValue, _ptr(pProtectedSession), NumCastableFormats, pCastableFormats, byref(_riid_g), byref(ppvResource)), 'ID3D12Device10.CreateReservedResource2')
         return _owned(_riid_c, ppvResource)
     _vt_ = (('CreateCommittedResource3', 285), ('CreatePlacedResource2', 286), ('CreateReservedResource2', 287))
@@ -11373,11 +11373,11 @@ class ID3D12Device12(ID3D12Device11):
     _iid_ = GUID('5af5c532-4c91-4cd0-b541-15a405395fc5')
     def GetResourceAllocationInfo3(self, visibleMask, pResourceDescs=None, pNumCastableFormats=None, ppCastableFormats=None, *, numResourceDescs=None):
         'D3D12_RESOURCE_ALLOCATION_INFO GetResourceAllocationInfo3(UINT visibleMask, UINT numResourceDescs, const D3D12_RESOURCE_DESC1 * pResourceDescs, const UINT32 * pNumCastableFormats, const DXGI_FORMAT *const * ppCastableFormats, D3D12_RESOURCE_ALLOCATION_INFO1 * pResourceAllocationInfo1)'
-        if numResourceDescs is None: numResourceDescs = _seqlen(pResourceDescs)
         pResourceDescs, _pResourceDescs_n = _arr(D3D12_RESOURCE_DESC1, pResourceDescs)
         pNumCastableFormats, _pNumCastableFormats_n = _arr(c_uint, pNumCastableFormats)
         ppCastableFormats, _ppCastableFormats_n = _arr(POINTER(DXGI_FORMAT), ppCastableFormats)
         pResourceAllocationInfo1 = (D3D12_RESOURCE_ALLOCATION_INFO1 * numResourceDescs)()
+        if numResourceDescs is None: numResourceDescs = (_pResourceDescs_n or 0)
         _ret = D3D12_RESOURCE_ALLOCATION_INFO()
         self._fn(80, _P[289])(self._this, byref(_ret), visibleMask, numResourceDescs, pResourceDescs, pNumCastableFormats, ppCastableFormats, pResourceAllocationInfo1)
         return (_ret, pResourceAllocationInfo1)
@@ -11402,9 +11402,9 @@ class ID3D12Device14(ID3D12Device13):
     def CreateRootSignatureFromSubobjectInLibrary(self, nodeMask, pLibraryBlob, subobjectName, riid, *, blobLengthInBytes=None):
         'HRESULT CreateRootSignatureFromSubobjectInLibrary(UINT nodeMask, const void * pLibraryBlob, SIZE_T blobLengthInBytes, LPCWSTR subobjectName, const IID & riid, void ** ppvRootSignature)'
         pLibraryBlob, _pLibraryBlob_n, _pLibraryBlob_k = _buf(pLibraryBlob)
-        if blobLengthInBytes is None: blobLengthInBytes = _pLibraryBlob_n
         _riid_g, _riid_c = _riid(riid)
         ppvRootSignature = c_void_p()
+        if blobLengthInBytes is None: blobLengthInBytes = (_pLibraryBlob_n or 0)
         _hr = _check(self._fn(82, _P[290])(self._this, nodeMask, pLibraryBlob, blobLengthInBytes, subobjectName, byref(_riid_g), byref(ppvRootSignature)), 'ID3D12Device14.CreateRootSignatureFromSubobjectInLibrary')
         return _owned(_riid_c, ppvRootSignature)
     _vt_ = (('CreateRootSignatureFromSubobjectInLibrary', 290),)
@@ -11485,23 +11485,23 @@ class ID3D12StateObjectDatabase(IUnknown):
     def StorePipelineStateDesc(self, pKey, Version, pDesc, *, KeySize=None):
         'HRESULT StorePipelineStateDesc(const void * pKey, UINT KeySize, UINT Version, const D3D12_PIPELINE_STATE_STREAM_DESC * pDesc)'
         pKey, _pKey_n, _pKey_k = _buf(pKey)
-        if KeySize is None: KeySize = _pKey_n
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_PIPELINE_STATE_STREAM_DESC, pDesc)[0]
+        if KeySize is None: KeySize = (_pKey_n or 0)
         _hr = _check(self._fn(5, _P[302])(self._this, pKey, KeySize, Version, pDesc), 'ID3D12StateObjectDatabase.StorePipelineStateDesc')
         return _hr or None
     def FindPipelineStateDesc(self, pKey, CallbackFunc, pContext=None, *, KeySize=None):
         'HRESULT FindPipelineStateDesc(const void * pKey, UINT KeySize, D3D12PipelineStateFunc CallbackFunc, void * pContext)'
         pKey, _pKey_n, _pKey_k = _buf(pKey)
-        if KeySize is None: KeySize = _pKey_n
+        if KeySize is None: KeySize = (_pKey_n or 0)
         _hr = _check(self._fn(6, _P[303])(self._this, pKey, KeySize, CallbackFunc, pContext), 'ID3D12StateObjectDatabase.FindPipelineStateDesc')
         return _hr or None
     def StoreStateObjectDesc(self, pKey, Version, pDesc, pStateObjectToGrowFromKey=None, *, KeySize=None, StateObjectToGrowFromKeySize=None):
         'HRESULT StoreStateObjectDesc(const void * pKey, UINT KeySize, UINT Version, const D3D12_STATE_OBJECT_DESC * pDesc, const void * pStateObjectToGrowFromKey, UINT StateObjectToGrowFromKeySize)'
         pKey, _pKey_n, _pKey_k = _buf(pKey)
-        if KeySize is None: KeySize = _pKey_n
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_STATE_OBJECT_DESC, pDesc)[0]
         pStateObjectToGrowFromKey, _pStateObjectToGrowFromKey_n, _pStateObjectToGrowFromKey_k = _buf(pStateObjectToGrowFromKey)
-        if StateObjectToGrowFromKeySize is None: StateObjectToGrowFromKeySize = _pStateObjectToGrowFromKey_n
+        if KeySize is None: KeySize = (_pKey_n or 0)
+        if StateObjectToGrowFromKeySize is None: StateObjectToGrowFromKeySize = (_pStateObjectToGrowFromKey_n or 0)
         _hr = _check(self._fn(7, _P[304])(self._this, pKey, KeySize, Version, pDesc, pStateObjectToGrowFromKey, StateObjectToGrowFromKeySize), 'ID3D12StateObjectDatabase.StoreStateObjectDesc')
         return _hr or None
     def FindStateObjectDesc(self, pKey, KeySize, CallbackFunc, pContext=None):
@@ -11538,29 +11538,29 @@ class ID3D12Device16(ID3D12Device15):
         if pHeapProperties.__class__ in (list, tuple): pHeapProperties = _arr(D3D12_HEAP_PROPERTIES, pHeapProperties)[0]
         if pResourceDesc.__class__ in (list, tuple): pResourceDesc = _arr(D3D12_RESOURCE_DESC2, pResourceDesc)[0]
         if pOptimizedClearValue.__class__ in (list, tuple): pOptimizedClearValue = _arr(D3D12_CLEAR_VALUE, pOptimizedClearValue)[0]
-        if NumCastableFormats is None: NumCastableFormats = _seqlen(pCastableFormats)
         pCastableFormats, _pCastableFormats_n = _arr(DXGI_FORMAT, pCastableFormats)
         _riidResource_g, _riidResource_c = _riid(riidResource)
         ppvResource = c_void_p()
+        if NumCastableFormats is None: NumCastableFormats = (_pCastableFormats_n or 0)
         _hr = _check(self._fn(96, _P[308])(self._this, pHeapProperties, HeapFlags, pResourceDesc, InitialLayout, pOptimizedClearValue, _ptr(pProtectedSession), NumCastableFormats, pCastableFormats, byref(_riidResource_g), byref(ppvResource)), 'ID3D12Device16.CreateCommittedResource4')
         return _owned(_riidResource_c, ppvResource)
     def CreatePlacedResource3(self, pHeap, HeapOffset, pResourceDesc, InitialLayout, pOptimizedClearValue, pCastableFormats, riid, *, NumCastableFormats=None):
         'HRESULT CreatePlacedResource3(ID3D12Heap * pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC2 * pResourceDesc, D3D12_BARRIER_LAYOUT InitialLayout, const D3D12_CLEAR_VALUE * pOptimizedClearValue, UINT32 NumCastableFormats, const DXGI_FORMAT * pCastableFormats, const IID & riid, void ** ppvResource)'
         if pResourceDesc.__class__ in (list, tuple): pResourceDesc = _arr(D3D12_RESOURCE_DESC2, pResourceDesc)[0]
         if pOptimizedClearValue.__class__ in (list, tuple): pOptimizedClearValue = _arr(D3D12_CLEAR_VALUE, pOptimizedClearValue)[0]
-        if NumCastableFormats is None: NumCastableFormats = _seqlen(pCastableFormats)
         pCastableFormats, _pCastableFormats_n = _arr(DXGI_FORMAT, pCastableFormats)
         _riid_g, _riid_c = _riid(riid)
         ppvResource = c_void_p()
+        if NumCastableFormats is None: NumCastableFormats = (_pCastableFormats_n or 0)
         _hr = _check(self._fn(97, _P[309])(self._this, _ptr(pHeap), HeapOffset, pResourceDesc, InitialLayout, pOptimizedClearValue, NumCastableFormats, pCastableFormats, byref(_riid_g), byref(ppvResource)), 'ID3D12Device16.CreatePlacedResource3')
         return _owned(_riid_c, ppvResource)
     def GetResourceAllocationInfo4(self, visibleMask, pResourceDescs=None, pNumCastableFormats=None, ppCastableFormats=None, *, numResourceDescs=None):
         'D3D12_RESOURCE_ALLOCATION_INFO GetResourceAllocationInfo4(UINT visibleMask, UINT numResourceDescs, const D3D12_RESOURCE_DESC2 * pResourceDescs, const UINT32 * pNumCastableFormats, const DXGI_FORMAT *const * ppCastableFormats, D3D12_RESOURCE_ALLOCATION_INFO1 * pResourceAllocationInfo1)'
-        if numResourceDescs is None: numResourceDescs = _seqlen(pResourceDescs)
         pResourceDescs, _pResourceDescs_n = _arr(D3D12_RESOURCE_DESC2, pResourceDescs)
         pNumCastableFormats, _pNumCastableFormats_n = _arr(c_uint, pNumCastableFormats)
         ppCastableFormats, _ppCastableFormats_n = _arr(POINTER(DXGI_FORMAT), ppCastableFormats)
         pResourceAllocationInfo1 = (D3D12_RESOURCE_ALLOCATION_INFO1 * numResourceDescs)()
+        if numResourceDescs is None: numResourceDescs = (_pResourceDescs_n or 0)
         _ret = D3D12_RESOURCE_ALLOCATION_INFO()
         self._fn(98, _P[310])(self._this, byref(_ret), visibleMask, numResourceDescs, pResourceDescs, pNumCastableFormats, ppCastableFormats, pResourceAllocationInfo1)
         return (_ret, pResourceAllocationInfo1)
@@ -11622,7 +11622,7 @@ class ID3D12ShaderCacheSession1(ID3D12ShaderCacheSession):
         'HRESULT StoreValue1(const D3D12_CACHE_VALUE_KEY * pValueKey, const D3D12_CACHE_TYPED_CONST_VALUE * pTypedValues, UINT NumTypedValues, D3D12_SHADER_CACHE_STORE_FLAGS Flags)'
         if pValueKey.__class__ in (list, tuple): pValueKey = _arr(D3D12_CACHE_VALUE_KEY, pValueKey)[0]
         pTypedValues, _pTypedValues_n = _arr(D3D12_CACHE_TYPED_CONST_VALUE, pTypedValues)
-        if NumTypedValues is None: NumTypedValues = _seqlen(pTypedValues)
+        if NumTypedValues is None: NumTypedValues = (_pTypedValues_n or 0)
         _hr = _check(self._fn(13, _P[318])(self._this, pValueKey, pTypedValues, NumTypedValues, Flags), 'ID3D12ShaderCacheSession1.StoreValue1')
         return _hr or None
     def GetSessionInfo(self):
@@ -11672,7 +11672,7 @@ class ID3D12Tools1(ID3D12Tools):
     def ReserveGPUVARangesAtCreate(self, pRanges=None, *, uiNumRanges=None):
         'HRESULT ReserveGPUVARangesAtCreate(D3D12_GPU_VIRTUAL_ADDRESS_RANGE * pRanges, UINT uiNumRanges)'
         pRanges, _pRanges_n = _arr(D3D12_GPU_VIRTUAL_ADDRESS_RANGE, pRanges)
-        if uiNumRanges is None: uiNumRanges = _seqlen(pRanges)
+        if uiNumRanges is None: uiNumRanges = (_pRanges_n or 0)
         _hr = _check(self._fn(5, _P[322])(self._this, pRanges, uiNumRanges), 'ID3D12Tools1.ReserveGPUVARangesAtCreate')
         return _hr or None
     def ClearReservedGPUVARangesList(self):
@@ -11843,7 +11843,7 @@ class ID3D12DebugDevice1(IUnknown):
     def SetDebugParameter(self, Type, pData=None, *, DataSize=None):
         'HRESULT SetDebugParameter(D3D12_DEBUG_DEVICE_PARAMETER_TYPE Type, const void * pData, UINT DataSize)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if DataSize is None: DataSize = _pData_n
+        if DataSize is None: DataSize = (_pData_n or 0)
         _hr = _check(self._fn(3, _P[329])(self._this, Type, pData, DataSize), 'ID3D12DebugDevice1.SetDebugParameter')
         return _hr or None
     def GetDebugParameter(self, Type, pData, DataSize):
@@ -11881,7 +11881,7 @@ class ID3D12DebugDevice2(ID3D12DebugDevice):
     def SetDebugParameter(self, Type, pData=None, *, DataSize=None):
         'HRESULT SetDebugParameter(D3D12_DEBUG_DEVICE_PARAMETER_TYPE Type, const void * pData, UINT DataSize)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if DataSize is None: DataSize = _pData_n
+        if DataSize is None: DataSize = (_pData_n or 0)
         _hr = _check(self._fn(6, _P[329])(self._this, Type, pData, DataSize), 'ID3D12DebugDevice2.SetDebugParameter')
         return _hr or None
     def GetDebugParameter(self, Type, pData, DataSize):
@@ -11923,7 +11923,7 @@ class ID3D12DebugCommandList1(IUnknown):
     def SetDebugParameter(self, Type, pData=None, *, DataSize=None):
         'HRESULT SetDebugParameter(D3D12_DEBUG_COMMAND_LIST_PARAMETER_TYPE Type, const void * pData, UINT DataSize)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if DataSize is None: DataSize = _pData_n
+        if DataSize is None: DataSize = (_pData_n or 0)
         _hr = _check(self._fn(4, _P[336])(self._this, Type, pData, DataSize), 'ID3D12DebugCommandList1.SetDebugParameter')
         return _hr or None
     def GetDebugParameter(self, Type, pData, DataSize):
@@ -11957,7 +11957,7 @@ class ID3D12DebugCommandList2(ID3D12DebugCommandList):
     def SetDebugParameter(self, Type, pData=None, *, DataSize=None):
         'HRESULT SetDebugParameter(D3D12_DEBUG_COMMAND_LIST_PARAMETER_TYPE Type, const void * pData, UINT DataSize)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if DataSize is None: DataSize = _pData_n
+        if DataSize is None: DataSize = (_pData_n or 0)
         _hr = _check(self._fn(6, _P[336])(self._this, Type, pData, DataSize), 'ID3D12DebugCommandList2.SetDebugParameter')
         return _hr or None
     def GetDebugParameter(self, Type, pData, DataSize):
@@ -12224,10 +12224,10 @@ class ID3D12DeviceFactory(IUnknown):
         return _owned(_iid_c, ppv)
     def EnableExperimentalFeatures(self, pIIDs=None, pConfigurationStructs=None, pConfigurationStructSizes=None, *, NumFeatures=None):
         'HRESULT EnableExperimentalFeatures(UINT NumFeatures, const IID * pIIDs, void * pConfigurationStructs, UINT * pConfigurationStructSizes)'
-        if NumFeatures is None: NumFeatures = _seqlen(pIIDs)
         pIIDs, _pIIDs_n = _arr(GUID, pIIDs)
         pConfigurationStructs, _pConfigurationStructs_n, _pConfigurationStructs_k = _buf(pConfigurationStructs)
         pConfigurationStructSizes, _pConfigurationStructSizes_n = _arr(c_uint, pConfigurationStructSizes)
+        if NumFeatures is None: NumFeatures = (_pIIDs_n or 0)
         _hr = _check(self._fn(8, _P[357])(self._this, NumFeatures, pIIDs, pConfigurationStructs, pConfigurationStructSizes), 'ID3D12DeviceFactory.EnableExperimentalFeatures')
         return _hr or None
     def CreateDevice(self, adapter, FeatureLevel, riid='ID3D12Device'):
@@ -12262,9 +12262,9 @@ class ID3D12DeviceConfiguration(IUnknown):
     def CreateVersionedRootSignatureDeserializer(self, pBlob=None, riid='ID3D12VersionedRootSignatureDeserializer', *, Size=None):
         'HRESULT CreateVersionedRootSignatureDeserializer(const void * pBlob, SIZE_T Size, const IID & riid, void ** ppvDeserializer)'
         pBlob, _pBlob_n, _pBlob_k = _buf(pBlob)
-        if Size is None: Size = _pBlob_n
         _riid_g, _riid_c = _riid(riid)
         ppvDeserializer = c_void_p()
+        if Size is None: Size = (_pBlob_n or 0)
         _hr = _check(self._fn(6, _P[220])(self._this, pBlob, Size, byref(_riid_g), byref(ppvDeserializer)), 'ID3D12DeviceConfiguration.CreateVersionedRootSignatureDeserializer')
         return _owned(_riid_c, ppvDeserializer)
     _vt_ = (('GetDesc', 359), ('GetEnabledExperimentalFeatures', 360), ('SerializeVersionedRootSignature', 361), ('CreateVersionedRootSignatureDeserializer', 220))
@@ -12276,9 +12276,9 @@ class ID3D12DeviceConfiguration1(ID3D12DeviceConfiguration):
     def CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary(self, pLibraryBlob, RootSignatureSubobjectName, riid, *, Size=None):
         'HRESULT CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary(const void * pLibraryBlob, SIZE_T Size, LPCWSTR RootSignatureSubobjectName, const IID & riid, void ** ppvDeserializer)'
         pLibraryBlob, _pLibraryBlob_n, _pLibraryBlob_k = _buf(pLibraryBlob)
-        if Size is None: Size = _pLibraryBlob_n
         _riid_g, _riid_c = _riid(riid)
         ppvDeserializer = c_void_p()
+        if Size is None: Size = (_pLibraryBlob_n or 0)
         _hr = _check(self._fn(7, _P[362])(self._this, pLibraryBlob, Size, RootSignatureSubobjectName, byref(_riid_g), byref(ppvDeserializer)), 'ID3D12DeviceConfiguration1.CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary')
         return _owned(_riid_c, ppvDeserializer)
     _vt_ = (('CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary', 362),)
@@ -12369,17 +12369,17 @@ class ID3D12StateObjectDatabase1(ID3D12StateObjectDatabase):
         'HRESULT StorePipelineStateDesc1(const D3D12_DATABASE_GROUP_KEY * pGroupKeys, const UINT * pVersions, UINT NumGroupKeys, const D3D12_PIPELINE_STATE_STREAM_DESC * pDesc)'
         pGroupKeys, _pGroupKeys_n = _arr(D3D12_DATABASE_GROUP_KEY, pGroupKeys)
         pVersions, _pVersions_n = _arr(c_uint, pVersions)
-        if NumGroupKeys is None: NumGroupKeys = _seqlen(pGroupKeys)
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_PIPELINE_STATE_STREAM_DESC, pDesc)[0]
+        if NumGroupKeys is None: NumGroupKeys = (_pGroupKeys_n or 0)
         _hr = _check(self._fn(24, _P[370])(self._this, pGroupKeys, pVersions, NumGroupKeys, pDesc), 'ID3D12StateObjectDatabase1.StorePipelineStateDesc1')
         return _hr or None
     def StoreStateObjectDesc1(self, pGroupKeys, pVersions, pDesc, pStateObjectToGrowFromGroupKey=None, pCreatedObject=None, pStateObjectToGrowFrom=None, *, NumGroupKeys=None):
         'HRESULT StoreStateObjectDesc1(const D3D12_DATABASE_GROUP_KEY * pGroupKeys, const UINT * pVersions, UINT NumGroupKeys, const D3D12_STATE_OBJECT_DESC * pDesc, const D3D12_DATABASE_GROUP_KEY * pStateObjectToGrowFromGroupKey, IUnknown * pCreatedObject, IUnknown * pStateObjectToGrowFrom)'
         pGroupKeys, _pGroupKeys_n = _arr(D3D12_DATABASE_GROUP_KEY, pGroupKeys)
         pVersions, _pVersions_n = _arr(c_uint, pVersions)
-        if NumGroupKeys is None: NumGroupKeys = _seqlen(pGroupKeys)
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_STATE_OBJECT_DESC, pDesc)[0]
         if pStateObjectToGrowFromGroupKey.__class__ in (list, tuple): pStateObjectToGrowFromGroupKey = _arr(D3D12_DATABASE_GROUP_KEY, pStateObjectToGrowFromGroupKey)[0]
+        if NumGroupKeys is None: NumGroupKeys = (_pGroupKeys_n or 0)
         _hr = _check(self._fn(25, _P[371])(self._this, pGroupKeys, pVersions, NumGroupKeys, pDesc, pStateObjectToGrowFromGroupKey, _ptr(pCreatedObject), _ptr(pStateObjectToGrowFrom)), 'ID3D12StateObjectDatabase1.StoreStateObjectDesc1')
         return _hr or None
     _vt_ = (('EnumeratePipelineStates', 32), ('EnumerateStateObjects', 32), ('GetStateObjectDependencies', 364), ('SetApplicationDesc1', 365), ('GetApplicationDesc1', 32), ('FindPipelineStateDesc1', 366), ('FindStateObjectDesc1', 367), ('GetPipelineStateDescCount', 4), ('GetStateObjectDescCount', 4), ('BeginTransaction', 368), ('CommitTransaction', 10), ('RollbackTransaction', 10), ('IsTransactionActive', 37), ('Checkpoint', 369), ('StorePipelineStateDesc1', 370), ('StoreStateObjectDesc1', 371))
@@ -12459,8 +12459,8 @@ class ID3D12GraphicsCommandList7(ID3D12GraphicsCommandList6):
     _iid_ = GUID('dd171223-8b61-4769-90e3-160ccde4e2c1')
     def Barrier(self, pBarrierGroups=None, *, NumBarrierGroups=None):
         'void Barrier(UINT32 NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
         self._fn(80, _P[375])(self._this, NumBarrierGroups, pBarrierGroups)
     _vt_ = (('Barrier', 375),)
     _vtbl_size_ = 81
@@ -12505,16 +12505,16 @@ class ID3D12GraphicsCommandList11(ID3D12GraphicsCommandList10):
     _iid_ = GUID('823aee5b-c932-4b15-b4c4-4a28e7c34dea')
     def WaitBarrier(self, pBarrierGroups, ppFences, pFenceValues, *, NumBarrierGroups=None, NumFences=None):
         'void WaitBarrier(UINT NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups, UINT NumFences, ID3D12Fence *const * ppFences, const UINT64 * pFenceValues)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
-        if NumFences is None: NumFences = _seqlen(ppFences)
         ppFences, _ppFences_n = _arr('ID3D12Fence', ppFences)
         pFenceValues, _pFenceValues_n = _arr(c_uint64, pFenceValues)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
+        if NumFences is None: NumFences = (_ppFences_n or 0)
         self._fn(86, _P[381])(self._this, NumBarrierGroups, pBarrierGroups, NumFences, ppFences, pFenceValues)
     def SignalBarrier(self, pBarrierGroups, pFence, FenceValue, *, NumBarrierGroups=None):
         'void SignalBarrier(UINT NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups, ID3D12Fence * pFence, UINT64 FenceValue)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
         self._fn(87, _P[382])(self._this, NumBarrierGroups, pBarrierGroups, _ptr(pFence), FenceValue)
     _vt_ = (('WaitBarrier', 381), ('SignalBarrier', 382))
     _vtbl_size_ = 88
@@ -12532,7 +12532,7 @@ class ID3D12DeviceDumpFile(IUnknown):
     def AddBlobToDumpFile(self, pBlob, metadata, *, sizeBytes=None):
         'HRESULT AddBlobToDumpFile(void * pBlob, UINT sizeBytes, UINT64 metadata)'
         pBlob, _pBlob_n, _pBlob_k = _buf(pBlob)
-        if sizeBytes is None: sizeBytes = _pBlob_n
+        if sizeBytes is None: sizeBytes = (_pBlob_n or 0)
         _hr = _check(self._fn(5, _P[384])(self._this, pBlob, sizeBytes, metadata), 'ID3D12DeviceDumpFile.AddBlobToDumpFile')
         return _hr or None
     def RetainDumpFile(self, retain):
@@ -12550,23 +12550,23 @@ class ID3D12GraphicsCommandList12(ID3D12GraphicsCommandList11):
     _iid_ = GUID('9524ea5e-c1b0-4fe5-a203-a75abc5d8e3a')
     def CopyBufferRegions(self, ppDestBuffers, pDestOffsets, ppSourceBuffers, pSourceOffsets, pSizes, *, NumRegions=None):
         'void CopyBufferRegions(UINT NumRegions, ID3D12Resource *const * ppDestBuffers, const UINT64 * pDestOffsets, ID3D12Resource *const * ppSourceBuffers, const UINT64 * pSourceOffsets, const UINT64 * pSizes)'
-        if NumRegions is None: NumRegions = _seqlen(ppDestBuffers)
         ppDestBuffers, _ppDestBuffers_n = _arr('ID3D12Resource', ppDestBuffers)
         pDestOffsets, _pDestOffsets_n = _arr(c_uint64, pDestOffsets)
         ppSourceBuffers, _ppSourceBuffers_n = _arr('ID3D12Resource', ppSourceBuffers)
         pSourceOffsets, _pSourceOffsets_n = _arr(c_uint64, pSourceOffsets)
         pSizes, _pSizes_n = _arr(c_uint64, pSizes)
+        if NumRegions is None: NumRegions = (_ppDestBuffers_n or 0)
         self._fn(88, _P[386])(self._this, NumRegions, ppDestBuffers, pDestOffsets, ppSourceBuffers, pSourceOffsets, pSizes)
     def CopyTextureRegions(self, pCopyDescs=None, *, NumCopyDescs=None):
         'void CopyTextureRegions(UINT NumCopyDescs, const D3D12_TEXTURE_COPY_DESC * pCopyDescs)'
-        if NumCopyDescs is None: NumCopyDescs = _seqlen(pCopyDescs)
         pCopyDescs, _pCopyDescs_n = _arr(D3D12_TEXTURE_COPY_DESC, pCopyDescs)
+        if NumCopyDescs is None: NumCopyDescs = (_pCopyDescs_n or 0)
         self._fn(89, _P[387])(self._this, NumCopyDescs, pCopyDescs)
     def CopyResources(self, ppDestResources, ppSourceResources, *, NumSourceDestPairs=None):
         'void CopyResources(UINT NumSourceDestPairs, ID3D12Resource *const * ppDestResources, ID3D12Resource *const * ppSourceResources)'
-        if NumSourceDestPairs is None: NumSourceDestPairs = _seqlen(ppDestResources)
         ppDestResources, _ppDestResources_n = _arr('ID3D12Resource', ppDestResources)
         ppSourceResources, _ppSourceResources_n = _arr('ID3D12Resource', ppSourceResources)
+        if NumSourceDestPairs is None: NumSourceDestPairs = (_ppDestResources_n or 0)
         self._fn(90, _P[388])(self._this, NumSourceDestPairs, ppDestResources, ppSourceResources)
     def CopyTilesAsync(self, pTiledResource, pTileRegionStartCoordinate, pTileRegionSize, pBuffer, BufferOffset, Flags):
         'void CopyTilesAsync(ID3D12Resource * pTiledResource, const D3D12_TILED_RESOURCE_COORDINATE * pTileRegionStartCoordinate, const D3D12_TILE_REGION_SIZE * pTileRegionSize, ID3D12Resource * pBuffer, UINT64 BufferOffset, D3D12_TILE_COPY_FLAGS Flags)'
@@ -12582,8 +12582,8 @@ class ID3D12GraphicsCommandList12(ID3D12GraphicsCommandList11):
         self._fn(93, _P[164])(self._this, _ptr(pQueryHeap), Type, StartIndex, NumQueries, _ptr(pDestBuffer), DestOffset)
     def ClearBoundDepthStencilView(self, ClearFlags, Depth, Stencil, pRegions=None, *, NumRegions=None):
         'void ClearBoundDepthStencilView(D3D12_CLEAR_FLAGS ClearFlags, FLOAT Depth, UINT8 Stencil, UINT NumRegions, const D3D12_BOX * pRegions)'
-        if NumRegions is None: NumRegions = _seqlen(pRegions)
         pRegions, _pRegions_n = _arr(D3D12_BOX, pRegions)
+        if NumRegions is None: NumRegions = (_pRegions_n or 0)
         self._fn(94, _P[389])(self._this, ClearFlags, Depth, Stencil, NumRegions, pRegions)
     def ClearBoundRenderTargetViews(self, RenderTargetMask, pClearValues, pNumRegions=None, ppRegions=None):
         'void ClearBoundRenderTargetViews(UINT RenderTargetMask, const D3D12_CLEAR_DATA * pClearValues, const UINT * pNumRegions, const D3D12_BOX *const * ppRegions)'
@@ -12593,13 +12593,13 @@ class ID3D12GraphicsCommandList12(ID3D12GraphicsCommandList11):
         self._fn(95, _P[390])(self._this, RenderTargetMask, pClearValues, pNumRegions, ppRegions)
     def ClearTextureSubresources(self, pClearDescs=None, *, NumClearDescs=None):
         'void ClearTextureSubresources(UINT NumClearDescs, const D3D12_CLEAR_TEXTURE_DESC * pClearDescs)'
-        if NumClearDescs is None: NumClearDescs = _seqlen(pClearDescs)
         pClearDescs, _pClearDescs_n = _arr(D3D12_CLEAR_TEXTURE_DESC, pClearDescs)
+        if NumClearDescs is None: NumClearDescs = (_pClearDescs_n or 0)
         self._fn(96, _P[391])(self._this, NumClearDescs, pClearDescs)
     def FillBuffers(self, pFillDescs=None, *, NumFillDescs=None):
         'void FillBuffers(UINT NumFillDescs, const D3D12_FILL_BUFFER_DESC * pFillDescs)'
-        if NumFillDescs is None: NumFillDescs = _seqlen(pFillDescs)
         pFillDescs, _pFillDescs_n = _arr(D3D12_FILL_BUFFER_DESC, pFillDescs)
+        if NumFillDescs is None: NumFillDescs = (_pFillDescs_n or 0)
         self._fn(97, _P[392])(self._this, NumFillDescs, pFillDescs)
     _vt_ = (('CopyBufferRegions', 386), ('CopyTextureRegions', 387), ('CopyResources', 388), ('CopyTilesAsync', 142), ('ResolveSubresourceRegionAsync', 171), ('ResolveQueryDataAsync', 164), ('ClearBoundDepthStencilView', 389), ('ClearBoundRenderTargetViews', 390), ('ClearTextureSubresources', 391), ('FillBuffers', 392))
     _vtbl_size_ = 98
@@ -12967,10 +12967,10 @@ class ID3D12VideoDevice(IUnknown):
     def CreateVideoProcessor(self, NodeMask, pOutputStreamDesc, pInputStreamDescs=None, riid='ID3D12VideoProcessor', *, NumInputStreamDescs=None):
         'HRESULT CreateVideoProcessor(UINT NodeMask, const D3D12_VIDEO_PROCESS_OUTPUT_STREAM_DESC * pOutputStreamDesc, UINT NumInputStreamDescs, const D3D12_VIDEO_PROCESS_INPUT_STREAM_DESC * pInputStreamDescs, const IID & riid, void ** ppVideoProcessor)'
         if pOutputStreamDesc.__class__ in (list, tuple): pOutputStreamDesc = _arr(D3D12_VIDEO_PROCESS_OUTPUT_STREAM_DESC, pOutputStreamDesc)[0]
-        if NumInputStreamDescs is None: NumInputStreamDescs = _seqlen(pInputStreamDescs)
         pInputStreamDescs, _pInputStreamDescs_n = _arr(D3D12_VIDEO_PROCESS_INPUT_STREAM_DESC, pInputStreamDescs)
         _riid_g, _riid_c = _riid(riid)
         ppVideoProcessor = c_void_p()
+        if NumInputStreamDescs is None: NumInputStreamDescs = (_pInputStreamDescs_n or 0)
         _hr = _check(self._fn(6, _P[420])(self._this, NodeMask, pOutputStreamDesc, NumInputStreamDescs, pInputStreamDescs, byref(_riid_g), byref(ppVideoProcessor)), 'ID3D12VideoDevice.CreateVideoProcessor')
         return _owned(_riid_c, ppVideoProcessor)
     _vt_ = (('CheckFeatureSupport', 417), ('CreateVideoDecoder', 418), ('CreateVideoDecoderHeap', 419), ('CreateVideoProcessor', 420))
@@ -13027,8 +13027,8 @@ class ID3D12VideoDecodeCommandList(ID3D12CommandList):
         self._fn(11, _P[20])(self._this)
     def ResourceBarrier(self, pBarriers=None, *, NumBarriers=None):
         'void ResourceBarrier(UINT NumBarriers, const D3D12_RESOURCE_BARRIER * pBarriers)'
-        if NumBarriers is None: NumBarriers = _seqlen(pBarriers)
         pBarriers, _pBarriers_n = _arr(D3D12_RESOURCE_BARRIER, pBarriers)
+        if NumBarriers is None: NumBarriers = (_pBarriers_n or 0)
         self._fn(12, _P[149])(self._this, NumBarriers, pBarriers)
     def DiscardResource(self, pResource, pRegion=None):
         'void DiscardResource(ID3D12Resource * pResource, const D3D12_DISCARD_REGION * pRegion)'
@@ -13049,12 +13049,12 @@ class ID3D12VideoDecodeCommandList(ID3D12CommandList):
     def SetMarker(self, Metadata, pData=None, *, Size=None):
         'void SetMarker(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(18, _P[166])(self._this, Metadata, pData, Size)
     def BeginEvent(self, Metadata, pData=None, *, Size=None):
         'void BeginEvent(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(19, _P[166])(self._this, Metadata, pData, Size)
     def EndEvent(self):
         'void EndEvent()'
@@ -13066,9 +13066,9 @@ class ID3D12VideoDecodeCommandList(ID3D12CommandList):
         self._fn(21, _P[424])(self._this, _ptr(pDecoder), pOutputArguments, pInputArguments)
     def WriteBufferImmediate(self, pParams=None, pModes=None, *, Count=None):
         'void WriteBufferImmediate(UINT Count, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER * pParams, const D3D12_WRITEBUFFERIMMEDIATE_MODE * pModes)'
-        if Count is None: Count = _seqlen(pParams)
         pParams, _pParams_n = _arr(D3D12_WRITEBUFFERIMMEDIATE_PARAMETER, pParams)
         pModes, _pModes_n = _arr(D3D12_WRITEBUFFERIMMEDIATE_MODE, pModes)
+        if Count is None: Count = (_pParams_n or 0)
         self._fn(22, _P[172])(self._this, Count, pParams, pModes)
     _vt_ = (('Close', 10), ('Reset', 3), ('ClearState', 20), ('ResourceBarrier', 149), ('DiscardResource', 162), ('BeginQuery', 163), ('EndQuery', 163), ('ResolveQueryData', 164), ('SetPredication', 165), ('SetMarker', 166), ('BeginEvent', 166), ('EndEvent', 20), ('DecodeFrame', 424), ('WriteBufferImmediate', 172))
     _vtbl_size_ = 23
@@ -13089,8 +13089,8 @@ class ID3D12VideoProcessCommandList(ID3D12CommandList):
         self._fn(11, _P[20])(self._this)
     def ResourceBarrier(self, pBarriers=None, *, NumBarriers=None):
         'void ResourceBarrier(UINT NumBarriers, const D3D12_RESOURCE_BARRIER * pBarriers)'
-        if NumBarriers is None: NumBarriers = _seqlen(pBarriers)
         pBarriers, _pBarriers_n = _arr(D3D12_RESOURCE_BARRIER, pBarriers)
+        if NumBarriers is None: NumBarriers = (_pBarriers_n or 0)
         self._fn(12, _P[149])(self._this, NumBarriers, pBarriers)
     def DiscardResource(self, pResource, pRegion=None):
         'void DiscardResource(ID3D12Resource * pResource, const D3D12_DISCARD_REGION * pRegion)'
@@ -13111,12 +13111,12 @@ class ID3D12VideoProcessCommandList(ID3D12CommandList):
     def SetMarker(self, Metadata, pData=None, *, Size=None):
         'void SetMarker(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(18, _P[166])(self._this, Metadata, pData, Size)
     def BeginEvent(self, Metadata, pData=None, *, Size=None):
         'void BeginEvent(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(19, _P[166])(self._this, Metadata, pData, Size)
     def EndEvent(self):
         'void EndEvent()'
@@ -13124,14 +13124,14 @@ class ID3D12VideoProcessCommandList(ID3D12CommandList):
     def ProcessFrames(self, pVideoProcessor, pOutputArguments, pInputArguments=None, *, NumInputStreams=None):
         'void ProcessFrames(ID3D12VideoProcessor * pVideoProcessor, const D3D12_VIDEO_PROCESS_OUTPUT_STREAM_ARGUMENTS * pOutputArguments, UINT NumInputStreams, const D3D12_VIDEO_PROCESS_INPUT_STREAM_ARGUMENTS * pInputArguments)'
         if pOutputArguments.__class__ in (list, tuple): pOutputArguments = _arr(D3D12_VIDEO_PROCESS_OUTPUT_STREAM_ARGUMENTS, pOutputArguments)[0]
-        if NumInputStreams is None: NumInputStreams = _seqlen(pInputArguments)
         pInputArguments, _pInputArguments_n = _arr(D3D12_VIDEO_PROCESS_INPUT_STREAM_ARGUMENTS, pInputArguments)
+        if NumInputStreams is None: NumInputStreams = (_pInputArguments_n or 0)
         self._fn(21, _P[425])(self._this, _ptr(pVideoProcessor), pOutputArguments, NumInputStreams, pInputArguments)
     def WriteBufferImmediate(self, pParams=None, pModes=None, *, Count=None):
         'void WriteBufferImmediate(UINT Count, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER * pParams, const D3D12_WRITEBUFFERIMMEDIATE_MODE * pModes)'
-        if Count is None: Count = _seqlen(pParams)
         pParams, _pParams_n = _arr(D3D12_WRITEBUFFERIMMEDIATE_PARAMETER, pParams)
         pModes, _pModes_n = _arr(D3D12_WRITEBUFFERIMMEDIATE_MODE, pModes)
+        if Count is None: Count = (_pParams_n or 0)
         self._fn(22, _P[172])(self._this, Count, pParams, pModes)
     _vt_ = (('Close', 10), ('Reset', 3), ('ClearState', 20), ('ResourceBarrier', 149), ('DiscardResource', 162), ('BeginQuery', 163), ('EndQuery', 163), ('ResolveQueryData', 164), ('SetPredication', 165), ('SetMarker', 166), ('BeginEvent', 166), ('EndEvent', 20), ('ProcessFrames', 425), ('WriteBufferImmediate', 172))
     _vtbl_size_ = 23
@@ -13153,8 +13153,8 @@ class ID3D12VideoProcessCommandList1(ID3D12VideoProcessCommandList):
     def ProcessFrames1(self, pVideoProcessor, pOutputArguments, pInputArguments=None, *, NumInputStreams=None):
         'void ProcessFrames1(ID3D12VideoProcessor * pVideoProcessor, const D3D12_VIDEO_PROCESS_OUTPUT_STREAM_ARGUMENTS * pOutputArguments, UINT NumInputStreams, const D3D12_VIDEO_PROCESS_INPUT_STREAM_ARGUMENTS1 * pInputArguments)'
         if pOutputArguments.__class__ in (list, tuple): pOutputArguments = _arr(D3D12_VIDEO_PROCESS_OUTPUT_STREAM_ARGUMENTS, pOutputArguments)[0]
-        if NumInputStreams is None: NumInputStreams = _seqlen(pInputArguments)
         pInputArguments, _pInputArguments_n = _arr(D3D12_VIDEO_PROCESS_INPUT_STREAM_ARGUMENTS1, pInputArguments)
+        if NumInputStreams is None: NumInputStreams = (_pInputArguments_n or 0)
         self._fn(23, _P[427])(self._this, _ptr(pVideoProcessor), pOutputArguments, NumInputStreams, pInputArguments)
     _vt_ = (('ProcessFrames1', 427),)
     _vtbl_size_ = 24
@@ -13229,8 +13229,8 @@ class ID3D12VideoEncodeCommandList(ID3D12CommandList):
         self._fn(11, _P[20])(self._this)
     def ResourceBarrier(self, pBarriers=None, *, NumBarriers=None):
         'void ResourceBarrier(UINT NumBarriers, const D3D12_RESOURCE_BARRIER * pBarriers)'
-        if NumBarriers is None: NumBarriers = _seqlen(pBarriers)
         pBarriers, _pBarriers_n = _arr(D3D12_RESOURCE_BARRIER, pBarriers)
+        if NumBarriers is None: NumBarriers = (_pBarriers_n or 0)
         self._fn(12, _P[149])(self._this, NumBarriers, pBarriers)
     def DiscardResource(self, pResource, pRegion=None):
         'void DiscardResource(ID3D12Resource * pResource, const D3D12_DISCARD_REGION * pRegion)'
@@ -13251,12 +13251,12 @@ class ID3D12VideoEncodeCommandList(ID3D12CommandList):
     def SetMarker(self, Metadata, pData=None, *, Size=None):
         'void SetMarker(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(18, _P[166])(self._this, Metadata, pData, Size)
     def BeginEvent(self, Metadata, pData=None, *, Size=None):
         'void BeginEvent(UINT Metadata, const void * pData, UINT Size)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if Size is None: Size = _pData_n
+        if Size is None: Size = (_pData_n or 0)
         self._fn(19, _P[166])(self._this, Metadata, pData, Size)
     def EndEvent(self):
         'void EndEvent()'
@@ -13273,9 +13273,9 @@ class ID3D12VideoEncodeCommandList(ID3D12CommandList):
         self._fn(22, _P[433])(self._this, pOutputArguments, pInputArguments)
     def WriteBufferImmediate(self, pParams=None, pModes=None, *, Count=None):
         'void WriteBufferImmediate(UINT Count, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER * pParams, const D3D12_WRITEBUFFERIMMEDIATE_MODE * pModes)'
-        if Count is None: Count = _seqlen(pParams)
         pParams, _pParams_n = _arr(D3D12_WRITEBUFFERIMMEDIATE_PARAMETER, pParams)
         pModes, _pModes_n = _arr(D3D12_WRITEBUFFERIMMEDIATE_MODE, pModes)
+        if Count is None: Count = (_pParams_n or 0)
         self._fn(23, _P[172])(self._this, Count, pParams, pModes)
     def SetProtectedResourceSession(self, pProtectedResourceSession=None):
         'void SetProtectedResourceSession(ID3D12ProtectedResourceSession * pProtectedResourceSession)'
@@ -13356,25 +13356,25 @@ class ID3D12VideoDevice2(ID3D12VideoDevice1):
     def CreateVideoProcessor1(self, NodeMask, pOutputStreamDesc, pInputStreamDescs=None, pProtectedResourceSession=None, riid='ID3D12VideoProcessor1', *, NumInputStreamDescs=None):
         'HRESULT CreateVideoProcessor1(UINT NodeMask, const D3D12_VIDEO_PROCESS_OUTPUT_STREAM_DESC * pOutputStreamDesc, UINT NumInputStreamDescs, const D3D12_VIDEO_PROCESS_INPUT_STREAM_DESC * pInputStreamDescs, ID3D12ProtectedResourceSession * pProtectedResourceSession, const IID & riid, void ** ppVideoProcessor)'
         if pOutputStreamDesc.__class__ in (list, tuple): pOutputStreamDesc = _arr(D3D12_VIDEO_PROCESS_OUTPUT_STREAM_DESC, pOutputStreamDesc)[0]
-        if NumInputStreamDescs is None: NumInputStreamDescs = _seqlen(pInputStreamDescs)
         pInputStreamDescs, _pInputStreamDescs_n = _arr(D3D12_VIDEO_PROCESS_INPUT_STREAM_DESC, pInputStreamDescs)
         _riid_g, _riid_c = _riid(riid)
         ppVideoProcessor = c_void_p()
+        if NumInputStreamDescs is None: NumInputStreamDescs = (_pInputStreamDescs_n or 0)
         _hr = _check(self._fn(11, _P[437])(self._this, NodeMask, pOutputStreamDesc, NumInputStreamDescs, pInputStreamDescs, _ptr(pProtectedResourceSession), byref(_riid_g), byref(ppVideoProcessor)), 'ID3D12VideoDevice2.CreateVideoProcessor1')
         return _owned(_riid_c, ppVideoProcessor)
     def CreateVideoExtensionCommand(self, pDesc, pCreationParameters=None, pProtectedResourceSession=None, riid='ID3D12VideoExtensionCommand', *, CreationParametersDataSizeInBytes=None):
         'HRESULT CreateVideoExtensionCommand(const D3D12_VIDEO_EXTENSION_COMMAND_DESC * pDesc, const void * pCreationParameters, SIZE_T CreationParametersDataSizeInBytes, ID3D12ProtectedResourceSession * pProtectedResourceSession, const IID & riid, void ** ppVideoExtensionCommand)'
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_VIDEO_EXTENSION_COMMAND_DESC, pDesc)[0]
         pCreationParameters, _pCreationParameters_n, _pCreationParameters_k = _buf(pCreationParameters)
-        if CreationParametersDataSizeInBytes is None: CreationParametersDataSizeInBytes = _pCreationParameters_n
         _riid_g, _riid_c = _riid(riid)
         ppVideoExtensionCommand = c_void_p()
+        if CreationParametersDataSizeInBytes is None: CreationParametersDataSizeInBytes = (_pCreationParameters_n or 0)
         _hr = _check(self._fn(12, _P[438])(self._this, pDesc, pCreationParameters, CreationParametersDataSizeInBytes, _ptr(pProtectedResourceSession), byref(_riid_g), byref(ppVideoExtensionCommand)), 'ID3D12VideoDevice2.CreateVideoExtensionCommand')
         return _owned(_riid_c, ppVideoExtensionCommand)
     def ExecuteExtensionCommand(self, pExtensionCommand, pExecutionParameters, pOutputData, OutputDataSizeInBytes, *, ExecutionParametersSizeInBytes=None):
         'HRESULT ExecuteExtensionCommand(ID3D12VideoExtensionCommand * pExtensionCommand, const void * pExecutionParameters, SIZE_T ExecutionParametersSizeInBytes, void * pOutputData, SIZE_T OutputDataSizeInBytes)'
         pExecutionParameters, _pExecutionParameters_n, _pExecutionParameters_k = _buf(pExecutionParameters)
-        if ExecutionParametersSizeInBytes is None: ExecutionParametersSizeInBytes = _pExecutionParameters_n
+        if ExecutionParametersSizeInBytes is None: ExecutionParametersSizeInBytes = (_pExecutionParameters_n or 0)
         _hr = _check(self._fn(13, _P[439])(self._this, _ptr(pExtensionCommand), pExecutionParameters, ExecutionParametersSizeInBytes, pOutputData, OutputDataSizeInBytes), 'ID3D12VideoDevice2.ExecuteExtensionCommand')
         return _hr or None
     _vt_ = (('CreateVideoDecoder1', 435), ('CreateVideoDecoderHeap1', 436), ('CreateVideoProcessor1', 437), ('CreateVideoExtensionCommand', 438), ('ExecuteExtensionCommand', 439))
@@ -13389,12 +13389,12 @@ class ID3D12VideoDecodeCommandList2(ID3D12VideoDecodeCommandList1):
     def InitializeExtensionCommand(self, pExtensionCommand, pInitializationParameters=None, *, InitializationParametersSizeInBytes=None):
         'void InitializeExtensionCommand(ID3D12VideoExtensionCommand * pExtensionCommand, const void * pInitializationParameters, SIZE_T InitializationParametersSizeInBytes)'
         pInitializationParameters, _pInitializationParameters_n, _pInitializationParameters_k = _buf(pInitializationParameters)
-        if InitializationParametersSizeInBytes is None: InitializationParametersSizeInBytes = _pInitializationParameters_n
+        if InitializationParametersSizeInBytes is None: InitializationParametersSizeInBytes = (_pInitializationParameters_n or 0)
         self._fn(25, _P[274])(self._this, _ptr(pExtensionCommand), pInitializationParameters, InitializationParametersSizeInBytes)
     def ExecuteExtensionCommand(self, pExtensionCommand, pExecutionParameters=None, *, ExecutionParametersSizeInBytes=None):
         'void ExecuteExtensionCommand(ID3D12VideoExtensionCommand * pExtensionCommand, const void * pExecutionParameters, SIZE_T ExecutionParametersSizeInBytes)'
         pExecutionParameters, _pExecutionParameters_n, _pExecutionParameters_k = _buf(pExecutionParameters)
-        if ExecutionParametersSizeInBytes is None: ExecutionParametersSizeInBytes = _pExecutionParameters_n
+        if ExecutionParametersSizeInBytes is None: ExecutionParametersSizeInBytes = (_pExecutionParameters_n or 0)
         self._fn(26, _P[274])(self._this, _ptr(pExtensionCommand), pExecutionParameters, ExecutionParametersSizeInBytes)
     _vt_ = (('SetProtectedResourceSession', 135), ('InitializeExtensionCommand', 274), ('ExecuteExtensionCommand', 274))
     _vtbl_size_ = 27
@@ -13404,8 +13404,8 @@ class ID3D12VideoDecodeCommandList3(ID3D12VideoDecodeCommandList2):
     _iid_ = GUID('2aee8c37-9562-42da-8abf-61efeb2e4513')
     def Barrier(self, pBarrierGroups=None, *, NumBarrierGroups=None):
         'void Barrier(UINT32 NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
         self._fn(27, _P[375])(self._this, NumBarrierGroups, pBarrierGroups)
     _vt_ = (('Barrier', 375),)
     _vtbl_size_ = 28
@@ -13415,16 +13415,16 @@ class ID3D12VideoDecodeCommandList4(ID3D12VideoDecodeCommandList3):
     _iid_ = GUID('a9b3e23c-7d4f-4a90-b6e1-3c8a0f5714d2')
     def WaitBarrier(self, pBarrierGroups, ppFences, pFenceValues, *, NumBarrierGroups=None, NumFences=None):
         'void WaitBarrier(UINT NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups, UINT NumFences, ID3D12Fence *const * ppFences, const UINT64 * pFenceValues)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
-        if NumFences is None: NumFences = _seqlen(ppFences)
         ppFences, _ppFences_n = _arr('ID3D12Fence', ppFences)
         pFenceValues, _pFenceValues_n = _arr(c_uint64, pFenceValues)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
+        if NumFences is None: NumFences = (_ppFences_n or 0)
         self._fn(28, _P[381])(self._this, NumBarrierGroups, pBarrierGroups, NumFences, ppFences, pFenceValues)
     def SignalBarrier(self, pBarrierGroups, pFence, FenceValue, *, NumBarrierGroups=None):
         'void SignalBarrier(UINT NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups, ID3D12Fence * pFence, UINT64 FenceValue)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
         self._fn(29, _P[382])(self._this, NumBarrierGroups, pBarrierGroups, _ptr(pFence), FenceValue)
     _vt_ = (('WaitBarrier', 381), ('SignalBarrier', 382))
     _vtbl_size_ = 30
@@ -13438,12 +13438,12 @@ class ID3D12VideoProcessCommandList2(ID3D12VideoProcessCommandList1):
     def InitializeExtensionCommand(self, pExtensionCommand, pInitializationParameters=None, *, InitializationParametersSizeInBytes=None):
         'void InitializeExtensionCommand(ID3D12VideoExtensionCommand * pExtensionCommand, const void * pInitializationParameters, SIZE_T InitializationParametersSizeInBytes)'
         pInitializationParameters, _pInitializationParameters_n, _pInitializationParameters_k = _buf(pInitializationParameters)
-        if InitializationParametersSizeInBytes is None: InitializationParametersSizeInBytes = _pInitializationParameters_n
+        if InitializationParametersSizeInBytes is None: InitializationParametersSizeInBytes = (_pInitializationParameters_n or 0)
         self._fn(25, _P[274])(self._this, _ptr(pExtensionCommand), pInitializationParameters, InitializationParametersSizeInBytes)
     def ExecuteExtensionCommand(self, pExtensionCommand, pExecutionParameters=None, *, ExecutionParametersSizeInBytes=None):
         'void ExecuteExtensionCommand(ID3D12VideoExtensionCommand * pExtensionCommand, const void * pExecutionParameters, SIZE_T ExecutionParametersSizeInBytes)'
         pExecutionParameters, _pExecutionParameters_n, _pExecutionParameters_k = _buf(pExecutionParameters)
-        if ExecutionParametersSizeInBytes is None: ExecutionParametersSizeInBytes = _pExecutionParameters_n
+        if ExecutionParametersSizeInBytes is None: ExecutionParametersSizeInBytes = (_pExecutionParameters_n or 0)
         self._fn(26, _P[274])(self._this, _ptr(pExtensionCommand), pExecutionParameters, ExecutionParametersSizeInBytes)
     _vt_ = (('SetProtectedResourceSession', 135), ('InitializeExtensionCommand', 274), ('ExecuteExtensionCommand', 274))
     _vtbl_size_ = 27
@@ -13453,8 +13453,8 @@ class ID3D12VideoProcessCommandList3(ID3D12VideoProcessCommandList2):
     _iid_ = GUID('1a0a4ca4-9f08-40ce-9558-b411fd2666ff')
     def Barrier(self, pBarrierGroups=None, *, NumBarrierGroups=None):
         'void Barrier(UINT32 NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
         self._fn(27, _P[375])(self._this, NumBarrierGroups, pBarrierGroups)
     _vt_ = (('Barrier', 375),)
     _vtbl_size_ = 28
@@ -13464,16 +13464,16 @@ class ID3D12VideoProcessCommandList4(ID3D12VideoProcessCommandList3):
     _iid_ = GUID('e7fc6a4b-8d2c-4e19-a5f3-7b91d0c28e56')
     def WaitBarrier(self, pBarrierGroups, ppFences, pFenceValues, *, NumBarrierGroups=None, NumFences=None):
         'void WaitBarrier(UINT NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups, UINT NumFences, ID3D12Fence *const * ppFences, const UINT64 * pFenceValues)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
-        if NumFences is None: NumFences = _seqlen(ppFences)
         ppFences, _ppFences_n = _arr('ID3D12Fence', ppFences)
         pFenceValues, _pFenceValues_n = _arr(c_uint64, pFenceValues)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
+        if NumFences is None: NumFences = (_ppFences_n or 0)
         self._fn(28, _P[381])(self._this, NumBarrierGroups, pBarrierGroups, NumFences, ppFences, pFenceValues)
     def SignalBarrier(self, pBarrierGroups, pFence, FenceValue, *, NumBarrierGroups=None):
         'void SignalBarrier(UINT NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups, ID3D12Fence * pFence, UINT64 FenceValue)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
         self._fn(29, _P[382])(self._this, NumBarrierGroups, pBarrierGroups, _ptr(pFence), FenceValue)
     _vt_ = (('WaitBarrier', 381), ('SignalBarrier', 382))
     _vtbl_size_ = 30
@@ -13484,12 +13484,12 @@ class ID3D12VideoEncodeCommandList1(ID3D12VideoEncodeCommandList):
     def InitializeExtensionCommand(self, pExtensionCommand, pInitializationParameters=None, *, InitializationParametersSizeInBytes=None):
         'void InitializeExtensionCommand(ID3D12VideoExtensionCommand * pExtensionCommand, const void * pInitializationParameters, SIZE_T InitializationParametersSizeInBytes)'
         pInitializationParameters, _pInitializationParameters_n, _pInitializationParameters_k = _buf(pInitializationParameters)
-        if InitializationParametersSizeInBytes is None: InitializationParametersSizeInBytes = _pInitializationParameters_n
+        if InitializationParametersSizeInBytes is None: InitializationParametersSizeInBytes = (_pInitializationParameters_n or 0)
         self._fn(25, _P[274])(self._this, _ptr(pExtensionCommand), pInitializationParameters, InitializationParametersSizeInBytes)
     def ExecuteExtensionCommand(self, pExtensionCommand, pExecutionParameters=None, *, ExecutionParametersSizeInBytes=None):
         'void ExecuteExtensionCommand(ID3D12VideoExtensionCommand * pExtensionCommand, const void * pExecutionParameters, SIZE_T ExecutionParametersSizeInBytes)'
         pExecutionParameters, _pExecutionParameters_n, _pExecutionParameters_k = _buf(pExecutionParameters)
-        if ExecutionParametersSizeInBytes is None: ExecutionParametersSizeInBytes = _pExecutionParameters_n
+        if ExecutionParametersSizeInBytes is None: ExecutionParametersSizeInBytes = (_pExecutionParameters_n or 0)
         self._fn(26, _P[274])(self._this, _ptr(pExtensionCommand), pExecutionParameters, ExecutionParametersSizeInBytes)
     _vt_ = (('InitializeExtensionCommand', 274), ('ExecuteExtensionCommand', 274))
     _vtbl_size_ = 27
@@ -13604,8 +13604,8 @@ class ID3D12VideoEncodeCommandList3(ID3D12VideoEncodeCommandList2):
     _iid_ = GUID('7f027b22-1515-4e85-aa0d-026486580576')
     def Barrier(self, pBarrierGroups=None, *, NumBarrierGroups=None):
         'void Barrier(UINT32 NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
         self._fn(29, _P[375])(self._this, NumBarrierGroups, pBarrierGroups)
     _vt_ = (('Barrier', 375),)
     _vtbl_size_ = 30
@@ -13659,16 +13659,16 @@ class ID3D12VideoEncodeCommandList5(ID3D12VideoEncodeCommandList4):
     _iid_ = GUID('5d1a6fc3-b8e7-42a0-97d5-6e4c1f3a9b82')
     def WaitBarrier(self, pBarrierGroups, ppFences, pFenceValues, *, NumBarrierGroups=None, NumFences=None):
         'void WaitBarrier(UINT NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups, UINT NumFences, ID3D12Fence *const * ppFences, const UINT64 * pFenceValues)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
-        if NumFences is None: NumFences = _seqlen(ppFences)
         ppFences, _ppFences_n = _arr('ID3D12Fence', ppFences)
         pFenceValues, _pFenceValues_n = _arr(c_uint64, pFenceValues)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
+        if NumFences is None: NumFences = (_ppFences_n or 0)
         self._fn(33, _P[381])(self._this, NumBarrierGroups, pBarrierGroups, NumFences, ppFences, pFenceValues)
     def SignalBarrier(self, pBarrierGroups, pFence, FenceValue, *, NumBarrierGroups=None):
         'void SignalBarrier(UINT NumBarrierGroups, const D3D12_BARRIER_GROUP * pBarrierGroups, ID3D12Fence * pFence, UINT64 FenceValue)'
-        if NumBarrierGroups is None: NumBarrierGroups = _seqlen(pBarrierGroups)
         pBarrierGroups, _pBarrierGroups_n = _arr(D3D12_BARRIER_GROUP, pBarrierGroups)
+        if NumBarrierGroups is None: NumBarrierGroups = (_pBarrierGroups_n or 0)
         self._fn(34, _P[382])(self._this, NumBarrierGroups, pBarrierGroups, _ptr(pFence), FenceValue)
     _vt_ = (('WaitBarrier', 381), ('SignalBarrier', 382))
     _vtbl_size_ = 35
@@ -13690,8 +13690,8 @@ class ID3D12VideoProcessCommandList5(ID3D12VideoProcessCommandList4):
     def ProcessFrames2(self, pVideoProcessor, pOutputArguments, pInputArguments=None, *, NumInputStreams=None):
         'void ProcessFrames2(ID3D12VideoProcessor2 * pVideoProcessor, const D3D12_VIDEO_PROCESS_OUTPUT_STREAM_ARGUMENTS * pOutputArguments, UINT NumInputStreams, const D3D12_VIDEO_PROCESS_INPUT_STREAM_ARGUMENTS2 * pInputArguments)'
         if pOutputArguments.__class__ in (list, tuple): pOutputArguments = _arr(D3D12_VIDEO_PROCESS_OUTPUT_STREAM_ARGUMENTS, pOutputArguments)[0]
-        if NumInputStreams is None: NumInputStreams = _seqlen(pInputArguments)
         pInputArguments, _pInputArguments_n = _arr(D3D12_VIDEO_PROCESS_INPUT_STREAM_ARGUMENTS2, pInputArguments)
+        if NumInputStreams is None: NumInputStreams = (_pInputArguments_n or 0)
         self._fn(30, _P[458])(self._this, _ptr(pVideoProcessor), pOutputArguments, NumInputStreams, pInputArguments)
     _vt_ = (('ProcessFrames2', 458),)
     _vtbl_size_ = 31
@@ -13702,10 +13702,10 @@ class ID3D12VideoDevice5(ID3D12VideoDevice4):
     def CreateVideoProcessor2(self, NodeMask, pOutputStreamDesc, pInputStreamDescs=None, pProtectedResourceSession=None, riid='ID3D12VideoProcessor', *, NumInputStreamDescs=None):
         'HRESULT CreateVideoProcessor2(UINT NodeMask, const D3D12_VIDEO_PROCESS_OUTPUT_STREAM_DESC * pOutputStreamDesc, UINT NumInputStreamDescs, const D3D12_VIDEO_PROCESS_INPUT_STREAM_DESC1 * pInputStreamDescs, ID3D12ProtectedResourceSession * pProtectedResourceSession, const IID & riid, void ** ppVideoProcessor)'
         if pOutputStreamDesc.__class__ in (list, tuple): pOutputStreamDesc = _arr(D3D12_VIDEO_PROCESS_OUTPUT_STREAM_DESC, pOutputStreamDesc)[0]
-        if NumInputStreamDescs is None: NumInputStreamDescs = _seqlen(pInputStreamDescs)
         pInputStreamDescs, _pInputStreamDescs_n = _arr(D3D12_VIDEO_PROCESS_INPUT_STREAM_DESC1, pInputStreamDescs)
         _riid_g, _riid_c = _riid(riid)
         ppVideoProcessor = c_void_p()
+        if NumInputStreamDescs is None: NumInputStreamDescs = (_pInputStreamDescs_n or 0)
         _hr = _check(self._fn(17, _P[459])(self._this, NodeMask, pOutputStreamDesc, NumInputStreamDescs, pInputStreamDescs, _ptr(pProtectedResourceSession), byref(_riid_g), byref(ppVideoProcessor)), 'ID3D12VideoDevice5.CreateVideoProcessor2')
         return _owned(_riid_c, ppVideoProcessor)
     _vt_ = (('CreateVideoProcessor2', 459),)
@@ -13854,14 +13854,14 @@ class ID3D12CompilerCacheSession(ID3D12CompilerFactoryChild):
         'HRESULT StoreGroupValueKeys(const D3D12_COMPILER_CACHE_GROUP_KEY * pGroupKey, UINT GroupVersion, const D3D12_COMPILER_CACHE_VALUE_KEY * pValueKeys, UINT NumValueKeys)'
         if pGroupKey.__class__ in (list, tuple): pGroupKey = _arr(D3D12_COMPILER_CACHE_GROUP_KEY, pGroupKey)[0]
         pValueKeys, _pValueKeys_n = _arr(D3D12_COMPILER_CACHE_VALUE_KEY, pValueKeys)
-        if NumValueKeys is None: NumValueKeys = _seqlen(pValueKeys)
+        if NumValueKeys is None: NumValueKeys = (_pValueKeys_n or 0)
         _hr = _check(self._fn(11, _P[471])(self._this, pGroupKey, GroupVersion, pValueKeys, NumValueKeys), 'ID3D12CompilerCacheSession.StoreGroupValueKeys')
         return _hr or None
     def StoreValue(self, pValueKey, pTypedValues=None, *, NumTypedValues=None):
         'HRESULT StoreValue(const D3D12_COMPILER_CACHE_VALUE_KEY * pValueKey, const D3D12_COMPILER_CACHE_TYPED_CONST_VALUE * pTypedValues, UINT NumTypedValues)'
         if pValueKey.__class__ in (list, tuple): pValueKey = _arr(D3D12_COMPILER_CACHE_VALUE_KEY, pValueKey)[0]
         pTypedValues, _pTypedValues_n = _arr(D3D12_COMPILER_CACHE_TYPED_CONST_VALUE, pTypedValues)
-        if NumTypedValues is None: NumTypedValues = _seqlen(pTypedValues)
+        if NumTypedValues is None: NumTypedValues = (_pTypedValues_n or 0)
         _hr = _check(self._fn(12, _P[472])(self._this, pValueKey, pTypedValues, NumTypedValues), 'ID3D12CompilerCacheSession.StoreValue')
         return _hr or None
     _vt_ = (('FindGroup', 464), ('FindGroupValueKeys', 465), ('FindGroupValues', 466), ('FindValue', 467), ('GetApplicationDesc', 468), ('GetCompilerTarget', 469), ('GetValueTypes', 470), ('StoreGroupValueKeys', 471), ('StoreValue', 472))
@@ -13920,28 +13920,28 @@ class ID3D12Compiler1(ID3D12Compiler):
         'HRESULT CompilePipelineState1(const D3D12_COMPILER_CACHE_GROUP_KEY * pGroupKeys, const UINT * pVersions, UINT NumGroupKeys, const D3D12_PIPELINE_STATE_STREAM_DESC * pDesc)'
         pGroupKeys, _pGroupKeys_n = _arr(D3D12_COMPILER_CACHE_GROUP_KEY, pGroupKeys)
         pVersions, _pVersions_n = _arr(c_uint, pVersions)
-        if NumGroupKeys is None: NumGroupKeys = _seqlen(pGroupKeys)
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_PIPELINE_STATE_STREAM_DESC, pDesc)[0]
+        if NumGroupKeys is None: NumGroupKeys = (_pGroupKeys_n or 0)
         _hr = _check(self._fn(8, _P[476])(self._this, pGroupKeys, pVersions, NumGroupKeys, pDesc), 'ID3D12Compiler1.CompilePipelineState1')
         return _hr or None
     def CompileStateObject1(self, pGroupKeys, pVersions, pDesc, riid, *, NumGroupKeys=None):
         'HRESULT CompileStateObject1(const D3D12_COMPILER_CACHE_GROUP_KEY * pGroupKeys, const UINT * pVersions, UINT NumGroupKeys, const D3D12_STATE_OBJECT_DESC * pDesc, const IID & riid, void ** ppCompilerStateObject)'
         pGroupKeys, _pGroupKeys_n = _arr(D3D12_COMPILER_CACHE_GROUP_KEY, pGroupKeys)
         pVersions, _pVersions_n = _arr(c_uint, pVersions)
-        if NumGroupKeys is None: NumGroupKeys = _seqlen(pGroupKeys)
         if pDesc.__class__ in (list, tuple): pDesc = _arr(D3D12_STATE_OBJECT_DESC, pDesc)[0]
         _riid_g, _riid_c = _riid(riid)
         ppCompilerStateObject = c_void_p()
+        if NumGroupKeys is None: NumGroupKeys = (_pGroupKeys_n or 0)
         _hr = _check(self._fn(9, _P[477])(self._this, pGroupKeys, pVersions, NumGroupKeys, pDesc, byref(_riid_g), byref(ppCompilerStateObject)), 'ID3D12Compiler1.CompileStateObject1')
         return _owned(_riid_c, ppCompilerStateObject)
     def CompileAddToStateObject1(self, pGroupKeys, pVersions, pAddition, pCompilerStateObjectToGrowFrom, riid, *, NumGroupKeys=None):
         'HRESULT CompileAddToStateObject1(const D3D12_COMPILER_CACHE_GROUP_KEY * pGroupKeys, const UINT * pVersions, UINT NumGroupKeys, const D3D12_STATE_OBJECT_DESC * pAddition, ID3D12CompilerStateObject * pCompilerStateObjectToGrowFrom, const IID & riid, void ** ppNewCompilerStateObject)'
         pGroupKeys, _pGroupKeys_n = _arr(D3D12_COMPILER_CACHE_GROUP_KEY, pGroupKeys)
         pVersions, _pVersions_n = _arr(c_uint, pVersions)
-        if NumGroupKeys is None: NumGroupKeys = _seqlen(pGroupKeys)
         if pAddition.__class__ in (list, tuple): pAddition = _arr(D3D12_STATE_OBJECT_DESC, pAddition)[0]
         _riid_g, _riid_c = _riid(riid)
         ppNewCompilerStateObject = c_void_p()
+        if NumGroupKeys is None: NumGroupKeys = (_pGroupKeys_n or 0)
         _hr = _check(self._fn(10, _P[478])(self._this, pGroupKeys, pVersions, NumGroupKeys, pAddition, _ptr(pCompilerStateObjectToGrowFrom), byref(_riid_g), byref(ppNewCompilerStateObject)), 'ID3D12Compiler1.CompileAddToStateObject1')
         return _owned(_riid_c, ppNewCompilerStateObject)
     _vt_ = (('CompilePipelineState1', 476), ('CompileStateObject1', 477), ('CompileAddToStateObject1', 478))
@@ -13976,11 +13976,11 @@ class ID3D12CompilerFactory(IUnknown):
     def CreateCompilerCacheSession(self, pPaths=None, pTarget=None, pApplicationDesc=None, riid='ID3D12CompilerCacheSession', *, NumPaths=None):
         'HRESULT CreateCompilerCacheSession(const D3D12_COMPILER_DATABASE_PATH * pPaths, UINT NumPaths, const D3D12_COMPILER_TARGET * pTarget, const D3D12_APPLICATION_DESC * pApplicationDesc, const IID & riid, void ** ppCompilerCacheSession)'
         pPaths, _pPaths_n = _arr(D3D12_COMPILER_DATABASE_PATH, pPaths)
-        if NumPaths is None: NumPaths = _seqlen(pPaths)
         if pTarget.__class__ in (list, tuple): pTarget = _arr(D3D12_COMPILER_TARGET, pTarget)[0]
         if pApplicationDesc.__class__ in (list, tuple): pApplicationDesc = _arr(D3D12_APPLICATION_DESC, pApplicationDesc)[0]
         _riid_g, _riid_c = _riid(riid)
         ppCompilerCacheSession = c_void_p()
+        if NumPaths is None: NumPaths = (_pPaths_n or 0)
         _hr = _check(self._fn(7, _P[483])(self._this, pPaths, NumPaths, pTarget, pApplicationDesc, byref(_riid_g), byref(ppCompilerCacheSession)), 'ID3D12CompilerFactory.CreateCompilerCacheSession')
         return _owned(_riid_c, ppCompilerCacheSession)
     def CreateCompiler(self, pCompilerCacheSession, riid='ID3D12Compiler'):
@@ -14056,10 +14056,10 @@ class ID3DShaderCacheApplication(IUnknown):
         return pApplicationDesc
     def RegisterComponent(self, pName, pStateObjectDBPath, pPSDBs, riid, *, NumPSDB=None):
         'HRESULT RegisterComponent(const wchar_t * pName, const wchar_t * pStateObjectDBPath, UINT NumPSDB, const D3D_SHADER_CACHE_PSDB_PROPERTIES * pPSDBs, const IID & riid, void ** ppvComponent)'
-        if NumPSDB is None: NumPSDB = _seqlen(pPSDBs)
         pPSDBs, _pPSDBs_n = _arr(D3D_SHADER_CACHE_PSDB_PROPERTIES, pPSDBs)
         _riid_g, _riid_c = _riid(riid)
         ppvComponent = c_void_p()
+        if NumPSDB is None: NumPSDB = (_pPSDBs_n or 0)
         _hr = _check(self._fn(5, _P[488])(self._this, pName, pStateObjectDBPath, NumPSDB, pPSDBs, byref(_riid_g), byref(ppvComponent)), 'ID3DShaderCacheApplication.RegisterComponent')
         return _owned(_riid_c, ppvComponent)
     def RemoveComponent(self, pComponent):
@@ -14082,8 +14082,8 @@ class ID3DShaderCacheApplication(IUnknown):
         return _r
     def GetPrecompileTargets(self, pArray, flags, *, ArraySize=None):
         'HRESULT GetPrecompileTargets(UINT ArraySize, D3D_SHADER_CACHE_COMPILER_PROPERTIES * pArray, D3D_SHADER_CACHE_TARGET_FLAGS flags)'
-        if ArraySize is None: ArraySize = _seqlen(pArray)
         pArray, _pArray_n = _arr(D3D_SHADER_CACHE_COMPILER_PROPERTIES, pArray)
+        if ArraySize is None: ArraySize = (_pArray_n or 0)
         _hr = _check(self._fn(10, _P[490])(self._this, ArraySize, pArray, flags), 'ID3DShaderCacheApplication.GetPrecompileTargets')
         return _hr or None
     def GetInstallerName(self):
@@ -14262,19 +14262,19 @@ class IDxcCompilerArgs(IUnknown):
     def AddArguments(self, pArguments=None, *, argCount=None):
         'HRESULT AddArguments(LPCWSTR * pArguments, UINT32 argCount)'
         pArguments, _pArguments_n = _arr(c_wchar_p, pArguments)
-        if argCount is None: argCount = _seqlen(pArguments)
+        if argCount is None: argCount = (_pArguments_n or 0)
         _hr = _check(self._fn(5, _P[30])(self._this, pArguments, argCount), 'IDxcCompilerArgs.AddArguments')
         return _hr or None
     def AddArgumentsUTF8(self, pArguments=None, *, argCount=None):
         'HRESULT AddArgumentsUTF8(LPCSTR * pArguments, UINT32 argCount)'
         pArguments, _pArguments_n = _arr(c_char_p, pArguments)
-        if argCount is None: argCount = _seqlen(pArguments)
+        if argCount is None: argCount = (_pArguments_n or 0)
         _hr = _check(self._fn(6, _P[30])(self._this, pArguments, argCount), 'IDxcCompilerArgs.AddArgumentsUTF8')
         return _hr or None
     def AddDefines(self, pDefines=None, *, defineCount=None):
         'HRESULT AddDefines(const DxcDefine * pDefines, UINT32 defineCount)'
         pDefines, _pDefines_n = _arr(DxcDefine, pDefines)
-        if defineCount is None: defineCount = _seqlen(pDefines)
+        if defineCount is None: defineCount = (_pDefines_n or 0)
         _hr = _check(self._fn(7, _P[497])(self._this, pDefines, defineCount), 'IDxcCompilerArgs.AddDefines')
         return _hr or None
     _vt_ = (('GetArguments', 67), ('GetCount', 69), ('AddArguments', 30), ('AddArgumentsUTF8', 30), ('AddDefines', 497))
@@ -14301,22 +14301,22 @@ class IDxcLibrary(IUnknown):
     def CreateBlobWithEncodingFromPinned(self, pText, codePage, *, size=None):
         'HRESULT CreateBlobWithEncodingFromPinned(LPCVOID pText, UINT32 size, UINT32 codePage, IDxcBlobEncoding ** pBlobEncoding)'
         pText, _pText_n, _pText_k = _buf(pText)
-        if size is None: size = _pText_n
         pBlobEncoding = c_void_p()
+        if size is None: size = (_pText_n or 0)
         _hr = _check(self._fn(6, _P[498])(self._this, pText, size, codePage, byref(pBlobEncoding)), 'IDxcLibrary.CreateBlobWithEncodingFromPinned')
         return _owned('IDxcBlobEncoding', pBlobEncoding)
     def CreateBlobWithEncodingOnHeapCopy(self, pText, codePage, *, size=None):
         'HRESULT CreateBlobWithEncodingOnHeapCopy(LPCVOID pText, UINT32 size, UINT32 codePage, IDxcBlobEncoding ** pBlobEncoding)'
         pText, _pText_n, _pText_k = _buf(pText)
-        if size is None: size = _pText_n
         pBlobEncoding = c_void_p()
+        if size is None: size = (_pText_n or 0)
         _hr = _check(self._fn(7, _P[498])(self._this, pText, size, codePage, byref(pBlobEncoding)), 'IDxcLibrary.CreateBlobWithEncodingOnHeapCopy')
         return _owned('IDxcBlobEncoding', pBlobEncoding)
     def CreateBlobWithEncodingOnMalloc(self, pText, pIMalloc, codePage, *, size=None):
         'HRESULT CreateBlobWithEncodingOnMalloc(LPCVOID pText, IMalloc * pIMalloc, UINT32 size, UINT32 codePage, IDxcBlobEncoding ** pBlobEncoding)'
         pText, _pText_n, _pText_k = _buf(pText)
-        if size is None: size = _pText_n
         pBlobEncoding = c_void_p()
+        if size is None: size = (_pText_n or 0)
         _hr = _check(self._fn(8, _P[500])(self._this, pText, _ptr(pIMalloc), size, codePage, byref(pBlobEncoding)), 'IDxcLibrary.CreateBlobWithEncodingOnMalloc')
         return _owned('IDxcBlobEncoding', pBlobEncoding)
     def CreateIncludeHandler(self):
@@ -14369,19 +14369,19 @@ class IDxcCompiler(IUnknown):
     def Compile(self, pSource, pSourceName, pEntryPoint, pTargetProfile, pArguments=None, pDefines=None, pIncludeHandler=None, *, argCount=None, defineCount=None):
         'HRESULT Compile(IDxcBlob * pSource, LPCWSTR pSourceName, LPCWSTR pEntryPoint, LPCWSTR pTargetProfile, LPCWSTR * pArguments, UINT32 argCount, const DxcDefine * pDefines, UINT32 defineCount, IDxcIncludeHandler * pIncludeHandler, IDxcOperationResult ** ppResult)'
         pArguments, _pArguments_n = _arr(c_wchar_p, pArguments)
-        if argCount is None: argCount = _seqlen(pArguments)
         pDefines, _pDefines_n = _arr(DxcDefine, pDefines)
-        if defineCount is None: defineCount = _seqlen(pDefines)
         ppResult = c_void_p()
+        if argCount is None: argCount = (_pArguments_n or 0)
+        if defineCount is None: defineCount = (_pDefines_n or 0)
         _hr = _check(self._fn(3, _P[502])(self._this, _ptr(pSource), pSourceName, pEntryPoint, pTargetProfile, pArguments, argCount, pDefines, defineCount, _ptr(pIncludeHandler), byref(ppResult)), 'IDxcCompiler.Compile')
         return _owned('IDxcOperationResult', ppResult)
     def Preprocess(self, pSource, pSourceName=None, pArguments=None, pDefines=None, pIncludeHandler=None, *, argCount=None, defineCount=None):
         'HRESULT Preprocess(IDxcBlob * pSource, LPCWSTR pSourceName, LPCWSTR * pArguments, UINT32 argCount, const DxcDefine * pDefines, UINT32 defineCount, IDxcIncludeHandler * pIncludeHandler, IDxcOperationResult ** ppResult)'
         pArguments, _pArguments_n = _arr(c_wchar_p, pArguments)
-        if argCount is None: argCount = _seqlen(pArguments)
         pDefines, _pDefines_n = _arr(DxcDefine, pDefines)
-        if defineCount is None: defineCount = _seqlen(pDefines)
         ppResult = c_void_p()
+        if argCount is None: argCount = (_pArguments_n or 0)
+        if defineCount is None: defineCount = (_pDefines_n or 0)
         _hr = _check(self._fn(4, _P[503])(self._this, _ptr(pSource), pSourceName, pArguments, argCount, pDefines, defineCount, _ptr(pIncludeHandler), byref(ppResult)), 'IDxcCompiler.Preprocess')
         return _owned('IDxcOperationResult', ppResult)
     def Disassemble(self, pSource):
@@ -14398,12 +14398,12 @@ class IDxcCompiler2(IDxcCompiler):
     def CompileWithDebug(self, pSource, pSourceName, pEntryPoint, pTargetProfile, pArguments=None, pDefines=None, pIncludeHandler=None, *, argCount=None, defineCount=None):
         'HRESULT CompileWithDebug(IDxcBlob * pSource, LPCWSTR pSourceName, LPCWSTR pEntryPoint, LPCWSTR pTargetProfile, LPCWSTR * pArguments, UINT32 argCount, const DxcDefine * pDefines, UINT32 defineCount, IDxcIncludeHandler * pIncludeHandler, IDxcOperationResult ** ppResult, LPWSTR * ppDebugBlobName, IDxcBlob ** ppDebugBlob)'
         pArguments, _pArguments_n = _arr(c_wchar_p, pArguments)
-        if argCount is None: argCount = _seqlen(pArguments)
         pDefines, _pDefines_n = _arr(DxcDefine, pDefines)
-        if defineCount is None: defineCount = _seqlen(pDefines)
         ppResult = c_void_p()
         ppDebugBlobName = c_void_p()
         ppDebugBlob = c_void_p()
+        if argCount is None: argCount = (_pArguments_n or 0)
+        if defineCount is None: defineCount = (_pDefines_n or 0)
         _hr = _check(self._fn(6, _P[504])(self._this, _ptr(pSource), pSourceName, pEntryPoint, pTargetProfile, pArguments, argCount, pDefines, defineCount, _ptr(pIncludeHandler), byref(ppResult), byref(ppDebugBlobName), byref(ppDebugBlob)), 'IDxcCompiler2.CompileWithDebug')
         return (_owned('IDxcOperationResult', ppResult), ppDebugBlobName.value, _owned('IDxcBlob', ppDebugBlob))
     _vt_ = (('CompileWithDebug', 504),)
@@ -14419,10 +14419,10 @@ class IDxcLinker(IUnknown):
     def Link(self, pEntryName, pTargetProfile, pLibNames=None, pArguments=None, *, libCount=None, argCount=None):
         'HRESULT Link(LPCWSTR pEntryName, LPCWSTR pTargetProfile, const LPCWSTR * pLibNames, UINT32 libCount, const LPCWSTR * pArguments, UINT32 argCount, IDxcOperationResult ** ppResult)'
         pLibNames, _pLibNames_n = _arr(c_wchar_p, pLibNames)
-        if libCount is None: libCount = _seqlen(pLibNames)
         pArguments, _pArguments_n = _arr(c_wchar_p, pArguments)
-        if argCount is None: argCount = _seqlen(pArguments)
         ppResult = c_void_p()
+        if libCount is None: libCount = (_pLibNames_n or 0)
+        if argCount is None: argCount = (_pArguments_n or 0)
         _hr = _check(self._fn(4, _P[505])(self._this, pEntryName, pTargetProfile, pLibNames, libCount, pArguments, argCount, byref(ppResult)), 'IDxcLinker.Link')
         return _owned('IDxcOperationResult', ppResult)
     _vt_ = (('RegisterLibrary', 216), ('Link', 505))
@@ -14439,22 +14439,22 @@ class IDxcUtils(IUnknown):
     def CreateBlobFromPinned(self, pData, codePage, *, size=None):
         'HRESULT CreateBlobFromPinned(LPCVOID pData, UINT32 size, UINT32 codePage, IDxcBlobEncoding ** ppBlobEncoding)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if size is None: size = _pData_n
         ppBlobEncoding = c_void_p()
+        if size is None: size = (_pData_n or 0)
         _hr = _check(self._fn(4, _P[498])(self._this, pData, size, codePage, byref(ppBlobEncoding)), 'IDxcUtils.CreateBlobFromPinned')
         return _owned('IDxcBlobEncoding', ppBlobEncoding)
     def MoveToBlob(self, pData, pIMalloc, codePage, *, size=None):
         'HRESULT MoveToBlob(LPCVOID pData, IMalloc * pIMalloc, UINT32 size, UINT32 codePage, IDxcBlobEncoding ** ppBlobEncoding)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if size is None: size = _pData_n
         ppBlobEncoding = c_void_p()
+        if size is None: size = (_pData_n or 0)
         _hr = _check(self._fn(5, _P[500])(self._this, pData, _ptr(pIMalloc), size, codePage, byref(ppBlobEncoding)), 'IDxcUtils.MoveToBlob')
         return _owned('IDxcBlobEncoding', ppBlobEncoding)
     def CreateBlob(self, pData, codePage, *, size=None):
         'HRESULT CreateBlob(LPCVOID pData, UINT32 size, UINT32 codePage, IDxcBlobEncoding ** ppBlobEncoding)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if size is None: size = _pData_n
         ppBlobEncoding = c_void_p()
+        if size is None: size = (_pData_n or 0)
         _hr = _check(self._fn(6, _P[498])(self._this, pData, size, codePage, byref(ppBlobEncoding)), 'IDxcUtils.CreateBlob')
         return _owned('IDxcBlobEncoding', ppBlobEncoding)
     def LoadFile(self, pFileName, pCodePage=None):
@@ -14500,10 +14500,10 @@ class IDxcUtils(IUnknown):
     def BuildArguments(self, pSourceName, pEntryPoint, pTargetProfile, pArguments=None, pDefines=None, *, argCount=None, defineCount=None):
         'HRESULT BuildArguments(LPCWSTR pSourceName, LPCWSTR pEntryPoint, LPCWSTR pTargetProfile, LPCWSTR * pArguments, UINT32 argCount, const DxcDefine * pDefines, UINT32 defineCount, IDxcCompilerArgs ** ppArgs)'
         pArguments, _pArguments_n = _arr(c_wchar_p, pArguments)
-        if argCount is None: argCount = _seqlen(pArguments)
         pDefines, _pDefines_n = _arr(DxcDefine, pDefines)
-        if defineCount is None: defineCount = _seqlen(pDefines)
         ppArgs = c_void_p()
+        if argCount is None: argCount = (_pArguments_n or 0)
+        if defineCount is None: defineCount = (_pDefines_n or 0)
         _hr = _check(self._fn(14, _P[508])(self._this, pSourceName, pEntryPoint, pTargetProfile, pArguments, argCount, pDefines, defineCount, byref(ppArgs)), 'IDxcUtils.BuildArguments')
         return _owned('IDxcCompilerArgs', ppArgs)
     def GetPDBContents(self, pPDBBlob):
@@ -14569,9 +14569,9 @@ class IDxcCompiler3(IUnknown):
         'HRESULT Compile(const DxcBuffer * pSource, LPCWSTR * pArguments, UINT32 argCount, IDxcIncludeHandler * pIncludeHandler, const IID & riid, LPVOID * ppResult)'
         if pSource.__class__ in (list, tuple): pSource = _arr(DxcBuffer, pSource)[0]
         pArguments, _pArguments_n = _arr(c_wchar_p, pArguments)
-        if argCount is None: argCount = _seqlen(pArguments)
         _riid_g, _riid_c = _riid(riid)
         ppResult = c_void_p()
+        if argCount is None: argCount = (_pArguments_n or 0)
         _hr = _check(self._fn(3, _P[515])(self._this, pSource, pArguments, argCount, _ptr(pIncludeHandler), byref(_riid_g), byref(ppResult)), 'IDxcCompiler3.Compile')
         return _owned(_riid_c, ppResult)
     def Disassemble(self, pObject, riid):
@@ -14724,9 +14724,9 @@ class IDxcOptimizer(IUnknown):
     def RunOptimizer(self, pBlob, ppOptions=None, *, optionCount=None):
         'HRESULT RunOptimizer(IDxcBlob * pBlob, LPCWSTR * ppOptions, UINT32 optionCount, IDxcBlob ** pOutputModule, IDxcBlobEncoding ** ppOutputText)'
         ppOptions, _ppOptions_n = _arr(c_wchar_p, ppOptions)
-        if optionCount is None: optionCount = _seqlen(ppOptions)
         pOutputModule = c_void_p()
         ppOutputText = c_void_p()
+        if optionCount is None: optionCount = (_ppOptions_n or 0)
         _hr = _check(self._fn(5, _P[519])(self._this, _ptr(pBlob), ppOptions, optionCount, byref(pOutputModule), byref(ppOutputText)), 'IDxcOptimizer.RunOptimizer')
         return (_owned('IDxcBlob', pOutputModule), _owned('IDxcBlobEncoding', ppOutputText))
     _vt_ = (('GetAvailablePassCount', 4), ('GetAvailablePass', 13), ('RunOptimizer', 519))
@@ -15055,8 +15055,8 @@ class IDXCoreAdapter(IUnknown):
         return _r
     def QueryState(self, state, inputStateDetails, outputBufferSize, outputBuffer, *, inputStateDetailsSize=None):
         'HRESULT QueryState(DXCoreAdapterState state, size_t inputStateDetailsSize, const void * inputStateDetails, size_t outputBufferSize, void * outputBuffer)'
-        if inputStateDetailsSize is None: inputStateDetailsSize = _inputStateDetails_n
         inputStateDetails, _inputStateDetails_n, _inputStateDetails_k = _buf(inputStateDetails)
+        if inputStateDetailsSize is None: inputStateDetailsSize = (_inputStateDetails_n or 0)
         _hr = _check(self._fn(9, _P[529])(self._this, state, inputStateDetailsSize, inputStateDetails, outputBufferSize, outputBuffer), 'IDXCoreAdapter.QueryState')
         return _hr or None
     def IsSetStateSupported(self, property):
@@ -15065,10 +15065,10 @@ class IDXCoreAdapter(IUnknown):
         return _r
     def SetState(self, state, inputStateDetails=None, inputData=None, *, inputStateDetailsSize=None, inputDataSize=None):
         'HRESULT SetState(DXCoreAdapterState state, size_t inputStateDetailsSize, const void * inputStateDetails, size_t inputDataSize, const void * inputData)'
-        if inputStateDetailsSize is None: inputStateDetailsSize = _inputStateDetails_n
         inputStateDetails, _inputStateDetails_n, _inputStateDetails_k = _buf(inputStateDetails)
-        if inputDataSize is None: inputDataSize = _inputData_n
         inputData, _inputData_n, _inputData_k = _buf(inputData)
+        if inputStateDetailsSize is None: inputStateDetailsSize = (_inputStateDetails_n or 0)
+        if inputDataSize is None: inputDataSize = (_inputData_n or 0)
         _hr = _check(self._fn(11, _P[529])(self._this, state, inputStateDetailsSize, inputStateDetails, inputDataSize, inputData), 'IDXCoreAdapter.SetState')
         return _hr or None
     def GetFactory(self, riid='IDXGIFactory'):
@@ -15085,8 +15085,8 @@ class IDXCoreAdapter1(IDXCoreAdapter):
     _iid_ = GUID('a0783366-cfa3-43be-9d79-55b2da97c63c')
     def GetPropertyWithInput(self, property, inputPropertyDetails, outputBufferSize, outputBuffer, *, inputPropertyDetailsSize=None):
         'HRESULT GetPropertyWithInput(DXCoreAdapterProperty property, size_t inputPropertyDetailsSize, const void * inputPropertyDetails, size_t outputBufferSize, void * outputBuffer)'
-        if inputPropertyDetailsSize is None: inputPropertyDetailsSize = _inputPropertyDetails_n
         inputPropertyDetails, _inputPropertyDetails_n, _inputPropertyDetails_k = _buf(inputPropertyDetails)
+        if inputPropertyDetailsSize is None: inputPropertyDetailsSize = (_inputPropertyDetails_n or 0)
         _hr = _check(self._fn(13, _P[530])(self._this, property, inputPropertyDetailsSize, inputPropertyDetails, outputBufferSize, outputBuffer), 'IDXCoreAdapter1.GetPropertyWithInput')
         return _hr or None
     _vt_ = (('GetPropertyWithInput', 530),)
@@ -15117,8 +15117,8 @@ class IDXCoreAdapterList(IUnknown):
         return _owned(_riid_c, ppvFactory)
     def Sort(self, preferences=None, *, numPreferences=None):
         'HRESULT Sort(uint32_t numPreferences, const DXCoreAdapterPreference * preferences)'
-        if numPreferences is None: numPreferences = _seqlen(preferences)
         preferences, _preferences_n = _arr(DXCoreAdapterPreference, preferences)
+        if numPreferences is None: numPreferences = (_preferences_n or 0)
         _hr = _check(self._fn(7, _P[531])(self._this, numPreferences, preferences), 'IDXCoreAdapterList.Sort')
         return _hr or None
     def IsAdapterPreferenceSupported(self, preference):
@@ -15133,10 +15133,10 @@ class IDXCoreAdapterFactory(IUnknown):
     _iid_ = GUID('78ee5945-c36e-4b13-a669-005dd11c0f06')
     def CreateAdapterList(self, filterAttributes=None, riid='IDXCoreAdapterList', *, numAttributes=None):
         'HRESULT CreateAdapterList(uint32_t numAttributes, const GUID * filterAttributes, const IID & riid, void ** ppvAdapterList)'
-        if numAttributes is None: numAttributes = _seqlen(filterAttributes)
         filterAttributes, _filterAttributes_n = _arr(GUID, filterAttributes)
         _riid_g, _riid_c = _riid(riid)
         ppvAdapterList = c_void_p()
+        if numAttributes is None: numAttributes = (_filterAttributes_n or 0)
         _hr = _check(self._fn(3, _P[533])(self._this, numAttributes, filterAttributes, byref(_riid_g), byref(ppvAdapterList)), 'IDXCoreAdapterFactory.CreateAdapterList')
         return _owned(_riid_c, ppvAdapterList)
     def GetAdapterByLuid(self, adapterLUID, riid='IDXCoreAdapter'):
@@ -15184,8 +15184,8 @@ class IDMLObject(IUnknown):
         return _hr or None
     def SetPrivateData(self, guid, data=None, *, dataSize=None):
         'HRESULT SetPrivateData(const GUID & guid, UINT dataSize, const void * data)'
-        if dataSize is None: dataSize = _data_n
         data, _data_n, _data_k = _buf(data)
+        if dataSize is None: dataSize = (_data_n or 0)
         _hr = _check(self._fn(4, _P[0])(self._this, guid, dataSize, data), 'IDMLObject.SetPrivateData')
         return _hr or None
     def SetPrivateDataInterface(self, guid, data=None):
@@ -15204,8 +15204,8 @@ class IDMLDevice(IDMLObject):
     _iid_ = GUID('6dbd6437-96fd-423f-a98c-ae5e7c2a573f')
     def CheckFeatureSupport(self, feature, featureQueryData, featureSupportDataSize, featureSupportData, *, featureQueryDataSize=None):
         'HRESULT CheckFeatureSupport(DML_FEATURE feature, UINT featureQueryDataSize, const void * featureQueryData, UINT featureSupportDataSize, void * featureSupportData)'
-        if featureQueryDataSize is None: featureQueryDataSize = _featureQueryData_n
         featureQueryData, _featureQueryData_n, _featureQueryData_k = _buf(featureQueryData)
+        if featureQueryDataSize is None: featureQueryDataSize = (_featureQueryData_n or 0)
         _hr = _check(self._fn(7, _P[538])(self._this, feature, featureQueryDataSize, featureQueryData, featureSupportDataSize, featureSupportData), 'IDMLDevice.CheckFeatureSupport')
         return _hr or None
     def CreateOperator(self, desc, riid='IDMLOperator'):
@@ -15223,10 +15223,10 @@ class IDMLDevice(IDMLObject):
         return _owned(_riid_c, ppv)
     def CreateOperatorInitializer(self, operators=None, riid='IDMLOperatorInitializer', *, operatorCount=None):
         'HRESULT CreateOperatorInitializer(UINT operatorCount, IDMLCompiledOperator *const * operators, const IID & riid, void ** ppv)'
-        if operatorCount is None: operatorCount = _seqlen(operators)
         operators, _operators_n = _arr('IDMLCompiledOperator', operators)
         _riid_g, _riid_c = _riid(riid)
         ppv = c_void_p()
+        if operatorCount is None: operatorCount = (_operators_n or 0)
         _hr = _check(self._fn(10, _P[541])(self._this, operatorCount, operators, byref(_riid_g), byref(ppv)), 'IDMLDevice.CreateOperatorInitializer')
         return _owned(_riid_c, ppv)
     def CreateCommandRecorder(self, riid='IDMLCommandRecorder'):
@@ -15244,14 +15244,14 @@ class IDMLDevice(IDMLObject):
         return _owned(_riid_c, ppv)
     def Evict(self, ppObjects=None, *, count=None):
         'HRESULT Evict(UINT count, IDMLPageable *const * ppObjects)'
-        if count is None: count = _seqlen(ppObjects)
         ppObjects, _ppObjects_n = _arr('IDMLPageable', ppObjects)
+        if count is None: count = (_ppObjects_n or 0)
         _hr = _check(self._fn(13, _P[13])(self._this, count, ppObjects), 'IDMLDevice.Evict')
         return _hr or None
     def MakeResident(self, ppObjects=None, *, count=None):
         'HRESULT MakeResident(UINT count, IDMLPageable *const * ppObjects)'
-        if count is None: count = _seqlen(ppObjects)
         ppObjects, _ppObjects_n = _arr('IDMLPageable', ppObjects)
+        if count is None: count = (_ppObjects_n or 0)
         _hr = _check(self._fn(14, _P[13])(self._this, count, ppObjects), 'IDMLDevice.MakeResident')
         return _hr or None
     def GetDeviceRemovedReason(self):
@@ -15313,8 +15313,8 @@ class IDMLOperatorInitializer(IDMLDispatchable):
     _iid_ = GUID('427c1113-435c-469c-8676-4d5dd072f813')
     def Reset(self, operators=None, *, operatorCount=None):
         'HRESULT Reset(UINT operatorCount, IDMLCompiledOperator *const * operators)'
-        if operatorCount is None: operatorCount = _seqlen(operators)
         operators, _operators_n = _arr('IDMLCompiledOperator', operators)
+        if operatorCount is None: operatorCount = (_operators_n or 0)
         _hr = _check(self._fn(9, _P[13])(self._this, operatorCount, operators), 'IDMLOperatorInitializer.Reset')
         return _hr or None
     _vt_ = (('Reset', 13),)
@@ -15325,13 +15325,13 @@ class IDMLBindingTable(IDMLDeviceChild):
     _iid_ = GUID('29c687dc-de74-4e3b-ab00-1168f2fc3cfc')
     def BindInputs(self, bindings=None, *, bindingCount=None):
         'void BindInputs(UINT bindingCount, const DML_BINDING_DESC * bindings)'
-        if bindingCount is None: bindingCount = _seqlen(bindings)
         bindings, _bindings_n = _arr(DML_BINDING_DESC, bindings)
+        if bindingCount is None: bindingCount = (_bindings_n or 0)
         self._fn(8, _P[544])(self._this, bindingCount, bindings)
     def BindOutputs(self, bindings=None, *, bindingCount=None):
         'void BindOutputs(UINT bindingCount, const DML_BINDING_DESC * bindings)'
-        if bindingCount is None: bindingCount = _seqlen(bindings)
         bindings, _bindings_n = _arr(DML_BINDING_DESC, bindings)
+        if bindingCount is None: bindingCount = (_bindings_n or 0)
         self._fn(9, _P[544])(self._this, bindingCount, bindings)
     def BindTemporaryResource(self, binding=None):
         'void BindTemporaryResource(const DML_BINDING_DESC * binding)'
@@ -15485,7 +15485,7 @@ class IXAudio2Voice(ComInterface):
     def SetEffectParameters(self, EffectIndex=None, pParameters=None, OperationSet=None, *, ParametersByteSize=None):
         'HRESULT SetEffectParameters(UINT32 EffectIndex, const void * pParameters, UINT32 ParametersByteSize, UINT32 OperationSet)'
         pParameters, _pParameters_n, _pParameters_k = _buf(pParameters)
-        if ParametersByteSize is None: ParametersByteSize = _pParameters_n
+        if ParametersByteSize is None: ParametersByteSize = (_pParameters_n or 0)
         _hr = _check(self._fn(6, _P[558])(self._this, EffectIndex, pParameters, ParametersByteSize, OperationSet), 'IXAudio2Voice.SetEffectParameters')
         return _hr or None
     def GetEffectParameters(self, EffectIndex=None, pParameters=None, ParametersByteSize=None):
@@ -15682,7 +15682,7 @@ class IXAPO(IUnknown):
     def Initialize(self, pData=None, *, DataByteSize=None):
         'HRESULT Initialize(const void * pData, UINT32 DataByteSize)'
         pData, _pData_n, _pData_k = _buf(pData)
-        if DataByteSize is None: DataByteSize = _pData_n
+        if DataByteSize is None: DataByteSize = (_pData_n or 0)
         _hr = _check(self._fn(6, _P[30])(self._this, pData, DataByteSize), 'IXAPO.Initialize')
         return _hr or None
     def Reset(self):
@@ -15690,10 +15690,10 @@ class IXAPO(IUnknown):
         self._fn(7, _P[20])(self._this)
     def LockForProcess(self, pInputLockedParameters=None, pOutputLockedParameters=None, *, InputLockedParameterCount=None, OutputLockedParameterCount=None):
         'HRESULT LockForProcess(UINT32 InputLockedParameterCount, const XAPO_LOCKFORPROCESS_PARAMETERS * pInputLockedParameters, UINT32 OutputLockedParameterCount, const XAPO_LOCKFORPROCESS_PARAMETERS * pOutputLockedParameters)'
-        if InputLockedParameterCount is None: InputLockedParameterCount = _seqlen(pInputLockedParameters)
         pInputLockedParameters, _pInputLockedParameters_n = _arr(XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS, pInputLockedParameters)
-        if OutputLockedParameterCount is None: OutputLockedParameterCount = _seqlen(pOutputLockedParameters)
         pOutputLockedParameters, _pOutputLockedParameters_n = _arr(XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS, pOutputLockedParameters)
+        if InputLockedParameterCount is None: InputLockedParameterCount = (_pInputLockedParameters_n or 0)
+        if OutputLockedParameterCount is None: OutputLockedParameterCount = (_pOutputLockedParameters_n or 0)
         _hr = _check(self._fn(8, _P[573])(self._this, InputLockedParameterCount, pInputLockedParameters, OutputLockedParameterCount, pOutputLockedParameters), 'IXAPO.LockForProcess')
         return _hr or None
     def UnlockForProcess(self):
@@ -15701,9 +15701,9 @@ class IXAPO(IUnknown):
         self._fn(9, _P[20])(self._this)
     def Process(self, pInputProcessParameters, OutputProcessParameterCount, pOutputProcessParameters, IsEnabled, *, InputProcessParameterCount=None):
         'void Process(UINT32 InputProcessParameterCount, const XAPO_PROCESS_BUFFER_PARAMETERS * pInputProcessParameters, UINT32 OutputProcessParameterCount, XAPO_PROCESS_BUFFER_PARAMETERS * pOutputProcessParameters, BOOL IsEnabled)'
-        if InputProcessParameterCount is None: InputProcessParameterCount = _seqlen(pInputProcessParameters)
         pInputProcessParameters, _pInputProcessParameters_n = _arr(XAPO_PROCESS_BUFFER_PARAMETERS, pInputProcessParameters)
         if pOutputProcessParameters.__class__ in (list, tuple): pOutputProcessParameters = _arr(XAPO_PROCESS_BUFFER_PARAMETERS, pOutputProcessParameters)[0]
+        if InputProcessParameterCount is None: InputProcessParameterCount = (_pInputProcessParameters_n or 0)
         self._fn(10, _P[574])(self._this, InputProcessParameterCount, pInputProcessParameters, OutputProcessParameterCount, pOutputProcessParameters, IsEnabled)
     def CalcInputFrames(self, OutputFrameCount):
         'UINT32 CalcInputFrames(UINT32 OutputFrameCount)'
@@ -15722,7 +15722,7 @@ class IXAPOParameters(IUnknown):
     def SetParameters(self, pParameters=None, *, ParameterByteSize=None):
         'void SetParameters(const void * pParameters, UINT32 ParameterByteSize)'
         pParameters, _pParameters_n, _pParameters_k = _buf(pParameters)
-        if ParameterByteSize is None: ParameterByteSize = _pParameters_n
+        if ParameterByteSize is None: ParameterByteSize = (_pParameters_n or 0)
         self._fn(3, _P[575])(self._this, pParameters, ParameterByteSize)
     def GetParameters(self, pParameters, ParameterByteSize):
         'void GetParameters(void * pParameters, UINT32 ParameterByteSize)'
@@ -15759,8 +15759,8 @@ class IDStorageCustomDecompressionQueue(IUnknown):
         return numRequests.value
     def SetRequestResults(self, results=None, *, numResults=None):
         'HRESULT SetRequestResults(UINT32 numResults, DSTORAGE_CUSTOM_DECOMPRESSION_RESULT * results)'
-        if numResults is None: numResults = _seqlen(results)
         results, _results_n = _arr(DSTORAGE_CUSTOM_DECOMPRESSION_RESULT, results)
+        if numResults is None: numResults = (_results_n or 0)
         _hr = _check(self._fn(5, _P[578])(self._this, numResults, results), 'IDStorageCustomDecompressionQueue.SetRequestResults')
         return _hr or None
     _vt_ = (('GetEvent', 67), ('GetRequests', 577), ('SetRequestResults', 578))
@@ -15901,7 +15901,7 @@ class IDStorageQueue3(IDStorageQueue2):
     def EnqueueRequests(self, requests, fence, value, flag, *, numRequests=None):
         'void EnqueueRequests(const DSTORAGE_REQUEST * requests, UINT numRequests, ID3D12Fence * fence, UINT64 value, DSTORAGE_ENQUEUE_REQUEST_FLAGS flag)'
         requests, _requests_n = _arr(DSTORAGE_REQUEST, requests)
-        if numRequests is None: numRequests = _seqlen(requests)
+        if numRequests is None: numRequests = (_requests_n or 0)
         self._fn(14, _P[588])(self._this, requests, numRequests, _ptr(fence), value, flag)
     _vt_ = (('EnqueueRequests', 588),)
     _vtbl_size_ = 15
@@ -16028,8 +16028,8 @@ class IGameInputRawDeviceReport(IUnknown):
         return _r
     def SetRawData(self, buffer=None, *, bufferSize=None):
         'bool SetRawData(size_t bufferSize, const void * buffer)'
-        if bufferSize is None: bufferSize = _buffer_n
         buffer, _buffer_n, _buffer_k = _buf(buffer)
+        if bufferSize is None: bufferSize = (_buffer_n or 0)
         _r = self._fn(7, _P[603])(self._this, bufferSize, buffer)
         return _r
     _vt_ = (('GetDevice', 135), ('GetReportInfo', 601), ('GetRawDataSize', 112), ('GetRawData', 602), ('SetRawData', 603))
@@ -16348,8 +16348,8 @@ class IGameInputDevice(IUnknown):
     def DirectInputEscape(self, command, bufferIn, bufferOut, bufferOutSize, *, bufferInSize=None):
         'HRESULT DirectInputEscape(uint32_t command, const void * bufferIn, uint32_t bufferInSize, void * bufferOut, uint32_t bufferOutSize, uint32_t * bufferOutSizeWritten)'
         bufferIn, _bufferIn_n, _bufferIn_k = _buf(bufferIn)
-        if bufferInSize is None: bufferInSize = _bufferIn_n
         bufferOutSizeWritten = c_uint()
+        if bufferInSize is None: bufferInSize = (_bufferIn_n or 0)
         _hr = _check(self._fn(48, _P[644])(self._this, command, bufferIn, bufferInSize, bufferOut, bufferOutSize, byref(bufferOutSizeWritten)), 'IGameInputDevice.DirectInputEscape')
         return bufferOutSizeWritten.value
     def CreateInputMapper(self):
@@ -17922,9 +17922,9 @@ _f_D3D12CreateRootSignatureDeserializer = _Func('d3d12.dll', 'D3D12CreateRootSig
 def D3D12CreateRootSignatureDeserializer(pSrcData=None, pRootSignatureDeserializerInterface='ID3D12RootSignatureDeserializer', *, SrcDataSizeInBytes=None):
     'HRESULT D3D12CreateRootSignatureDeserializer(LPCVOID pSrcData, SIZE_T SrcDataSizeInBytes, const IID & pRootSignatureDeserializerInterface, void ** ppRootSignatureDeserializer)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSizeInBytes is None: SrcDataSizeInBytes = _pSrcData_n
     _pRootSignatureDeserializerInterface_g, _pRootSignatureDeserializerInterface_c = _riid(pRootSignatureDeserializerInterface)
     ppRootSignatureDeserializer = c_void_p()
+    if SrcDataSizeInBytes is None: SrcDataSizeInBytes = (_pSrcData_n or 0)
     _hr = _check(_f_D3D12CreateRootSignatureDeserializer(pSrcData, SrcDataSizeInBytes, byref(_pRootSignatureDeserializerInterface_g), byref(ppRootSignatureDeserializer)), 'D3D12CreateRootSignatureDeserializer')
     return _owned(_pRootSignatureDeserializerInterface_c, ppRootSignatureDeserializer)
 
@@ -17941,9 +17941,9 @@ _f_D3D12CreateVersionedRootSignatureDeserializer = _Func('d3d12.dll', 'D3D12Crea
 def D3D12CreateVersionedRootSignatureDeserializer(pSrcData=None, pRootSignatureDeserializerInterface='ID3D12VersionedRootSignatureDeserializer', *, SrcDataSizeInBytes=None):
     'HRESULT D3D12CreateVersionedRootSignatureDeserializer(LPCVOID pSrcData, SIZE_T SrcDataSizeInBytes, const IID & pRootSignatureDeserializerInterface, void ** ppRootSignatureDeserializer)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSizeInBytes is None: SrcDataSizeInBytes = _pSrcData_n
     _pRootSignatureDeserializerInterface_g, _pRootSignatureDeserializerInterface_c = _riid(pRootSignatureDeserializerInterface)
     ppRootSignatureDeserializer = c_void_p()
+    if SrcDataSizeInBytes is None: SrcDataSizeInBytes = (_pSrcData_n or 0)
     _hr = _check(_f_D3D12CreateVersionedRootSignatureDeserializer(pSrcData, SrcDataSizeInBytes, byref(_pRootSignatureDeserializerInterface_g), byref(ppRootSignatureDeserializer)), 'D3D12CreateVersionedRootSignatureDeserializer')
     return _owned(_pRootSignatureDeserializerInterface_c, ppRootSignatureDeserializer)
 
@@ -17951,9 +17951,9 @@ _f_D3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary = _Func('
 def D3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary(pSrcData, RootSignatureSubobjectName, pRootSignatureDeserializerInterface, *, SrcDataSizeInBytes=None):
     'HRESULT D3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary(LPCVOID pSrcData, SIZE_T SrcDataSizeInBytes, LPCWSTR RootSignatureSubobjectName, const IID & pRootSignatureDeserializerInterface, void ** ppRootSignatureDeserializer)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSizeInBytes is None: SrcDataSizeInBytes = _pSrcData_n
     _pRootSignatureDeserializerInterface_g, _pRootSignatureDeserializerInterface_c = _riid(pRootSignatureDeserializerInterface)
     ppRootSignatureDeserializer = c_void_p()
+    if SrcDataSizeInBytes is None: SrcDataSizeInBytes = (_pSrcData_n or 0)
     _hr = _check(_f_D3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary(pSrcData, SrcDataSizeInBytes, RootSignatureSubobjectName, byref(_pRootSignatureDeserializerInterface_g), byref(ppRootSignatureDeserializer)), 'D3D12CreateVersionedRootSignatureDeserializerFromSubobjectInLibrary')
     return _owned(_pRootSignatureDeserializerInterface_c, ppRootSignatureDeserializer)
 
@@ -17984,10 +17984,10 @@ def D3D12GetDebugInterface(riid='ID3D12Debug'):
 _f_D3D12EnableExperimentalFeatures = _Func('d3d12.dll', 'D3D12EnableExperimentalFeatures', WINFUNCTYPE(HRESULT, c_uint, POINTER(GUID), c_void_p, POINTER(c_uint)))
 def D3D12EnableExperimentalFeatures(pIIDs=None, pConfigurationStructs=None, pConfigurationStructSizes=None, *, NumFeatures=None):
     'HRESULT D3D12EnableExperimentalFeatures(UINT NumFeatures, const IID * pIIDs, void * pConfigurationStructs, UINT * pConfigurationStructSizes)'
-    if NumFeatures is None: NumFeatures = _seqlen(pIIDs)
     pIIDs, _pIIDs_n = _arr(GUID, pIIDs)
     pConfigurationStructs, _pConfigurationStructs_n, _pConfigurationStructs_k = _buf(pConfigurationStructs)
     pConfigurationStructSizes, _pConfigurationStructSizes_n = _arr(c_uint, pConfigurationStructSizes)
+    if NumFeatures is None: NumFeatures = (_pIIDs_n or 0)
     _hr = _check(_f_D3D12EnableExperimentalFeatures(NumFeatures, pIIDs, pConfigurationStructs, pConfigurationStructSizes), 'D3D12EnableExperimentalFeatures')
     return _hr or None
 
@@ -18041,10 +18041,10 @@ _f_D3DCompile = _Func('d3dcompiler_47.dll', 'D3DCompile', WINFUNCTYPE(HRESULT, c
 def D3DCompile(pSrcData, pSourceName, pDefines, pInclude, pEntrypoint, pTarget, Flags1=0, Flags2=0, *, SrcDataSize=None):
     'HRESULT D3DCompile(LPCVOID pSrcData, SIZE_T SrcDataSize, LPCSTR pSourceName, const D3D_SHADER_MACRO * pDefines, ID3DInclude * pInclude, LPCSTR pEntrypoint, LPCSTR pTarget, UINT Flags1, UINT Flags2, ID3DBlob ** ppCode, ID3DBlob ** ppErrorMsgs)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     pDefines, _pDefines_n = _arr(D3D_SHADER_MACRO, pDefines)
     ppCode = c_void_p()
     ppErrorMsgs = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DCompile(pSrcData, SrcDataSize, _str(pSourceName), pDefines, _ptr(pInclude), _str(pEntrypoint), _str(pTarget), Flags1, Flags2, byref(ppCode), byref(ppErrorMsgs)), 'D3DCompile', ppErrorMsgs)
     return _owned('ID3D10Blob', ppCode)
 
@@ -18052,12 +18052,12 @@ _f_D3DCompile2 = _Func('d3dcompiler_47.dll', 'D3DCompile2', WINFUNCTYPE(HRESULT,
 def D3DCompile2(pSrcData, pSourceName, pDefines, pInclude, pEntrypoint, pTarget, Flags1=0, Flags2=0, SecondaryDataFlags=0, pSecondaryData=None, *, SrcDataSize=None, SecondaryDataSize=None):
     'HRESULT D3DCompile2(LPCVOID pSrcData, SIZE_T SrcDataSize, LPCSTR pSourceName, const D3D_SHADER_MACRO * pDefines, ID3DInclude * pInclude, LPCSTR pEntrypoint, LPCSTR pTarget, UINT Flags1, UINT Flags2, UINT SecondaryDataFlags, LPCVOID pSecondaryData, SIZE_T SecondaryDataSize, ID3DBlob ** ppCode, ID3DBlob ** ppErrorMsgs)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     pDefines, _pDefines_n = _arr(D3D_SHADER_MACRO, pDefines)
     pSecondaryData, _pSecondaryData_n, _pSecondaryData_k = _buf(pSecondaryData)
-    if SecondaryDataSize is None: SecondaryDataSize = _pSecondaryData_n
     ppCode = c_void_p()
     ppErrorMsgs = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
+    if SecondaryDataSize is None: SecondaryDataSize = (_pSecondaryData_n or 0)
     _hr = _check(_f_D3DCompile2(pSrcData, SrcDataSize, _str(pSourceName), pDefines, _ptr(pInclude), _str(pEntrypoint), _str(pTarget), Flags1, Flags2, SecondaryDataFlags, pSecondaryData, SecondaryDataSize, byref(ppCode), byref(ppErrorMsgs)), 'D3DCompile2', ppErrorMsgs)
     return _owned('ID3D10Blob', ppCode)
 
@@ -18074,10 +18074,10 @@ _f_D3DPreprocess = _Func('d3dcompiler_47.dll', 'D3DPreprocess', WINFUNCTYPE(HRES
 def D3DPreprocess(pSrcData=None, pSourceName=None, pDefines=None, pInclude=None, *, SrcDataSize=None):
     'HRESULT D3DPreprocess(LPCVOID pSrcData, SIZE_T SrcDataSize, LPCSTR pSourceName, const D3D_SHADER_MACRO * pDefines, ID3DInclude * pInclude, ID3DBlob ** ppCodeText, ID3DBlob ** ppErrorMsgs)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     if pDefines.__class__ in (list, tuple): pDefines = _arr(D3D_SHADER_MACRO, pDefines)[0]
     ppCodeText = c_void_p()
     ppErrorMsgs = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DPreprocess(pSrcData, SrcDataSize, _str(pSourceName), pDefines, _ptr(pInclude), byref(ppCodeText), byref(ppErrorMsgs)), 'D3DPreprocess', ppErrorMsgs)
     return _owned('ID3D10Blob', ppCodeText)
 
@@ -18085,8 +18085,8 @@ _f_D3DGetDebugInfo = _Func('d3dcompiler_47.dll', 'D3DGetDebugInfo', WINFUNCTYPE(
 def D3DGetDebugInfo(pSrcData=None, *, SrcDataSize=None):
     'HRESULT D3DGetDebugInfo(LPCVOID pSrcData, SIZE_T SrcDataSize, ID3DBlob ** ppDebugInfo)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     ppDebugInfo = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DGetDebugInfo(pSrcData, SrcDataSize, byref(ppDebugInfo)), 'D3DGetDebugInfo')
     return _owned('ID3D10Blob', ppDebugInfo)
 
@@ -18094,9 +18094,9 @@ _f_D3DReflect = _Func('d3dcompiler_47.dll', 'D3DReflect', WINFUNCTYPE(HRESULT, c
 def D3DReflect(pSrcData=None, pInterface='ID3D12ShaderReflection', *, SrcDataSize=None):
     'HRESULT D3DReflect(LPCVOID pSrcData, SIZE_T SrcDataSize, const IID & pInterface, void ** ppReflector)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     _pInterface_g, _pInterface_c = _riid(pInterface)
     ppReflector = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DReflect(pSrcData, SrcDataSize, byref(_pInterface_g), byref(ppReflector)), 'D3DReflect')
     return _owned(_pInterface_c, ppReflector)
 
@@ -18112,8 +18112,8 @@ _f_D3DDisassemble = _Func('d3dcompiler_47.dll', 'D3DDisassemble', WINFUNCTYPE(HR
 def D3DDisassemble(pSrcData, Flags, szComments=None, *, SrcDataSize=None):
     'HRESULT D3DDisassemble(LPCVOID pSrcData, SIZE_T SrcDataSize, UINT Flags, LPCSTR szComments, ID3DBlob ** ppDisassembly)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     ppDisassembly = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DDisassemble(pSrcData, SrcDataSize, Flags, _str(szComments), byref(ppDisassembly)), 'D3DDisassemble')
     return _owned('ID3D10Blob', ppDisassembly)
 
@@ -18121,9 +18121,9 @@ _f_D3DDisassembleRegion = _Func('d3dcompiler_47.dll', 'D3DDisassembleRegion', WI
 def D3DDisassembleRegion(pSrcData, Flags, szComments, StartByteOffset, NumInsts, *, SrcDataSize=None):
     'HRESULT D3DDisassembleRegion(LPCVOID pSrcData, SIZE_T SrcDataSize, UINT Flags, LPCSTR szComments, SIZE_T StartByteOffset, SIZE_T NumInsts, SIZE_T * pFinishByteOffset, ID3DBlob ** ppDisassembly)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     pFinishByteOffset = c_uint64()
     ppDisassembly = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DDisassembleRegion(pSrcData, SrcDataSize, Flags, _str(szComments), StartByteOffset, NumInsts, byref(pFinishByteOffset), byref(ppDisassembly)), 'D3DDisassembleRegion')
     return (pFinishByteOffset.value, _owned('ID3D10Blob', ppDisassembly))
 
@@ -18151,9 +18151,9 @@ _f_D3DGetTraceInstructionOffsets = _Func('d3dcompiler_47.dll', 'D3DGetTraceInstr
 def D3DGetTraceInstructionOffsets(pSrcData, Flags, StartInstIndex, NumInsts, pOffsets=None, *, SrcDataSize=None):
     'HRESULT D3DGetTraceInstructionOffsets(LPCVOID pSrcData, SIZE_T SrcDataSize, UINT Flags, SIZE_T StartInstIndex, SIZE_T NumInsts, SIZE_T * pOffsets, SIZE_T * pTotalInsts)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     if pOffsets.__class__ in (list, tuple): pOffsets = _arr(c_uint64, pOffsets)[0]
     pTotalInsts = c_uint64()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DGetTraceInstructionOffsets(pSrcData, SrcDataSize, Flags, StartInstIndex, NumInsts, pOffsets, byref(pTotalInsts)), 'D3DGetTraceInstructionOffsets')
     return pTotalInsts.value
 
@@ -18161,8 +18161,8 @@ _f_D3DGetInputSignatureBlob = _Func('d3dcompiler_47.dll', 'D3DGetInputSignatureB
 def D3DGetInputSignatureBlob(pSrcData=None, *, SrcDataSize=None):
     'HRESULT D3DGetInputSignatureBlob(LPCVOID pSrcData, SIZE_T SrcDataSize, ID3DBlob ** ppSignatureBlob)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     ppSignatureBlob = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DGetInputSignatureBlob(pSrcData, SrcDataSize, byref(ppSignatureBlob)), 'D3DGetInputSignatureBlob')
     return _owned('ID3D10Blob', ppSignatureBlob)
 
@@ -18170,8 +18170,8 @@ _f_D3DGetOutputSignatureBlob = _Func('d3dcompiler_47.dll', 'D3DGetOutputSignatur
 def D3DGetOutputSignatureBlob(pSrcData=None, *, SrcDataSize=None):
     'HRESULT D3DGetOutputSignatureBlob(LPCVOID pSrcData, SIZE_T SrcDataSize, ID3DBlob ** ppSignatureBlob)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     ppSignatureBlob = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DGetOutputSignatureBlob(pSrcData, SrcDataSize, byref(ppSignatureBlob)), 'D3DGetOutputSignatureBlob')
     return _owned('ID3D10Blob', ppSignatureBlob)
 
@@ -18179,8 +18179,8 @@ _f_D3DGetInputAndOutputSignatureBlob = _Func('d3dcompiler_47.dll', 'D3DGetInputA
 def D3DGetInputAndOutputSignatureBlob(pSrcData=None, *, SrcDataSize=None):
     'HRESULT D3DGetInputAndOutputSignatureBlob(LPCVOID pSrcData, SIZE_T SrcDataSize, ID3DBlob ** ppSignatureBlob)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     ppSignatureBlob = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DGetInputAndOutputSignatureBlob(pSrcData, SrcDataSize, byref(ppSignatureBlob)), 'D3DGetInputAndOutputSignatureBlob')
     return _owned('ID3D10Blob', ppSignatureBlob)
 
@@ -18188,8 +18188,8 @@ _f_D3DStripShader = _Func('d3dcompiler_47.dll', 'D3DStripShader', WINFUNCTYPE(HR
 def D3DStripShader(pShaderBytecode, uStripFlags, *, BytecodeLength=None):
     'HRESULT D3DStripShader(LPCVOID pShaderBytecode, SIZE_T BytecodeLength, UINT uStripFlags, ID3DBlob ** ppStrippedBlob)'
     pShaderBytecode, _pShaderBytecode_n, _pShaderBytecode_k = _buf(pShaderBytecode)
-    if BytecodeLength is None: BytecodeLength = _pShaderBytecode_n
     ppStrippedBlob = c_void_p()
+    if BytecodeLength is None: BytecodeLength = (_pShaderBytecode_n or 0)
     _hr = _check(_f_D3DStripShader(pShaderBytecode, BytecodeLength, uStripFlags, byref(ppStrippedBlob)), 'D3DStripShader')
     return _owned('ID3D10Blob', ppStrippedBlob)
 
@@ -18197,8 +18197,8 @@ _f_D3DGetBlobPart = _Func('d3dcompiler_47.dll', 'D3DGetBlobPart', WINFUNCTYPE(HR
 def D3DGetBlobPart(pSrcData, Part, Flags, *, SrcDataSize=None):
     'HRESULT D3DGetBlobPart(LPCVOID pSrcData, SIZE_T SrcDataSize, D3D_BLOB_PART Part, UINT Flags, ID3DBlob ** ppPart)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     ppPart = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
     _hr = _check(_f_D3DGetBlobPart(pSrcData, SrcDataSize, Part, Flags, byref(ppPart)), 'D3DGetBlobPart')
     return _owned('ID3D10Blob', ppPart)
 
@@ -18206,10 +18206,10 @@ _f_D3DSetBlobPart = _Func('d3dcompiler_47.dll', 'D3DSetBlobPart', WINFUNCTYPE(HR
 def D3DSetBlobPart(pSrcData, Part, Flags, pPart=None, *, SrcDataSize=None, PartSize=None):
     'HRESULT D3DSetBlobPart(LPCVOID pSrcData, SIZE_T SrcDataSize, D3D_BLOB_PART Part, UINT Flags, LPCVOID pPart, SIZE_T PartSize, ID3DBlob ** ppNewShader)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
     pPart, _pPart_n, _pPart_k = _buf(pPart)
-    if PartSize is None: PartSize = _pPart_n
     ppNewShader = c_void_p()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
+    if PartSize is None: PartSize = (_pPart_n or 0)
     _hr = _check(_f_D3DSetBlobPart(pSrcData, SrcDataSize, Part, Flags, pPart, PartSize, byref(ppNewShader)), 'D3DSetBlobPart')
     return _owned('ID3D10Blob', ppNewShader)
 
@@ -18223,9 +18223,9 @@ def D3DCreateBlob(Size):
 _f_D3DCompressShaders = _Func('d3dcompiler_47.dll', 'D3DCompressShaders', WINFUNCTYPE(HRESULT, c_uint, POINTER(D3D_SHADER_DATA), c_uint, c_void_p))
 def D3DCompressShaders(pShaderData, uFlags, *, uNumShaders=None):
     'HRESULT D3DCompressShaders(UINT uNumShaders, D3D_SHADER_DATA * pShaderData, UINT uFlags, ID3DBlob ** ppCompressedData)'
-    if uNumShaders is None: uNumShaders = _seqlen(pShaderData)
     pShaderData, _pShaderData_n = _arr(D3D_SHADER_DATA, pShaderData)
     ppCompressedData = c_void_p()
+    if uNumShaders is None: uNumShaders = (_pShaderData_n or 0)
     _hr = _check(_f_D3DCompressShaders(uNumShaders, pShaderData, uFlags, byref(ppCompressedData)), 'D3DCompressShaders')
     return _owned('ID3D10Blob', ppCompressedData)
 
@@ -18233,10 +18233,10 @@ _f_D3DDecompressShaders = _Func('d3dcompiler_47.dll', 'D3DDecompressShaders', WI
 def D3DDecompressShaders(pSrcData, uStartIndex, pIndices, uFlags, ppShaders, *, SrcDataSize=None, uNumShaders=None):
     'HRESULT D3DDecompressShaders(LPCVOID pSrcData, SIZE_T SrcDataSize, UINT uNumShaders, UINT uStartIndex, UINT * pIndices, UINT uFlags, ID3DBlob ** ppShaders, UINT * pTotalShaders)'
     pSrcData, _pSrcData_n, _pSrcData_k = _buf(pSrcData)
-    if SrcDataSize is None: SrcDataSize = _pSrcData_n
-    if uNumShaders is None: uNumShaders = _seqlen(pIndices)
     pIndices, _pIndices_n = _arr(c_uint, pIndices)
     pTotalShaders = c_uint()
+    if SrcDataSize is None: SrcDataSize = (_pSrcData_n or 0)
+    if uNumShaders is None: uNumShaders = (_pIndices_n or 0)
     _hr = _check(_f_D3DDecompressShaders(pSrcData, SrcDataSize, uNumShaders, uStartIndex, pIndices, uFlags, ppShaders, byref(pTotalShaders)), 'D3DDecompressShaders')
     return pTotalShaders.value
 
@@ -18313,7 +18313,7 @@ def CreateFX(clsid, pInitDat=None, *, InitDataByteSize=None):
     'HRESULT CreateFX(const IID & clsid, IUnknown ** pEffect, const void * pInitDat, UINT32 InitDataByteSize)'
     pEffect = c_void_p()
     pInitDat, _pInitDat_n, _pInitDat_k = _buf(pInitDat)
-    if InitDataByteSize is None: InitDataByteSize = _pInitDat_n
+    if InitDataByteSize is None: InitDataByteSize = (_pInitDat_n or 0)
     _hr = _check(_f_CreateFX(clsid, byref(pEffect), pInitDat, InitDataByteSize), 'CreateFX')
     return _owned('IUnknown', pEffect)
 
