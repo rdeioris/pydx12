@@ -68,6 +68,9 @@ Complete programs, in [examples/](https://github.com/rdeioris/pydx12/tree/main/e
   a glossy floor, depth of field and progressive accumulation; triangle meshes and procedural spheres
   traced by an intersection shader
 - `triangle.py`: a swapchain on a tkinter window
+- `directstorage.py`: streams a GDeflate compressed 8K texture (a Mandelbrot set rendered by a compute
+  shader) from disk into GPU memory with GPU decompression, compared with reading, decompressing and
+  uploading it the classic way; then lets you explore it
 - `directml_life.py`: Conway's Game of Life as a DirectML operator graph (wrap padding, a 3×3
   convolution and two element-wise operators)
 - `xaudio2_orbit.py`: a synthesized sound orbiting around you, with X3DAudio panning, Doppler and
