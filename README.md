@@ -19,19 +19,20 @@ DirectX is Windows only, so this is the only supported platform. Python 3.9+ on 
 | I/O and input | DirectStorage, GameInput, XInput |
 | Audio | XAudio2, X3DAudio, XAPO |
 
-The package ships type information (`.pyi` stubs), so editors and type checkers know every
-parameter, field and return type.
+The package ships type information (`.pyi` stubs), so editors and type checkers know the parameters,
+fields and return types.
 
 ## Install
 
-From a checkout:
-
 ```
-pip install .
+pip install pydx12
 ```
 
-DirectStorage and GameInput ship their runtimes as NuGet packages, and so does the newest D3D12 runtime (the Agility SDK);
-see [Runtimes that are not in Windows](#runtimes-that-are-not-in-windows).
+DirectStorage, GameInput and PIX ship their runtimes as NuGet packages, and so does the newest D3D12 runtime
+(the Agility SDK); see [Runtimes that are not in Windows](#runtimes-that-are-not-in-windows).
+
+The examples and tutorials also use numpy and Pillow (`pip install numpy pillow`), and tutorials 012-017
+use pyrr.
 
 ## Quickstart
 
@@ -51,7 +52,8 @@ while True:
     print('%s (%d MB)' % (desc.Description, desc.DedicatedVideoMemory // 2**20))
     i += 1
 
-device = dx.D3D12CreateDevice(factory.EnumAdapterByGpuPreference(0, dx.DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE))
+adapter = factory.EnumAdapterByGpuPreference(0, dx.DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE)
+device = dx.D3D12CreateDevice(adapter)
 queue = device.CreateCommandQueue(dx.D3D12_COMMAND_QUEUE_DESC(Type=dx.D3D12_COMMAND_LIST_TYPE_DIRECT))
 ```
 
@@ -73,13 +75,14 @@ Names and parameter order are the ones in Microsoft's documentation, so the C++ 
 generator reads the headers' SAL annotations and applies these rules:
 
 - **Errors raise.** A failing `HRESULT` raises `pydx12.DXError` (`.hresult`, `.name`); compiler error blobs
-  are included in the message. Successful calls return their out-parameters, or `None`.
+  are included in the message. Successful calls return their out-parameters, or `None` (other success
+  codes, such as `DXGI_STATUS_OCCLUDED` from `Present`, are returned as an int).
 - **Out-parameters are returned.** `adapter.GetDesc1()` returns a `DXGI_ADAPTER_DESC1`;
   several out-parameters come back as a tuple.
 - **`riid` / `ppv` pairs take an interface class** and return that interface. Common factory methods have
   a default: `device.CreateCommandList(0, type, allocator)` returns an `ID3D12GraphicsCommandList`, and
-  `factory.CreateDeviceFactory(...)`, `D3D12CreateDevice(...)` and the like pick the obvious interface.
-  Pass another class to get a newer version: `D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_2, dx.ID3D12Device10)`.
+  `D3D12CreateDevice(...)`, `CreateDXGIFactory2()` and the like pick the obvious interface. Pass another
+  class to get a newer version: `dx.D3D12CreateDevice(adapter, dx.D3D_FEATURE_LEVEL_12_2, dx.ID3D12Device10)`.
 - **Arrays take sequences** and their count parameter is filled in for you:
   `cl.ResourceBarrier([barrier])`, `queue.ExecuteCommandLists([cl])`. The count is still available as a
   keyword-only argument for partial arrays.
@@ -126,10 +129,11 @@ class EngineCallback(dx.ComImplementation):
     def OnCriticalError(self, error):
         print('XAudio2 error', hex(error))
 
-xaudio2.RegisterForCallbacks(EngineCallback())
+callback = EngineCallback()
+xaudio2.RegisterForCallbacks(callback)
 ```
 
-Keep a reference to the object for as long as the API may call it.
+Keep a reference to the object (here `callback`) for as long as the API may call it.
 
 ## Runtimes that are not in Windows
 
@@ -148,8 +152,8 @@ SDK runtime through the device factory. This works from `python.exe` and does no
 
 ```py
 config = dx.D3D12GetInterface(dx.CLSID_D3D12SDKConfiguration, dx.ID3D12SDKConfiguration1)
-factory = config.CreateDeviceFactory(dx.AGILITY_SDK_VERSION, 'C:\\path\\to\\agility\\bin\\x64\\')
-device = factory.CreateDevice(adapter, dx.D3D_FEATURE_LEVEL_12_0, dx.ID3D12Device)
+device_factory = config.CreateDeviceFactory(dx.AGILITY_SDK_VERSION, 'C:\\path\\to\\agility\\bin\\x64\\')
+device = device_factory.CreateDevice(adapter, dx.D3D_FEATURE_LEVEL_12_0, dx.ID3D12Device)
 ```
 
 **DirectStorage, GameInput, PIX.** Put the DLLs next to your program, or add their folder:
@@ -159,9 +163,10 @@ os.add_dll_directory(r'C:\path\to\directstorage\bin\x64')
 storage = dx.DStorageGetFactory()
 ```
 
-XAudio2 needs COM initialized on the calling thread (`ctypes.windll.ole32.CoInitializeEx(None, 0)`).
+**XAudio2** is in Windows, but needs COM initialized on the calling thread
+(`ctypes.windll.ole32.CoInitializeEx(None, 0)`).
 
-**PIX.** Events and markers show up in PIX captures; they take a plain string and an ARGB color:
+**PIX.** Events and markers show up in PIX captures; they take a color (`0xAARRGGBB`) and a plain string:
 
 ```py
 dx.PIXBeginEventOnCommandList(command_list, 0xFF00FF00, 'shadows')
@@ -193,6 +198,9 @@ winpixeventruntime). It writes `pydx12/_api.pyi` (the type stubs) at the same ti
 pip install clang==<your libclang version>      # LLVM must be installed (libclang.dll)
 python tools/generate.py
 ```
+
+A `.nupkg` is a zip file: download it from nuget.org and extract it, for example into
+`.deps/agility-1.620.2/pkg`. The newest version of each package found there is used.
 
 It needs the Windows SDK, the MSVC headers and LLVM. `tests/layout_data.py` is generated along with it,
 and `tests/test_layout.py` checks every struct's size, alignment and field offsets against clang's
