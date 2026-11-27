@@ -2,6 +2,11 @@
 
 DirectX 12 for Python, in pure `ctypes`.
 
+![Spheres of glass, gold and chrome on a glossy checkered floor, lit by a low sun and a glowing lamp](https://raw.githubusercontent.com/rdeioris/pydx12/main/docs/images/pathtracer.jpg)
+
+*Path traced in real time with DirectX Raytracing, from Python:
+[examples/pathtracer.py](https://github.com/rdeioris/pydx12/blob/main/examples/pathtracer.py)*
+
 pydx12 exposes the whole DirectX 12 family as plain Python: every enum, constant, struct, COM interface and
 exported function, generated from Microsoft's own headers. Nothing is compiled — the package is Python
 source plus the DirectX Shader Compiler DLLs.
