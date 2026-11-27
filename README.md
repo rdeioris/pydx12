@@ -67,6 +67,9 @@ Complete programs, in [examples/](https://github.com/rdeioris/pydx12/tree/main/e
 - `pathtracer.py`: a real-time DXR path tracer with global illumination, soft shadows, glass, metals,
   a glossy floor, depth of field and progressive accumulation; triangle meshes and procedural spheres
   traced by an intersection shader
+- `asteroids.py`: DirectX 12 Ultimate mesh shaders, an asteroid belt of 50,000 rocks generated on the GPU
+  with no vertex buffers; amplification shaders cull and pick levels of detail, pipeline statistics show
+  what they let through, V cycles variable rate shading
 - `triangle.py`: a swapchain on a tkinter window
 - `directstorage.py`: streams a GDeflate compressed 8K texture (a Mandelbrot set rendered by a compute
   shader) from disk into GPU memory with GPU decompression, compared with reading, decompressing and
