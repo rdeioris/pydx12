@@ -59,6 +59,9 @@ queue = device.CreateCommandQueue(dx.D3D12_COMMAND_QUEUE_DESC(Type=dx.D3D12_COMM
 
 Complete programs, in [examples/](https://github.com/rdeioris/pydx12/tree/main/examples):
 
+- `pathtracer.py`: a real-time DXR path tracer with global illumination, soft shadows, glass, metals,
+  a glossy floor, depth of field and progressive accumulation; triangle meshes and procedural spheres
+  traced by an intersection shader
 - `triangle.py`: a swapchain on a tkinter window
 - `directml_life.py`: Conway's Game of Life as a DirectML operator graph (wrap padding, a 3×3
   convolution and two element-wise operators)
